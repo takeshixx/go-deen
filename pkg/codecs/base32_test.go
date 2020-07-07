@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/takeshixx/deen/types"
+	"github.com/takeshixx/deen/pkg/types"
 )
 
 var b32InputData = "asdtest123"
