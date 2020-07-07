@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/takeshixx/deen/internal/gui"
 	"github.com/takeshixx/deen/internal/plugins"
 )
 
@@ -86,6 +87,7 @@ func main() {
 	} else if *versionPtr {
 		fmt.Println(version)
 	} else {
-		flag.Usage()
+		//flag.Usage()
+		gui.RunGUI()
 	}
 }
