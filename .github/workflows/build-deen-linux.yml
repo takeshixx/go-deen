@@ -1,4 +1,4 @@
-name: Build deen for Linux x86_64
+name: Build deen for Linux
 
 on:
   workflow_dispatch
@@ -28,10 +28,13 @@ jobs:
         fi
 
     - name: Build
-      run: make
+      run: make build-linux
+
+    - name: Make executable
+      run: chmod +x bin/deen*
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
-          name: deen
-          path: bin/deen
+          name: deen-linux
+          path: bin/deen*
