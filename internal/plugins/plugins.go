@@ -22,6 +22,7 @@ var pluginConstructors = []types.PluginConstructor{
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,
 	codecs.NewPluginHTML,
+	codecs.NewPluginJwt,
 	hashs.NewPluginSHA1,
 	hashs.NewPluginSHA224,
 	hashs.NewPluginSHA256,
