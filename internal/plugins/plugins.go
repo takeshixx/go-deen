@@ -8,6 +8,7 @@ import (
 
 	"github.com/takeshixx/deen/pkg/codecs"
 	"github.com/takeshixx/deen/pkg/compressions"
+	"github.com/takeshixx/deen/pkg/formatters"
 	"github.com/takeshixx/deen/pkg/hashs"
 	"github.com/takeshixx/deen/pkg/types"
 )
@@ -42,9 +43,10 @@ var pluginConstructors = []types.PluginConstructor{
 	compressions.NewPluginGzip,
 	compressions.NewPluginZlib,
 	compressions.NewPluginBzip2,
+	formatters.NewPluginJSONFormatter,
 }
 
-var PluginCategories = []string{"codec", "compression", "hash"}
+var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
 
 // PrintAvailable prints a list of available plugins
 // and their aliases.
