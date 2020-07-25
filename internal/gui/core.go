@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"fmt"
 	"log"
 
 	"fyne.io/fyne"
@@ -15,10 +14,27 @@ func RunGUI() {
 	app := app.New()
 
 	w := app.NewWindow("deen")
+	dg, err := NewDeenGUI(app, w)
+	if err != nil {
+		log.Fatal(err)
+	}
 	w.SetMainMenu(
 		fyne.NewMainMenu(
 			fyne.NewMenu("File",
-				fyne.NewMenuItem("Open", func() { fmt.Println("Menu New") }),
+				fyne.NewMenuItem("Open", func() {
+					fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+						if err == nil && reader == nil {
+							return
+						}
+						if err != nil {
+							dialog.ShowError(err, w)
+							return
+						}
+
+						dg.fileOpened(reader)
+					}, w)
+					fd.Show()
+				}),
 				// A quit item will be appended to our first menu
 			),
 			fyne.NewMenu("Theme",
@@ -35,12 +51,6 @@ func RunGUI() {
 				}),
 			)))
 	w.SetMaster()
-
-	dg, err := NewDeenGUI(app, w)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	w.SetContent(dg.Layout)
 	w.Resize(fyne.NewSize(640, 480))
 	w.ShowAndRun()

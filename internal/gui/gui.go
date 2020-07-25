@@ -3,6 +3,7 @@ package gui
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 
 	"fyne.io/fyne"
@@ -344,6 +345,14 @@ func (dg *DeenGUI) showPluginSearch() {
 	}
 
 	dialog.ShowCustom("Search Plugin", "Cancel", layout, dg.MainWindow)
+}
+
+func (dg *DeenGUI) fileOpened(f fyne.URIReadCloser) {
+	input, err := ioutil.ReadAll(f)
+	if err != nil {
+		dialog.ShowError(err, dg.MainWindow)
+	}
+	dg.Encoders[0].SetContent(input)
 }
 
 // NewDeenGUI initializes a new DeenGUI instance.
