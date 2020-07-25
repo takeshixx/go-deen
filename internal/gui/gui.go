@@ -235,14 +235,18 @@ func (dg *DeenGUI) PreviousEncoder(ne *DeenEncoder) (pe *DeenEncoder, err error)
 // Populate the DeenGUI.PluginList field
 func (dg *DeenGUI) loadPluginList() (err error) {
 	dg.Plugins = []string{}
-	pluginList := widget.NewVBox()
-	var pluginGroup *widget.Group
+	pluginList := widget.NewAccordionContainer()
+
+	var pluginGroup *widget.AccordionItem
 	for _, c := range plugins.PluginCategories {
-		pluginGroup = widget.NewGroup(c)
+
 		filteredPlugins := plugins.GetForCategory(c, false)
+
+		var groupList *widget.Box
+		groupList = widget.NewVBox()
 		for _, p := range filteredPlugins {
 			pluginName := p
-			pluginGroup.Append(widget.NewButton(p, func() {
+			groupList.Append(widget.NewButton(p, func() {
 				dg.RunPlugin(pluginName)
 			}))
 		}
@@ -251,8 +255,28 @@ func (dg *DeenGUI) loadPluginList() (err error) {
 			pluginName := p
 			dg.Plugins = append(dg.Plugins, pluginName)
 		}
+
+		pluginGroup = widget.NewAccordionItem(c, groupList)
 		pluginList.Append(pluginGroup)
 	}
+
+	/* 	var pluginGroup *widget.Group
+	   	for _, c := range plugins.PluginCategories {
+	   		pluginGroup = widget.NewGroup(c)
+	   		filteredPlugins := plugins.GetForCategory(c, false)
+	   		for _, p := range filteredPlugins {
+	   			pluginName := p
+	   			pluginGroup.Append(widget.NewButton(p, func() {
+	   				dg.RunPlugin(pluginName)
+	   			}))
+	   		}
+	   		allPlugins := plugins.GetForCategory(c, true)
+	   		for _, p := range allPlugins {
+	   			pluginName := p
+	   			dg.Plugins = append(dg.Plugins, pluginName)
+	   		}
+	   		pluginList.Append(pluginGroup)
+	   	} */
 	// Alternative way to display plugins in dropdown boxes
 	/* 	pluginGroup = widget.NewGroup("Plugins")
 	for _, c := range plugins.PluginCategories {
