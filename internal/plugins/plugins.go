@@ -47,7 +47,7 @@ var pluginConstructors = []types.PluginConstructor{
 	formatters.NewPluginJSONFormatter,
 }
 
-var PluginCategories = []string{"codec", "compression", "hash"}
+var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
 
 // PrintAvailable prints a list of available plugins
 // and their aliases.
