@@ -113,11 +113,11 @@ func NewDeenEncoderWidget(parent *DeenGUI) (de *DeenEncoder, err error) {
 	de = &DeenEncoder{}
 	de.Parent = parent
 	de.InputField = NewDeenInputField(de)
-	de.ViewButton = widget.NewSelect([]string{"Plain", "Hex"}, func(mode string) {
+	de.ViewButton = widget.NewSelect([]string{"Plain", "Hexdump"}, func(mode string) {
 		if len(de.Content) < 1 && len(de.InputField.Text) < 1 {
 			return
 		}
-		if mode == "Hex" {
+		if mode == "Hexdump" {
 			if len(de.Content) < 1 {
 				de.Content = []byte(de.InputField.Text)
 			}
