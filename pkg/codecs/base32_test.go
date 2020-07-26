@@ -43,35 +43,3 @@ func TestPluginBase32Unprocess(t *testing.T) {
 		t.Errorf("Base32Unprocess data wrong: %s", d)
 	}
 }
-
-func TestNewPluginBase32Hex(t *testing.T) {
-	p := NewPluginBase32Hex()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
-		t.Errorf("Invalid return type for NewPluginBase32: %s", reflect.TypeOf(p))
-	}
-}
-
-func TestPluginBase32HexProcess(t *testing.T) {
-	p := NewPluginBase32Hex()
-	r := strings.NewReader(b32InputData)
-	d, e := p.ProcessStreamFunc(r)
-	if e != nil {
-		t.Errorf("Base32HexProcess failed: %s", e)
-	}
-	if c := bytes.Compare(d, b32InputDataProcessedHex); c != 0 {
-		t.Errorf("Base32HexProcess data wrong %s", d)
-	}
-
-}
-
-func TestPluginBase32HexUnprocess(t *testing.T) {
-	p := NewPluginBase32Hex()
-	r := bytes.NewReader(b32InputDataProcessedHex)
-	d, e := p.UnprocessStreamFunc(r)
-	if e != nil {
-		t.Error("Base32HexUnprocess failed")
-	}
-	if c := bytes.Compare(d, []byte(b32InputData)); c != 0 {
-		t.Error("Base32HexUnprocess data wrong")
-	}
-}
