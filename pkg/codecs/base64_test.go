@@ -43,35 +43,3 @@ func TestPluginBase64Unprocess(t *testing.T) {
 		t.Errorf("Base64Unprocess data wrong: %s", d)
 	}
 }
-
-func TestNewPluginBase64Url(t *testing.T) {
-	p := NewPluginBase64Url()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
-		t.Errorf("Invalid return type for NewPluginBase64Url: %s", reflect.TypeOf(p))
-	}
-}
-
-func TestPluginBase64UrlProcess(t *testing.T) {
-	p := NewPluginBase64Url()
-	r := strings.NewReader(b64InputData)
-	d, e := p.ProcessStreamFunc(r)
-	if e != nil {
-		t.Errorf("Base64UrlProcess failed: %s", e)
-	}
-	if c := bytes.Compare(d, b64InputDataProcessedURL); c != 0 {
-		t.Errorf("Base64UrlProcess data wrong: %s", d)
-	}
-
-}
-
-func TestPluginBase64UrlUnprocess(t *testing.T) {
-	p := NewPluginBase64Url()
-	r := bytes.NewReader(b64InputDataProcessedURL)
-	d, e := p.UnprocessStreamFunc(r)
-	if e != nil {
-		t.Errorf("Base64UrlUnprocess failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte(b64InputData)); c != 0 {
-		t.Errorf("Base64UrlUnprocess data wrong: %s", d)
-	}
-}
