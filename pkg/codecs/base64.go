@@ -1,7 +1,6 @@
 package codecs
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"flag"
@@ -11,31 +10,6 @@ import (
 
 	"github.com/takeshixx/deen/pkg/types"
 )
-
-func processBase64(encoding *base64.Encoding, reader io.Reader) ([]byte, error) {
-	var outBuf bytes.Buffer
-	var err error
-	encoder := base64.NewEncoder(encoding, &outBuf)
-	if _, err := io.Copy(encoder, reader); err != nil {
-		return outBuf.Bytes(), err
-	}
-	encoder.Close()
-	return outBuf.Bytes(), err
-}
-
-func unprocessBase64(encoding *base64.Encoding, reader io.Reader) ([]byte, error) {
-	var outBuf bytes.Buffer
-	var err error
-	// We have to remove leading/trailing whitespaces
-	wrappedReader := trimReader{}
-	wrappedReader.rd = reader
-	decoder := base64.NewDecoder(encoding, reader)
-	wrapper := struct{ io.Writer }{&outBuf}
-	if _, err := io.Copy(wrapper, decoder); err != nil {
-		return outBuf.Bytes(), err
-	}
-	return outBuf.Bytes(), err
-}
 
 func processBase64Pipe(encoding *base64.Encoding, reader io.Reader, writer *io.PipeWriter) (err error) {
 	go func() {
