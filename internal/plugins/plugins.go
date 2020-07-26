@@ -17,7 +17,6 @@ var pluginConstructors = []types.PluginConstructor{
 	codecs.NewPluginBase32,
 	codecs.NewPluginBase32Hex,
 	codecs.NewPluginBase64,
-	codecs.NewPluginBase64Url,
 	codecs.NewPluginBase85,
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,

@@ -11,8 +11,8 @@ type AddCliFuncStub func(*DeenPlugin, []string) *flag.FlagSet
 type StreamFuncStub func(io.Reader) ([]byte, error)
 type StreamFuncWithCliFlagsStub func(*flag.FlagSet, io.Reader) ([]byte, error)
 
-type PipeFuncStub func(io.Reader, *io.Writer) error
-type PipeFuncWithFlagsStub func(*flag.FlagSet, io.Reader, *io.Writer) error
+type PipeFuncStub func(io.Reader, *io.PipeWriter) error
+type PipeFuncWithFlagsStub func(*flag.FlagSet, io.Reader, *io.PipeWriter) error
 
 type DeenPlugin struct {
 	Name                            string
