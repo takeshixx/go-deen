@@ -1,10 +1,14 @@
 build:
+ifeq ($(OS),Windows_NT)
+	go build -o ./bin/deen.exe ./cmd/deen
+else
 	go build -o ./bin/deen ./cmd/deen
+endif
 
 run:
 	go run ./cmd/deen/main.go
 
-build-all: compile-freebsd compile-macos compile-linux compile-windows
+build-all: build-freebsd build-macos build-linux build-windows
 
 build-freebsd:
 	GOOS=freebsd GOARCH=386 go build -o bin/deen-freebsd-x86 ./cmd/deen
