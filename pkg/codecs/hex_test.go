@@ -19,26 +19,34 @@ func TestNewPluginHex(t *testing.T) {
 	}
 }
 
-func TestPluginHexProcess(t *testing.T) {
-	p := NewPluginHex()
-	r := strings.NewReader(hexInputData)
-	d, e := p.ProcessStreamFunc(r)
-	if e != nil {
-		t.Errorf("HexProcess failed: %s", e)
-	}
-	if c := bytes.Compare(d, hexInputDataProcessed); c != 0 {
-		t.Errorf("HexProcess data wrong: %s", d)
+func TestPluginHexProcessDeenTask(t *testing.T) {
+	destWriter := new(bytes.Buffer)
+	task := types.NewDeenTask(destWriter)
+	task.Reader = strings.NewReader(hexInputData)
+	plugin := NewPluginHex()
+	plugin.ProcessDeenTaskFunc(task)
+	select {
+	case err := <-task.ErrChan:
+		t.Error(err)
+	case <-task.DoneChan:
+		if c := bytes.Compare(destWriter.Bytes(), hexInputDataProcessed); c != 0 {
+			t.Errorf("TestPluginBase85ProcessDeenTask data wrong: %s != %s", destWriter.Bytes(), hexInputDataProcessed)
+		}
 	}
 }
 
-func TestPluginHexUnprocess(t *testing.T) {
-	p := NewPluginHex()
-	r := bytes.NewReader(hexInputDataProcessed)
-	d, e := p.UnprocessStreamFunc(r)
-	if e != nil {
-		t.Errorf("HexUnprocess failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte(hexInputData)); c != 0 {
-		t.Errorf("HexUnprocess data wrong: %s", d)
+func TestPluginHexUnprocessDeenTask(t *testing.T) {
+	destWriter := new(bytes.Buffer)
+	task := types.NewDeenTask(destWriter)
+	task.Reader = bytes.NewReader(hexInputDataProcessed)
+	plugin := NewPluginHex()
+	plugin.UnprocessDeenTaskFunc(task)
+	select {
+	case err := <-task.ErrChan:
+		t.Error(err)
+	case <-task.DoneChan:
+		if c := bytes.Compare(destWriter.Bytes(), []byte(hexInputData)); c != 0 {
+			t.Errorf("TestPluginBase85ProcessDeenTask data wrong: %s != %s", destWriter.Bytes(), []byte(hexInputData))
+		}
 	}
 }
