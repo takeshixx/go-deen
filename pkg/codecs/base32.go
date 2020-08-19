@@ -11,29 +11,36 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func processBase32Pipe(encoding *base32.Encoding, reader io.Reader, writer *io.PipeWriter) (err error) {
+func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
 	go func() {
-		encoder := base32.NewEncoder(encoding, writer)
-		if _, err := io.Copy(encoder, reader); err != nil {
-			return
+		encoder := base32.NewEncoder(encoding, task.PipeWriter)
+		_, err := io.Copy(encoder, task.Reader)
+		if err != nil {
+			task.ErrChan <- err
 		}
-		encoder.Close()
-		writer.Close()
+		err = encoder.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
+		err = task.PipeWriter.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
 	}()
-
-	return
 }
 
-func unprocessBas32Pipe(encoding *base32.Encoding, reader io.Reader, writer *io.PipeWriter) (err error) {
+func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
 	go func() {
-		decoder := base32.NewDecoder(encoding, reader)
-		if _, err := io.Copy(writer, decoder); err != nil {
-			return
+		decoder := base32.NewDecoder(encoding, task.Reader)
+		_, err := io.Copy(task.PipeWriter, decoder)
+		if err != nil {
+			task.ErrChan <- err
 		}
-		writer.Close()
+		err = task.PipeWriter.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
 	}()
-
-	return
 }
 
 func isHex(flags *flag.FlagSet) (hex bool, err error) {
@@ -63,22 +70,13 @@ func NewPluginBase32() (p types.DeenPlugin) {
 	p.Aliases = []string{".base32", "b32", ".b32"}
 	p.Type = "codec"
 	p.Unprocess = false
-	p.ProcessPipeFunc = func(reader io.Reader, writer *io.PipeWriter) (err error) {
-		return processBase32Pipe(base32.StdEncoding, reader, writer)
+	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
+		processBase32(base32.StdEncoding, task)
 	}
-	p.UnprocessPipeFunc = func(reader io.Reader, writer *io.PipeWriter) (err error) {
-		err = unprocessBas32Pipe(base32.StdEncoding, reader, writer)
-		if err == nil {
-			return
-		}
-		err = unprocessBas32Pipe(base32.HexEncoding, reader, writer)
-		if err == nil {
-			return
-		}
-		err = errors.New("Invalid Base32 data")
-		return
+	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
+		unprocessBas32(base32.StdEncoding, task)
 	}
-	p.ProcessPipeWithFlags = func(flags *flag.FlagSet, reader io.Reader, writer *io.PipeWriter) (err error) {
+	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
 		var enc *base32.Encoding
 		noPad, err := isNoPad(flags)
 		if err != nil {
@@ -92,20 +90,18 @@ func NewPluginBase32() (p types.DeenPlugin) {
 		if noPad {
 			enc = enc.WithPadding(base32.NoPadding)
 		}
-		return processBase32Pipe(enc, reader, writer)
+		processBase32(enc, task)
 	}
-	p.UnprocessPipeWithFlags = func(flags *flag.FlagSet, reader io.Reader, writer *io.PipeWriter) (err error) {
-		err = unprocessBas32Pipe(base32.HexEncoding, reader, writer)
-		if err == nil {
-			return
+	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
+		var enc *base32.Encoding
+		if hex, err := isHex(flags); hex && err == nil {
+			enc = base32.HexEncoding
+		} else {
+			enc = base32.StdEncoding
 		}
-		err = unprocessBas32Pipe(base32.StdEncoding, reader, writer)
-		if err == nil {
-			return
-		}
-		err = errors.New("Invalid Base32 data")
-		return
+		unprocessBas32(enc, task)
 	}
+
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		b32Cmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
 		b32Cmd.Usage = func() {
