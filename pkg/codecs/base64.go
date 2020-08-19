@@ -14,8 +14,6 @@ import (
 func processBase64(encoding *base64.Encoding, task *types.DeenTask) {
 	go func() {
 		encoder := base64.NewEncoder(encoding, task.PipeWriter)
-		defer encoder.Close()
-		defer task.PipeWriter.Close()
 		_, err := io.Copy(encoder, task.Reader)
 		if err != nil {
 			task.ErrChan <- errors.Wrap(err, "Copying into encoder in processBase64 failed")
