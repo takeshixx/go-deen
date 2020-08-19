@@ -15,39 +15,29 @@ type StreamFuncWithCliFlagsStub func(*flag.FlagSet, io.Reader) ([]byte, error)
 type DeenTaskFuncStub func(*DeenTask)
 type DeenTaskWithFlagsStub func(*flag.FlagSet, *DeenTask)
 
-type PipeChanFuncStub func(io.Reader, *io.PipeWriter, chan bool, chan error)
-type PipeChanFuncWithFlagsStub func(*flag.FlagSet, io.Reader, *io.PipeWriter, chan bool, chan error)
-
-type PipeFuncStub func(io.Reader, *io.PipeWriter) error
-type PipeFuncWithFlagsStub func(*flag.FlagSet, io.Reader, *io.PipeWriter) error
-
 type DeenPlugin struct {
-	Name                            string
-	Aliases                         []string
-	Type                            string
-	Unprocess                       bool
-	ProcessStreamFunc               StreamFuncStub
-	UnprocessStreamFunc             StreamFuncStub
-	ProcessStreamWithCliFlagsFunc   StreamFuncWithCliFlagsStub
-	UnprocessStreamWithCliFlagsFunc StreamFuncWithCliFlagsStub
-	ProcessPipeFunc                 PipeFuncStub
-	UnprocessPipeFunc               PipeFuncStub
-	ProcessPipeWithFlags            PipeFuncWithFlagsStub
-	UnprocessPipeWithFlags          PipeFuncWithFlagsStub
+	Name              string
+	Aliases           []string
+	Type              string
+	Unprocess         bool
+	AddCliOptionsFunc AddCliFuncStub
+	CliHelp           string
 
 	ProcessDeenTaskFunc        DeenTaskFuncStub
 	UnprocessDeenTaskFunc      DeenTaskFuncStub
 	ProcessDeenTaskWithFlags   DeenTaskWithFlagsStub
 	UnprocessDeenTaskWithFlags DeenTaskWithFlagsStub
 
-	ProcessPipeChanFunc        PipeChanFuncStub
-	UnprocessPipeChanFunc      PipeChanFuncStub
-	ProcessPipeChanWithFlags   PipeChanFuncWithFlagsStub
-	UnprocessPipeChanWithFlags PipeChanFuncWithFlagsStub
-	AddCliOptionsFunc          AddCliFuncStub
-	CliHelp                    string
+	// TODO: port and remove old stream funcs
+	ProcessStreamFunc               StreamFuncStub
+	UnprocessStreamFunc             StreamFuncStub
+	ProcessStreamWithCliFlagsFunc   StreamFuncWithCliFlagsStub
+	UnprocessStreamWithCliFlagsFunc StreamFuncWithCliFlagsStub
 }
 
+// DeenTask describes a (un)processing
+// task for a plugin. It includes pointers
+// to all relevant inputs and outputs.
 type DeenTask struct {
 	Reader     io.Reader
 	PipeReader *io.PipeReader
@@ -56,6 +46,9 @@ type DeenTask struct {
 	ErrChan    chan error
 }
 
+// Close is responsible for closing all
+// relevant chans and pipes of the
+// corresponding task.
 func (dt *DeenTask) Close() error {
 	err := dt.PipeWriter.Close()
 	dt.DoneChan <- true
@@ -66,13 +59,23 @@ func (dt *DeenTask) Error(err error) {
 	dt.ErrChan <- err
 }
 
+// NewDeenTask creates a new task that can be used
+// for processing/unprocessing funcs of plugins.
+// It also makes it easier to setup test cases.
 func NewDeenTask(writer io.Writer) *DeenTask {
 	dt := &DeenTask{}
+	// pipeWriter is provided to plugins to write data to.
+	// After a plugin has finished, processed data will be
+	// piped from pipeReader to os.Stdout
 	pr, pw := io.Pipe()
 	dt.PipeReader = pr
 	dt.PipeWriter = pw
 	dt.DoneChan = make(chan bool)
 	dt.ErrChan = make(chan error)
+	// We have to ensure that the pipeReader reads data
+	// so that the pipeWriter does not block. After Copy
+	// is done or pipeWriter is closed it will also
+	// close the doneChan
 	go func() {
 		defer close(dt.DoneChan)
 		_, err := io.Copy(writer, dt.PipeReader)
