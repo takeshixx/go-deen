@@ -19,7 +19,6 @@ func NewPluginURL() (p types.DeenPlugin) {
 		var err error
 		data, err := ioutil.ReadAll(reader)
 		if err != nil {
-			//log.Fatal(err)
 			return outBuf, err
 		}
 		outBuf = []byte(url.QueryEscape(string(data)))
