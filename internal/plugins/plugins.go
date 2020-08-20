@@ -35,6 +35,7 @@ var pluginConstructors = []types.PluginConstructor{
 	hashs.NewPluginBLAKE2b384,
 	hashs.NewPluginBLAKE2b256,
 	hashs.NewPluginBLAKE3,
+	hashs.NewPluginBcrypt,
 	compressions.NewPluginFlate,
 	compressions.NewPluginLZMA,
 	compressions.NewPluginLZMA2,
