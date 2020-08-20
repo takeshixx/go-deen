@@ -2,6 +2,7 @@ package hashs
 
 import (
 	"bytes"
+	"os"
 	"testing"
 )
 
@@ -262,4 +263,36 @@ func TestPluginBLAKE3512ProcessStreamWithCliFlagsFunc(t *testing.T) {
 	if c := bytes.Compare(d, []byte("e60cd8431ebc2c74d793a4e7256344fb5b4050311f3203a3f62eacdc608bd78b")); c != 0 {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
 	}
+}
+
+func TestPluginBlakeUsage(t *testing.T) {
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+
+	p := NewPluginBLAKE2s()
+	testFlags := p.AddCliOptionsFunc(&p, []string{})
+	testFlags.Usage()
+
+	p = NewPluginBLAKE2s128()
+	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags.Usage()
+
+	p = NewPluginBLAKE2b()
+	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags.Usage()
+
+	p = NewPluginBLAKE2b384()
+	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags.Usage()
+
+	p = NewPluginBLAKE2b256()
+	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags.Usage()
+
+	p = NewPluginBLAKE3()
+	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags.Usage()
 }
