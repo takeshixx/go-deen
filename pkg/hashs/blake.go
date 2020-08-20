@@ -30,7 +30,7 @@ func doBLAKE2(variant string, reader *io.Reader, macKey []byte) ([]byte, error) 
 		if len(macKey) != 0 {
 			hasher, err = blake2s.New128(macKey)
 		} else {
-			hasher, err = blake2s.New128(nil)
+			return []byte(""), errors.New("BLAKE2s128 requres a key")
 		}
 	case "blake2b-512":
 		if len(macKey) != 0 {
@@ -96,15 +96,12 @@ func NewPluginBLAKE2s128() (p types.DeenPlugin) {
 	p.Aliases = []string{"blake2s-128"}
 	p.Type = "hash"
 	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return doBLAKE2("blake2s-128", &reader, []byte{})
-	}
 	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
 		macKey := flags.Lookup("key")
 		if macKey.Value.String() != "" {
 			return doBLAKE2("blake2s-128", &reader, []byte(macKey.Value.String()))
 		}
-		return doBLAKE2("blake2s-128", &reader, []byte{})
+		return []byte(""), errors.New("BLAKE2s128 requires a key")
 	}
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
