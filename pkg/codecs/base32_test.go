@@ -3,6 +3,7 @@ package codecs
 import (
 	"bytes"
 	"encoding/base32"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -197,4 +198,15 @@ func TestPluginBase32UnprocessDeenTaskWithFlags(t *testing.T) {
 			t.Errorf("TestPluginBase32UnprocessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), b32InputData)
 		}
 	}
+}
+
+func TestPluginBase32Usage(t *testing.T) {
+	p := NewPluginBase32()
+	testFlags := p.AddCliOptionsFunc(&p, []string{})
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+	testFlags.Usage()
 }

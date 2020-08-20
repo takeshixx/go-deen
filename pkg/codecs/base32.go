@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
@@ -81,8 +82,8 @@ func NewPluginBase32() (p types.DeenPlugin) {
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		b32Cmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
 		b32Cmd.Usage = func() {
-			fmt.Printf("Usage of %s:\n\n", p.Name)
-			fmt.Printf("Base32 encoding as specified by RFC 4648.\n\n")
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "Base32 encoding as specified by RFC 4648.\n\n")
 			b32Cmd.PrintDefaults()
 		}
 		b32Cmd.Bool("hex", false, "use \"Extended Hex Alphabet\" defined in RFC 4648")

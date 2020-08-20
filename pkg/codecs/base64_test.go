@@ -2,6 +2,7 @@ package codecs
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -174,4 +175,15 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 			t.Errorf("TestPluginBase64UnprocessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), []byte(b64InputData))
 		}
 	}
+}
+
+func TestPluginBase64Usage(t *testing.T) {
+	p := NewPluginBase64()
+	testFlags := p.AddCliOptionsFunc(&p, []string{})
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+	testFlags.Usage()
 }

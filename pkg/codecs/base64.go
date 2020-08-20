@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/pkg/errors"
 	"github.com/takeshixx/deen/pkg/helpers"
@@ -86,8 +87,8 @@ func NewPluginBase64() (p types.DeenPlugin) {
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		b64Cmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
 		b64Cmd.Usage = func() {
-			fmt.Printf("Usage of %s:\n\n", p.Name)
-			fmt.Printf("Base64 encoding defined in RFC 4648. By default, decoding tries to decode raw URL and default Base64 data.\n\n")
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "Base64 encoding defined in RFC 4648. By default, decoding tries to decode raw URL and default Base64 data.\n\n")
 			b64Cmd.PrintDefaults()
 		}
 		b64Cmd.Bool("strict", false, "use strict Base64 decoding mode (don't try different encodings)")
