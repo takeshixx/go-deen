@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"flag"
 	"io"
 	"log"
@@ -84,4 +85,15 @@ func NewDeenTask(writer io.Writer) *DeenTask {
 		}
 	}()
 	return dt
+}
+
+type TrimReader struct {
+	Rd io.Reader
+}
+
+func (tr TrimReader) Read(buf []byte) (int, error) {
+	n, err := tr.Rd.Read(buf)
+	t := bytes.TrimSpace(buf[:n])
+	n = copy(buf, t)
+	return n, err
 }

@@ -35,8 +35,8 @@ func NewPluginBase85() (p types.DeenPlugin) {
 	}
 	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
-			wrappedReader := trimReader{}
-			wrappedReader.rd = task.Reader
+			wrappedReader := types.TrimReader{}
+			wrappedReader.Rd = task.Reader
 			decoder := ascii85.NewDecoder(wrappedReader)
 			_, err := io.Copy(task.PipeWriter, decoder)
 			if err != nil {
