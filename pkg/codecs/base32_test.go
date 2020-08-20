@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -111,19 +112,11 @@ func TestPluginBase32AddCliOptionsFunc(t *testing.T) {
 	if b32Flags == nil {
 		t.Error("Failed to create FlagSet")
 	}
-	hex, err := isHex(b32Flags)
-	if err != nil {
-		t.Error(err)
+	if !helpers.IsBoolFlag(b32Flags, "hex") {
+		t.Error("hex should be true")
 	}
-	if hex != true {
-		t.Errorf("hex should be true, but is: %v\n", hex)
-	}
-	noPad, err := isNoPad(b32Flags)
-	if err != nil {
-		t.Error(err)
-	}
-	if noPad != true {
-		t.Errorf("noPad should be true, but is: %v\n", noPad)
+	if !helpers.IsBoolFlag(b32Flags, "no-pad") {
+		t.Error("no-pad should be true")
 	}
 }
 

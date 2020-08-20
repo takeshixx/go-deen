@@ -2,12 +2,11 @@ package codecs
 
 import (
 	"encoding/base32"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -43,26 +42,6 @@ func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
 	}()
 }
 
-func isHex(flags *flag.FlagSet) (hex bool, err error) {
-	hexFlag := flags.Lookup("hex")
-	hex, err = strconv.ParseBool(hexFlag.Value.String())
-	if err != nil {
-		err = errors.New("Failed to parse --hex option")
-		return
-	}
-	return
-}
-
-func isNoPad(flags *flag.FlagSet) (noPad bool, err error) {
-	noPadFlag := flags.Lookup("no-pad")
-	noPad, err = strconv.ParseBool(noPadFlag.Value.String())
-	if err != nil {
-		err = errors.New("Failed to parse --no-pad option")
-		return
-	}
-	return
-}
-
 // NewPluginBase32 creates a new PluginBase32 object
 // Standard base32 encoding, as defined in RFC 4648
 func NewPluginBase32() (p types.DeenPlugin) {
@@ -78,11 +57,8 @@ func NewPluginBase32() (p types.DeenPlugin) {
 	}
 	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
 		var enc *base32.Encoding
-		noPad, err := isNoPad(flags)
-		if err != nil {
-			return
-		}
-		if hex, err := isHex(flags); hex && err == nil {
+		noPad := helpers.IsBoolFlag(flags, "no-pad")
+		if helpers.IsBoolFlag(flags, "hex") {
 			enc = base32.HexEncoding
 		} else {
 			enc = base32.StdEncoding
@@ -94,7 +70,7 @@ func NewPluginBase32() (p types.DeenPlugin) {
 	}
 	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
 		var enc *base32.Encoding
-		if hex, err := isHex(flags); hex && err == nil {
+		if helpers.IsBoolFlag(flags, "hex") {
 			enc = base32.HexEncoding
 		} else {
 			enc = base32.StdEncoding

@@ -5,9 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 
 	"github.com/pkg/errors"
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -43,41 +43,10 @@ func unprocessBase64(encoding *base64.Encoding, task *types.DeenTask) {
 	}()
 }
 
-func isRaw(flags *flag.FlagSet) (raw bool, err error) {
-	rawFlag := flags.Lookup("raw")
-	raw, err = strconv.ParseBool(rawFlag.Value.String())
-	if err != nil {
-		err = errors.Wrap(err, "Failed to parse --raw option")
-		return
-	}
-	return
-}
-
-func isStrict(flags *flag.FlagSet) (raw bool, err error) {
-	rawFlag := flags.Lookup("strict")
-	raw, err = strconv.ParseBool(rawFlag.Value.String())
-	if err != nil {
-		err = errors.Wrap(err, "Failed to parse --strict option")
-		return
-	}
-	return
-}
-
-func isURLSafe(flags *flag.FlagSet) (url bool, err error) {
-	urlFlag := flags.Lookup("url")
-	url, err = strconv.ParseBool(urlFlag.Value.String())
-	if err != nil {
-		err = errors.Wrap(err, "Failed to parse --url option")
-		return
-	}
-	return
-}
-
 func parseBase64Encoding(flags *flag.FlagSet) (enc *base64.Encoding) {
-	var raw, strict, url bool
-	strict, _ = isStrict(flags)
-	raw, _ = isRaw(flags)
-	url, _ = isURLSafe(flags)
+	raw := helpers.IsBoolFlag(flags, "raw")
+	url := helpers.IsBoolFlag(flags, "url")
+	strict := helpers.IsBoolFlag(flags, "strict")
 	if strict {
 		enc = base64.StdEncoding
 	} else {
