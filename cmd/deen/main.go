@@ -48,34 +48,24 @@ func main() {
 			if plugin.ProcessDeenTaskWithFlags != nil || plugin.UnprocessDeenTaskWithFlags != nil {
 				if pluginParser.NArg() > 0 {
 					task.Reader = strings.NewReader(pluginParser.Arg(0))
-					if plugin.Unprocess {
-						plugin.UnprocessDeenTaskWithFlags(pluginParser, task)
-					} else {
-						plugin.ProcessDeenTaskWithFlags(pluginParser, task)
-					}
 				} else {
 					task.Reader = os.Stdin
-					if plugin.Unprocess {
-						plugin.UnprocessDeenTaskWithFlags(pluginParser, task)
-					} else {
-						plugin.ProcessDeenTaskWithFlags(pluginParser, task)
-					}
+				}
+				if plugin.Unprocess {
+					plugin.UnprocessDeenTaskWithFlags(pluginParser, task)
+				} else {
+					plugin.ProcessDeenTaskWithFlags(pluginParser, task)
 				}
 			} else if plugin.ProcessDeenTaskFunc != nil || plugin.UnprocessDeenTaskFunc != nil {
 				if flag.NArg() > 1 {
 					task.Reader = strings.NewReader(flag.Arg(1))
-					if plugin.Unprocess {
-						plugin.UnprocessDeenTaskFunc(task)
-					} else {
-						plugin.ProcessDeenTaskFunc(task)
-					}
 				} else {
 					task.Reader = os.Stdin
-					if plugin.Unprocess {
-						plugin.UnprocessDeenTaskFunc(task)
-					} else {
-						plugin.ProcessDeenTaskFunc(task)
-					}
+				}
+				if plugin.Unprocess {
+					plugin.UnprocessDeenTaskFunc(task)
+				} else {
+					plugin.ProcessDeenTaskFunc(task)
 				}
 			}
 
@@ -97,47 +87,40 @@ func main() {
 			return
 		}
 
-		// Default stream implementation (will be removed soon)
+		// Default stream implementation (will be removed soon?)
+		var inputReader io.Reader
 
 		if plugin.ProcessStreamWithCliFlagsFunc != nil || plugin.UnprocessStreamWithCliFlagsFunc != nil {
 			// Process plugins that actually use additional CLI flags
 			if pluginParser.NArg() > 0 {
 				// Read data from CLI
-				stringReader := strings.NewReader(pluginParser.Arg(0))
-				if plugin.Unprocess {
-					processedData, err = plugin.UnprocessStreamWithCliFlagsFunc(pluginParser, stringReader)
-				} else {
-					processedData, err = plugin.ProcessStreamWithCliFlagsFunc(pluginParser, stringReader)
-				}
+				inputReader = strings.NewReader(pluginParser.Arg(0))
 			} else {
-				if plugin.Unprocess {
-					processedData, err = plugin.UnprocessStreamWithCliFlagsFunc(pluginParser, os.Stdin)
-				} else {
-					// Read data from STDIN
-					processedData, err = plugin.ProcessStreamWithCliFlagsFunc(pluginParser, os.Stdin)
-				}
+				inputReader = os.Stdin
+			}
+			if plugin.Unprocess {
+				processedData, err = plugin.UnprocessStreamWithCliFlagsFunc(pluginParser, inputReader)
+			} else {
+				processedData, err = plugin.ProcessStreamWithCliFlagsFunc(pluginParser, inputReader)
 			}
 		} else {
 			// Process plugins without additional CLI options
 			if flag.NArg() > 1 {
-				stringReader := strings.NewReader(flag.Arg(1))
-				if plugin.Unprocess {
-					processedData, err = plugin.UnprocessStreamFunc(stringReader)
-				} else {
-					processedData, err = plugin.ProcessStreamFunc(stringReader)
-				}
+				inputReader = strings.NewReader(flag.Arg(1))
 			} else {
-				if plugin.Unprocess {
-					processedData, err = plugin.UnprocessStreamFunc(os.Stdin)
-				} else {
-					processedData, err = plugin.ProcessStreamFunc(os.Stdin)
-				}
+				inputReader = os.Stdin
+			}
+			if plugin.Unprocess {
+				processedData, err = plugin.UnprocessStreamFunc(inputReader)
+			} else {
+				processedData, err = plugin.ProcessStreamFunc(inputReader)
 			}
 		}
 		if err != nil {
 			// TODO: better handle plugin errors?
 			log.Fatal(err)
 		}
+
 		// Convert []byte to string
 		outputData := fmt.Sprintf("%s", processedData)
 		if *noNewLinePtr {
