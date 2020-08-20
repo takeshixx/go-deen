@@ -52,14 +52,25 @@ var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
 // and their aliases.
 func PrintAvailable() {
 	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 0, 8, 0, '\t', 0)
+	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
+	var pluginList []types.DeenPlugin
 	for _, constructor := range pluginConstructors {
 		p := constructor()
-		if len(p.Aliases) > 0 {
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%s", p.Name, p.Aliases))
-		} else {
-			fmt.Fprintln(w, p.Name)
+		pluginList = append(pluginList, p)
+	}
+	for _, category := range PluginCategories {
+		fmt.Fprintf(w, "%s:\n", category)
+		for _, p := range pluginList {
+			if p.Type != category {
+				continue
+			}
+			if len(p.Aliases) > 0 {
+				fmt.Fprintf(w, " \t%s\t%s\n", p.Name, p.Aliases)
+			} else {
+				fmt.Fprintf(w, " \t%s\n", p.Name)
+			}
 		}
+		fmt.Fprintln(w, "")
 	}
 	w.Flush()
 }
