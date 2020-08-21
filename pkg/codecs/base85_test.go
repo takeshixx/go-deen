@@ -19,26 +19,34 @@ func TestNewPluginBase85(t *testing.T) {
 	}
 }
 
-func TestPluginBase85Process(t *testing.T) {
-	p := NewPluginBase85()
-	r := strings.NewReader(b85InputData)
-	d, e := p.ProcessStreamFunc(r)
-	if e != nil {
-		t.Errorf("Base85Process failed: %s", e)
-	}
-	if c := bytes.Compare(d, b85InputDataProcessed); c != 0 {
-		t.Errorf("Base85Process data wrong: %s", d)
+func TestPluginBase85ProcessDeenTask(t *testing.T) {
+	destWriter := new(bytes.Buffer)
+	task := types.NewDeenTask(destWriter)
+	task.Reader = strings.NewReader(b85InputData)
+	plugin := NewPluginBase85()
+	plugin.ProcessDeenTaskFunc(task)
+	select {
+	case err := <-task.ErrChan:
+		t.Error(err)
+	case <-task.DoneChan:
+		if c := bytes.Compare(destWriter.Bytes(), b85InputDataProcessed); c != 0 {
+			t.Errorf("TestPluginBase85ProcessDeenTask data wrong: %s != %s", destWriter.Bytes(), b85InputDataProcessed)
+		}
 	}
 }
 
-func TestPluginBase85Unprocess(t *testing.T) {
-	p := NewPluginBase85()
-	r := bytes.NewReader(b85InputDataProcessed)
-	d, e := p.UnprocessStreamFunc(r)
-	if e != nil {
-		t.Errorf("Base85Unprocess failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte(b85InputData)); c != 0 {
-		t.Errorf("Base85Unprocess data wrong: %s", d)
+func TestPluginBase85UnprocessDeenTask(t *testing.T) {
+	destWriter := new(bytes.Buffer)
+	task := types.NewDeenTask(destWriter)
+	task.Reader = bytes.NewReader(b85InputDataProcessed)
+	plugin := NewPluginBase85()
+	plugin.UnprocessDeenTaskFunc(task)
+	select {
+	case err := <-task.ErrChan:
+		t.Error(err)
+	case <-task.DoneChan:
+		if c := bytes.Compare(destWriter.Bytes(), []byte(b85InputData)); c != 0 {
+			t.Errorf("TestPluginBase85UnprocessDeenTask data wrong: %s != %s", destWriter.Bytes(), []byte(b85InputData))
+		}
 	}
 }

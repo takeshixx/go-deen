@@ -1,8 +1,15 @@
 build:
+ifeq ($(OS),Windows_NT)
+	go build -o ./bin/deen.exe ./cmd/deen
+else
 	go build -o ./bin/deen ./cmd/deen
+endif
 
 run:
 	go run ./cmd/deen/main.go
+
+clean:
+	rm -rf ./bin
 
 build-all: build-freebsd build-macos build-linux build-windows
 

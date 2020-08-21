@@ -1,10 +1,10 @@
 package codecs
 
 import (
-	"bytes"
 	"encoding/ascii85"
 	"io"
 
+	"github.com/pkg/errors"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -16,28 +16,37 @@ func NewPluginBase85() (p types.DeenPlugin) {
 		".a85"}
 	p.Type = "codec"
 	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-		encoder := ascii85.NewEncoder(&outBuf)
-		if _, err := io.Copy(encoder, reader); err != nil {
-			return outBuf.Bytes(), err
-		}
-		encoder.Close()
-		return outBuf.Bytes(), err
+	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
+		go func() {
+			encoder := ascii85.NewEncoder(task.PipeWriter)
+			_, err := io.Copy(encoder, task.Reader)
+			if err != nil {
+				task.ErrChan <- errors.Wrap(err, "Copying into encoder in Base85 failed")
+			}
+			err = encoder.Close()
+			if err != nil {
+				task.ErrChan <- errors.Wrap(err, "Closing encoder in Base85 failed")
+			}
+			err = task.PipeWriter.Close()
+			if err != nil {
+				task.ErrChan <- errors.Wrap(err, "Closing PipeWriter in Base85 failed")
+			}
+		}()
 	}
-	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-		// We have to remove leading/trailing whitespaces
-		wrappedReader := trimReader{}
-		wrappedReader.rd = reader
-		decoder := ascii85.NewDecoder(reader)
-		wrapper := struct{ io.Writer }{&outBuf}
-		if _, err := io.Copy(wrapper, decoder); err != nil {
-			return outBuf.Bytes(), err
-		}
-		return outBuf.Bytes(), err
+	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
+		go func() {
+			wrappedReader := types.TrimReader{}
+			wrappedReader.Rd = task.Reader
+			decoder := ascii85.NewDecoder(wrappedReader)
+			_, err := io.Copy(task.PipeWriter, decoder)
+			if err != nil {
+				task.ErrChan <- errors.Wrap(err, "Copy in Base85 failed")
+			}
+			err = task.PipeWriter.Close()
+			if err != nil {
+				task.ErrChan <- errors.Wrap(err, "Closing PipeWriter in Base85 failed")
+			}
+		}()
 	}
 	return
 }

@@ -1,12 +1,47 @@
 package codecs
 
 import (
-	"bytes"
 	"encoding/base32"
+	"flag"
+	"fmt"
 	"io"
+	"os"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
+
+func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
+	go func() {
+		encoder := base32.NewEncoder(encoding, task.PipeWriter)
+		_, err := io.Copy(encoder, task.Reader)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		err = encoder.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
+		err = task.PipeWriter.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
+}
+
+func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
+	go func() {
+		decoder := base32.NewDecoder(encoding, task.Reader)
+		_, err := io.Copy(task.PipeWriter, decoder)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		err = task.PipeWriter.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
+}
 
 // NewPluginBase32 creates a new PluginBase32 object
 // Standard base32 encoding, as defined in RFC 4648
@@ -15,61 +50,46 @@ func NewPluginBase32() (p types.DeenPlugin) {
 	p.Aliases = []string{".base32", "b32", ".b32"}
 	p.Type = "codec"
 	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-		encoder := base32.NewEncoder(base32.StdEncoding, &outBuf)
-		if _, err := io.Copy(encoder, reader); err != nil {
-			return outBuf.Bytes(), err
-		}
-		encoder.Close()
-		return outBuf.Bytes(), err
+	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
+		processBase32(base32.StdEncoding, task)
 	}
-	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-		// We have to remove leading/trailing whitespaces
-		wrappedReader := trimReader{}
-		wrappedReader.rd = reader
-		decoder := base32.NewDecoder(base32.StdEncoding, reader)
-		wrapper := struct{ io.Writer }{&outBuf}
-		if _, err := io.Copy(wrapper, decoder); err != nil {
-			return outBuf.Bytes(), err
-		}
-		return outBuf.Bytes(), err
+	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
+		unprocessBas32(base32.StdEncoding, task)
 	}
-	return
-}
+	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
+		var enc *base32.Encoding
+		noPad := helpers.IsBoolFlag(flags, "no-pad")
+		if helpers.IsBoolFlag(flags, "hex") {
+			enc = base32.HexEncoding
+		} else {
+			enc = base32.StdEncoding
+		}
+		if noPad {
+			enc = enc.WithPadding(base32.NoPadding)
+		}
+		processBase32(enc, task)
+	}
+	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
+		var enc *base32.Encoding
+		if helpers.IsBoolFlag(flags, "hex") {
+			enc = base32.HexEncoding
+		} else {
+			enc = base32.StdEncoding
+		}
+		unprocessBas32(enc, task)
+	}
 
-// NewPluginBase32Hex creates a new PluginBase32Hex object
-// “Extended Hex Alphabet” defined in RFC 4648
-func NewPluginBase32Hex() (p types.DeenPlugin) {
-	p.Name = "base32hex"
-	p.Aliases = []string{".base32hex", "b32h", ".b32h"}
-	p.Type = "codec"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-		encoder := base32.NewEncoder(base32.HexEncoding, &outBuf)
-		if _, err := io.Copy(encoder, reader); err != nil {
-			return outBuf.Bytes(), err
+	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
+		b32Cmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
+		b32Cmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "Base32 encoding as specified by RFC 4648.\n\n")
+			b32Cmd.PrintDefaults()
 		}
-		encoder.Close()
-		return outBuf.Bytes(), err
-	}
-	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-		// We have to remove leading/trailing whitespaces
-		wrappedReader := trimReader{}
-		wrappedReader.rd = reader
-		decoder := base32.NewDecoder(base32.HexEncoding, reader)
-		wrapper := struct{ io.Writer }{&outBuf}
-		if _, err := io.Copy(wrapper, decoder); err != nil {
-			return outBuf.Bytes(), err
-		}
-		return outBuf.Bytes(), err
+		b32Cmd.Bool("hex", false, "use \"Extended Hex Alphabet\" defined in RFC 4648")
+		b32Cmd.Bool("no-pad", false, "disable padding")
+		b32Cmd.Parse(args)
+		return b32Cmd
 	}
 	return
 }

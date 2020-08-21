@@ -1,11 +1,14 @@
 package hashs
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
 	"hash"
 	"io"
+	"os"
 	"strconv"
 
 	"golang.org/x/crypto/blake2b"
@@ -15,49 +18,93 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-// Generic function that calculates BLAKE2 variants
-func doBLAKE2(variant string, reader *io.Reader, macKey []byte) ([]byte, error) {
-	var hasher hash.Hash
+func doBLAKE2x(reader *io.Reader, macKey []byte, length uint16) ([]byte, error) {
+	var hasher blake2s.XOF
 	var err error
-	switch variant {
-	case "blake2s-256":
+	if len(macKey) != 0 {
+		hasher, err = blake2s.NewXOF(length, macKey)
+	} else {
+		hasher, err = blake2s.NewXOF(length, nil)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(hasher, *reader); err != nil {
+		return nil, err
+	}
+	var outBuf bytes.Buffer
+	hexEncoder := hex.NewEncoder(&outBuf)
+	_, err = io.Copy(hexEncoder, hasher)
+	if err != nil {
+		return nil, err
+	}
+	return outBuf.Bytes(), err
+}
+
+// NewPluginBLAKE2x creates a plugin
+func NewPluginBLAKE2x() (p types.DeenPlugin) {
+	p.Name = "blake2x"
+	p.Aliases = []string{"b2x"}
+	p.Type = "hash"
+	p.Unprocess = false
+	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
+		return doBLAKE2x(&reader, nil, uint16(32))
+	}
+	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
+		macKey := flags.Lookup("key")
+		var key []byte
+		if macKey.Value.String() != "" {
+			key = []byte(macKey.Value.String())
+		} else {
+			key = nil
+		}
+		lengthFlag := flags.Lookup("len")
+		length, err := strconv.Atoi(lengthFlag.Value.String())
+		if err != nil {
+			return nil, err
+		}
+		if length < 1 || length > 65535 {
+			length = 32
+		}
+		return doBLAKE2x(&reader, key, uint16(length))
+	}
+	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
+		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
+		blakeCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "BLAKE2 is a fast and secure cryptographic hash function defined \nin RFC 7693.\n\n")
+			fmt.Fprintf(os.Stderr, "BLAKE2X is a family of extensible-output functions (XOFs). Whereas BLAKE2 is limited to 64-byte digests, BLAKE2X allows for digests of up to 256 GiB.\n\n")
+			blakeCmd.PrintDefaults()
+		}
+		blakeCmd.String("key", "", "MAC key")
+		blakeCmd.Int("len", 32, "length of the output hash in bytes, must be between 1 and 65535")
+		blakeCmd.Parse(args)
+		return blakeCmd
+	}
+	return
+}
+
+func doBLAKE2s(reader *io.Reader, macKey []byte, length int) ([]byte, error) {
+	var err error
+	var hasher hash.Hash
+	if length == 32 {
 		if len(macKey) != 0 {
 			hasher, err = blake2s.New256(macKey)
 		} else {
 			hasher, err = blake2s.New256(nil)
 		}
-	case "blake2s-128":
+	} else {
 		if len(macKey) != 0 {
 			hasher, err = blake2s.New128(macKey)
 		} else {
-			hasher, err = blake2s.New128(nil)
+			return []byte(""), errors.New("BLAKE2s128 requres a key")
 		}
-	case "blake2b-512":
-		if len(macKey) != 0 {
-			hasher, err = blake2b.New512(macKey)
-		} else {
-			hasher, err = blake2b.New512(nil)
-		}
-	case "blake2b-384":
-		if len(macKey) != 0 {
-			hasher, err = blake2b.New384(macKey)
-		} else {
-			hasher, err = blake2b.New384(nil)
-		}
-	case "blake2b-256":
-		if len(macKey) != 0 {
-			hasher, err = blake2b.New256(macKey)
-		} else {
-			hasher, err = blake2b.New256(nil)
-		}
-	default:
-		return *new([]byte), err
 	}
 	if err != nil {
-		return *new([]byte), err
+		return nil, err
 	}
 	if _, err := io.Copy(hasher, *reader); err != nil {
-		return *new([]byte), err
+		return nil, err
 	}
 	hashSum := hasher.Sum(nil)
 	outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
@@ -68,122 +115,102 @@ func doBLAKE2(variant string, reader *io.Reader, macKey []byte) ([]byte, error) 
 // NewPluginBLAKE2s creates a plugin
 func NewPluginBLAKE2s() (p types.DeenPlugin) {
 	p.Name = "blake2s"
-	p.Aliases = []string{"blake2s256", "blake2s-256"}
+	p.Aliases = []string{"b2s"}
 	p.Type = "hash"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return doBLAKE2("blake2s-256", &reader, []byte{})
+		return doBLAKE2s(&reader, nil, 32)
 	}
 	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
 		macKey := flags.Lookup("key")
+		var key []byte
 		if macKey.Value.String() != "" {
-			return doBLAKE2("blake2s-256", &reader, []byte(macKey.Value.String()))
+			key = []byte(macKey.Value.String())
+		} else {
+			key = nil
 		}
-		return doBLAKE2("blake2s-256", &reader, []byte{})
+		lengthFlag := flags.Lookup("len")
+		length, err := strconv.Atoi(lengthFlag.Value.String())
+		if err != nil {
+			return nil, err
+		}
+		if length != 16 && length != 32 {
+			return nil, errors.New("Invalid length")
+		}
+		return doBLAKE2s(&reader, key, length)
 	}
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
+		blakeCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "BLAKE2 is a fast and secure cryptographic hash function defined \nin RFC 7693.\n\n")
+			fmt.Fprintf(os.Stderr, "BLAKE2s is optimized for 8- to 32-bit platforms and produces\ndigests of any size between 1 and 32 bytes.\n\n")
+			blakeCmd.PrintDefaults()
+		}
 		blakeCmd.String("key", "", "MAC key")
+		blakeCmd.Int("len", 32, "length of the output hash in bytes, must be either 16 or 32")
 		blakeCmd.Parse(args)
 		return blakeCmd
 	}
 	return
 }
 
-// NewPluginBLAKE2s128 creates a plugin
-func NewPluginBLAKE2s128() (p types.DeenPlugin) {
-	p.Name = "blake2s128"
-	p.Aliases = []string{"blake2s-128"}
-	p.Type = "hash"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return doBLAKE2("blake2s-128", &reader, []byte{})
+func doBLAKE2b(reader *io.Reader, macKey []byte, length int) ([]byte, error) {
+	var hasher hash.Hash
+	var err error
+	if len(macKey) != 0 {
+		hasher, err = blake2b.New(length, macKey)
+	} else {
+		hasher, err = blake2b.New(length, nil)
 	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		macKey := flags.Lookup("key")
-		if macKey.Value.String() != "" {
-			return doBLAKE2("blake2s-128", &reader, []byte(macKey.Value.String()))
-		}
-		return doBLAKE2("blake2s-128", &reader, []byte{})
+	if err != nil {
+		return nil, err
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.String("key", "", "MAC key")
-		blakeCmd.Parse(args)
-		return blakeCmd
+	if _, err := io.Copy(hasher, *reader); err != nil {
+		return nil, err
 	}
-	return
+	hashSum := hasher.Sum(nil)
+	outBuf := []byte(fmt.Sprintf("%x", hashSum))
+	return outBuf, err
 }
 
 // NewPluginBLAKE2b creates a plugin
 func NewPluginBLAKE2b() (p types.DeenPlugin) {
 	p.Name = "blake2b"
-	p.Aliases = []string{"blake2b512", "blake2b-512"}
+	p.Aliases = []string{"b2b"}
 	p.Type = "hash"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return doBLAKE2("blake2b-512", &reader, []byte{})
+		return doBLAKE2b(&reader, nil, 64)
 	}
 	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
 		macKey := flags.Lookup("key")
+		var key []byte
 		if macKey.Value.String() != "" {
-			return doBLAKE2("blake2b-512", &reader, []byte(macKey.Value.String()))
+			key = []byte(macKey.Value.String())
+		} else {
+			key = nil
 		}
-		return doBLAKE2("blake2b-512", &reader, []byte{})
+		lengthFlag := flags.Lookup("len")
+		length, err := strconv.Atoi(lengthFlag.Value.String())
+		if err != nil {
+			return nil, err
+		}
+		if length < 1 || length > 64 {
+			length = 32
+		}
+		return doBLAKE2b(&reader, key, length)
 	}
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.String("key", "", "MAC key")
-		blakeCmd.Parse(args)
-		return blakeCmd
-	}
-	return
-}
-
-// NewPluginBLAKE2b384 creates a plugin
-func NewPluginBLAKE2b384() (p types.DeenPlugin) {
-	p.Name = "blake2b384"
-	p.Aliases = []string{"blake2b-384"}
-	p.Type = "hash"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return doBLAKE2("blake2b-384", &reader, []byte{})
-	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		macKey := flags.Lookup("key")
-		if macKey.Value.String() != "" {
-			return doBLAKE2("blake2b-384", &reader, []byte(macKey.Value.String()))
+		blakeCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "BLAKE2 is a fast and secure cryptographic hash function defined \nin RFC 7693.\n\n")
+			fmt.Fprintf(os.Stderr, "BLAKE2b (or just BLAKE2) is optimized for 64-bit platforms and\nproduces digests of any size between 1 and 64 bytes . This\nplugin generates 512 bit hashs.\n\n")
+			blakeCmd.PrintDefaults()
 		}
-		return doBLAKE2("blake2b-384", &reader, []byte{})
-	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
 		blakeCmd.String("key", "", "MAC key")
-		blakeCmd.Parse(args)
-		return blakeCmd
-	}
-	return
-}
-
-// NewPluginBLAKE2b256 creates a plugin
-func NewPluginBLAKE2b256() (p types.DeenPlugin) {
-	p.Name = "blake2b256"
-	p.Aliases = []string{"blake2b-256"}
-	p.Type = "hash"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return doBLAKE2("blake2b-256", &reader, []byte{})
-	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		macKey := flags.Lookup("key")
-		if macKey.Value.String() != "" {
-			return doBLAKE2("blake2b-256", &reader, []byte(macKey.Value.String()))
-		}
-		return doBLAKE2("blake2b-256", &reader, []byte{})
-	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.String("key", "", "MAC key")
+		blakeCmd.Int("len", 32, "length of the output hash in bytes, must be between 1 and 64")
 		blakeCmd.Parse(args)
 		return blakeCmd
 	}
@@ -206,7 +233,7 @@ func doBLAKE3(outLen int, reader *io.Reader, key []byte, derive bool, ctx string
 		hasher = blake3.New(outLen, nil)
 	}
 	if _, err := io.Copy(hasher, *reader); err != nil {
-		return *new([]byte), err
+		return nil, err
 	}
 	hashSum := hasher.Sum(nil)
 	outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
@@ -217,7 +244,7 @@ func doBLAKE3(outLen int, reader *io.Reader, key []byte, derive bool, ctx string
 // NewPluginBLAKE3 creates a plugin
 func NewPluginBLAKE3() (p types.DeenPlugin) {
 	p.Name = "blake3"
-	p.Aliases = []string{"blake3512", "blake3-512"}
+	p.Aliases = []string{"b3"}
 	p.Type = "hash"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
@@ -227,7 +254,7 @@ func NewPluginBLAKE3() (p types.DeenPlugin) {
 		length := flags.Lookup("length")
 		outLen, err := strconv.Atoi(length.Value.String())
 		if err != nil {
-			return *new([]byte), err
+			return nil, err
 		}
 		if outLen == 0 {
 			outLen = 32
@@ -255,6 +282,12 @@ func NewPluginBLAKE3() (p types.DeenPlugin) {
 	}
 	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
 		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
+		blakeCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "BLAKE3 is a cryptographic hash function that is fast and secure.\n")
+			fmt.Fprintf(os.Stderr, "It can be used as PRF, MAC, KDF, and XOF as well as a regular hash.\n\n")
+			blakeCmd.PrintDefaults()
+		}
 		blakeCmd.String("key", "", "key (requires 32 bytes)")
 		blakeCmd.Int("length", 32, "number of output bytes")
 		blakeCmd.String("derive-key", "", "derive key")
