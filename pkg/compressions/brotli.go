@@ -95,7 +95,8 @@ func NewPluginBrotli() (p types.DeenPlugin) {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Decription\n\n")
+			fmt.Fprintf(os.Stderr, "Brotli is a generic-purpose lossless compression algorithm\nthat compresses data using a combination of a modern variant\nof the LZ77 algorithm, Huffman coding and 2nd order context\nmodeling, with a compression ratio comparable to the best\ncurrently available general-purpose compression methods.\n\n")
+			fmt.Fprintf(os.Stderr, "The specification of the Brotli Compressed Data Format is\ndefined in RFC 7932.\n\n")
 			flags.PrintDefaults()
 		}
 		flags.Int("level", brotli.DefaultCompression, "compression level")
