@@ -12,7 +12,7 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-var version = "v3.0-alpha"
+var version = "v3.1-alpha"
 
 func main() {
 	noNewLinePtr := flag.Bool("n", false, "omit new line")
