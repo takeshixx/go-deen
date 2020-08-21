@@ -46,6 +46,7 @@ var pluginConstructors = []types.PluginConstructor{
 	compressions.NewPluginGzip,
 	compressions.NewPluginZlib,
 	compressions.NewPluginBzip2,
+	compressions.NewPluginBrotli,
 	formatters.NewPluginJSONFormatter,
 }
 
