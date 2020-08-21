@@ -44,39 +44,16 @@ func TestPluginBLAKE2sProcessStreamWithCliFlagsFunc(t *testing.T) {
 	if c := bytes.Compare(d, []byte("4088080c149a6165b9a086ef4aaeb13df5fc7ffb83d5731ed9692320b5634c50")); c != 0 {
 		t.Errorf("BLAKE2sProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
 	}
-}
 
-func TestPluginBLAKE2s128ProcessStreamFunc(t *testing.T) {
-	p := NewPluginBLAKE2s128()
-	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
-	if e != nil {
-		t.Errorf("BLAKE2s128ProcessStreamFunc failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte("b789903bd37697727692abb9f0494bad")); c != 0 {
-		t.Errorf("BLAKE2s128ProcessStreamFunc returned invalid data: %s", d)
-	}
-
-	p = NewPluginBLAKE2s128()
+	p = NewPluginBLAKE2s()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags = p.AddCliOptionsFunc(&p, []string{"-len", "16", "-key", blakeTestKey})
 	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
-	if e == nil {
-		t.Error("BLAKE2s128ProcessStreamFunc without a key did not trigger an error")
-	}
-}
-
-func TestPluginBLAKE2s128ProcessStreamWithCliFlagsFunc(t *testing.T) {
-	p := NewPluginBLAKE2s128()
-	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
 	if e != nil {
-		t.Errorf("BLAKE2s128ProcessStreamWithCliFlagsFunc failed: %s", e)
+		t.Errorf("BLAKE2sProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
 	if c := bytes.Compare(d, []byte("b789903bd37697727692abb9f0494bad")); c != 0 {
-		t.Errorf("BLAKE2s128ProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
+		t.Errorf("BLAKE2sProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
 	}
 }
 
@@ -95,7 +72,7 @@ func TestPluginBLAKE2bProcessStreamFunc(t *testing.T) {
 func TestPluginBLAKE2bProcessStreamWithCliFlagsFunc(t *testing.T) {
 	p := NewPluginBLAKE2b()
 	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
+	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey, "-len", "64"})
 	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
 	if e != nil {
 		t.Errorf("BLAKE2bProcessStreamWithCliFlagsFunc failed: %s", e)
@@ -106,7 +83,7 @@ func TestPluginBLAKE2bProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE2b()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags = p.AddCliOptionsFunc(&p, []string{"-len", "64"})
 	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
 	if e != nil {
 		t.Errorf("BLAKE2bProcessStreamWithCliFlagsFunc failed: %s", e)
@@ -116,75 +93,39 @@ func TestPluginBLAKE2bProcessStreamWithCliFlagsFunc(t *testing.T) {
 	}
 }
 
-func TestPluginBLAKE2b384ProcessStreamFunc(t *testing.T) {
-	p := NewPluginBLAKE2b384()
+func TestPluginBLAKE2xProcessStreamFunc(t *testing.T) {
+	p := NewPluginBLAKE2x()
 	r := bytes.NewReader(blakeTestData)
 	d, e := p.ProcessStreamFunc(r)
 	if e != nil {
-		t.Errorf("BLAKE2b384ProcessStreamFunc failed: %s", e)
+		t.Errorf("TestPluginBLAKE2xProcessStreamFunc failed: %s", e)
 	}
-	if c := bytes.Compare(d, []byte("4b9857fa13e3c90de236b5004bd9ed91c4b5da1a83e9b75f6450c07e4577d971a478e5865e12a6d262498b04b9560847")); c != 0 {
-		t.Errorf("BLAKE2b384ProcessSteamFunc returned invalid data: %s", d)
+	if c := bytes.Compare(d, []byte("0924e4d71784282e91639a595475a0290a9c2caee4a03978199b4d2f7bcf8d83")); c != 0 {
+		t.Errorf("BLAKE2bProcessSteamFunc returned invalid data: %s", d)
 	}
 }
 
-func TestPluginBLAKE2b384ProcessStreamWithCliFlagsFunc(t *testing.T) {
-	p := NewPluginBLAKE2b384()
+func TestPluginBLAKE2xProcessStreamWithCliFlagsFunc(t *testing.T) {
+	p := NewPluginBLAKE2x()
 	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
+	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey, "-len", "64"})
 	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
 	if e != nil {
-		t.Errorf("BLAKE2b384ProcessStreamWithCliFlagsFunc failed: %s", e)
+		t.Errorf("TestPluginBLAKE2xProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
-	if c := bytes.Compare(d, []byte("19297fafa024f3408591cac9343686a39cb4f306148f40b38fe51a4a0937a87f4367c66744e577c6360748f78bdad648")); c != 0 {
-		t.Errorf("BLAKE2b384ProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
+	if c := bytes.Compare(d, []byte("94e30c637ecf91f9873924d74e667e56099045b8e3cffaa3ad9d415b163af0ad6c0c1da67732b0d2497f152f197635d2ac76cead6c7a48fcb8c0b11ca3a726f0")); c != 0 {
+		t.Errorf("TestPluginBLAKE2xProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
 	}
 
-	p = NewPluginBLAKE2b384()
+	p = NewPluginBLAKE2x()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
+	testFlags = p.AddCliOptionsFunc(&p, []string{"-len", "256"})
 	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
 	if e != nil {
-		t.Errorf("BLAKE2b384ProcessStreamWithCliFlagsFunc failed: %s", e)
+		t.Errorf("TestPluginBLAKE2xProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
-	if c := bytes.Compare(d, []byte("4b9857fa13e3c90de236b5004bd9ed91c4b5da1a83e9b75f6450c07e4577d971a478e5865e12a6d262498b04b9560847")); c != 0 {
-		t.Errorf("BLAKE2b384ProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
-	}
-}
-
-func TestPluginBLAKE2b256ProcessStreamFunc(t *testing.T) {
-	p := NewPluginBLAKE2b256()
-	r := bytes.NewReader(blakeTestData)
-	d, e := p.ProcessStreamFunc(r)
-	if e != nil {
-		t.Errorf("BLAKE2b256ProcessStreamFunc failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte("9c5a85bed8e8f3fb41e1d21f7dd0ae4033d506aa125da2c03f2dd527fb6b1868")); c != 0 {
-		t.Errorf("BLAKE2b256ProcessSteamFunc returned invalid data: %s", d)
-	}
-}
-
-func TestPluginBLAKE2b256ProcessStreamWithCliFlagsFunc(t *testing.T) {
-	p := NewPluginBLAKE2b256()
-	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
-	if e != nil {
-		t.Errorf("BLAKE2b256ProcessStreamWithCliFlagsFunc failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte("6979810b7ec2cc132a2bcaaef73ab661d3e38d6248694c4ddc3b6261772b3128")); c != 0 {
-		t.Errorf("BLAKE2b256ProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
-	}
-
-	p = NewPluginBLAKE2b256()
-	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
-	if e != nil {
-		t.Errorf("BLAKE2b256ProcessStreamWithCliFlagsFunc failed: %s", e)
-	}
-	if c := bytes.Compare(d, []byte("9c5a85bed8e8f3fb41e1d21f7dd0ae4033d506aa125da2c03f2dd527fb6b1868")); c != 0 {
-		t.Errorf("BLAKE2b256ProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
+	if c := bytes.Compare(d, []byte("fc229cfc05261f697e49c8ae9db9a2c434c759636d77a87b8657ab40389fa1446a9fe4bd14d9b62122799ef8217b054df95a83e110c967c2bbfdeed6a41264efd1034c3279a9c3c2f9a17650d40e47a93eac18b8b59f5b28dfc0d948e178e033ff3057b90b5742a6c44eb498ac10756e4cfa2d1335615eebc5a4c6145bd18fa06ea0f6e2fd54077be86d64ec29ba30da6cf7e584fa00458ae51653da89cccf6a050b4946f8141c53164c9753d409012439e05e67d92384b6e94b2819cf5b915738e7d1e4d05c4bf6be501061614a15b10c40c70899d54b643fcc4861ed155cacefe1575c2ba1f70ba513da3916b95d1e16549db1a1f8dce722899394070d5773")); c != 0 {
+		t.Errorf("TestPluginBLAKE2xProcessStreamWithCliFlagsFunc returned invalid data: %s", d)
 	}
 }
 
@@ -276,19 +217,11 @@ func TestPluginBlakeUsage(t *testing.T) {
 	testFlags := p.AddCliOptionsFunc(&p, []string{})
 	testFlags.Usage()
 
-	p = NewPluginBLAKE2s128()
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	testFlags.Usage()
-
 	p = NewPluginBLAKE2b()
 	testFlags = p.AddCliOptionsFunc(&p, []string{})
 	testFlags.Usage()
 
-	p = NewPluginBLAKE2b384()
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	testFlags.Usage()
-
-	p = NewPluginBLAKE2b256()
+	p = NewPluginBLAKE2x()
 	testFlags = p.AddCliOptionsFunc(&p, []string{})
 	testFlags.Usage()
 
