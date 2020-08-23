@@ -2,10 +2,12 @@ package codecs
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -49,4 +51,16 @@ func TestPluginHexUnprocessDeenTask(t *testing.T) {
 			t.Errorf("TestPluginBase85ProcessDeenTask data wrong: %s != %s", destWriter.Bytes(), []byte(hexInputData))
 		}
 	}
+}
+
+func TestPluginHexUsage(t *testing.T) {
+	p := NewPluginHex()
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+	flags.Usage()
 }
