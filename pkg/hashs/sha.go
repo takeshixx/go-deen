@@ -3,7 +3,10 @@ package hashs
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"flag"
+	"fmt"
 	"io"
+	"os"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
@@ -24,6 +27,16 @@ func NewPluginSHA1() (p types.DeenPlugin) {
 		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
+	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "SHA1 is a cryptographic hash function which takes an input\nand produces a 160-bit (20-byte) hash value known as a\nmessage digest.\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
