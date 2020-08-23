@@ -4,7 +4,10 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"flag"
+	"fmt"
 	"io"
+	"os"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
@@ -26,6 +29,16 @@ func NewPluginSHA224() (p types.DeenPlugin) {
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
 	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
+	}
 	return
 }
 
@@ -45,6 +58,16 @@ func NewPluginSHA256() (p types.DeenPlugin) {
 		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
+	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
@@ -66,6 +89,16 @@ func NewPluginSHA384() (p types.DeenPlugin) {
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
 	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
+	}
 	return
 }
 
@@ -85,6 +118,16 @@ func NewPluginSHA512() (p types.DeenPlugin) {
 		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
+	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }

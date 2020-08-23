@@ -2,7 +2,10 @@ package hashs
 
 import (
 	"bytes"
+	"os"
 	"testing"
+
+	"github.com/takeshixx/deen/pkg/helpers"
 )
 
 func TestNewPluginSHA224(t *testing.T) {
@@ -51,4 +54,32 @@ func TestNewPluginSHA512(t *testing.T) {
 	if c := bytes.Compare(d, []byte("695359c0ba4b7cb76c5287e14c5f2d5284bfa0b5df81dbb2abfab080221019ed9de0a3f3d4307772cf8bc40c16930d4f1b2a0bd0d81e8a9bed2290f588d2d90b")); c != 0 {
 		t.Errorf("Invalid SHA512 data: %s", d)
 	}
+}
+
+func TestSHA2Usage(t *testing.T) {
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+
+	p := NewPluginSHA224()
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
+
+	p = NewPluginSHA256()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
+
+	p = NewPluginSHA384()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
+
+	p = NewPluginSHA512()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
 }
