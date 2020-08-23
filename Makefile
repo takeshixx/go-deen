@@ -11,6 +11,9 @@ run:
 clean:
 	rm -rf ./bin
 
+test:
+	go test -timeout 20s -cover ./...
+
 build-all: build-freebsd build-macos build-linux build-windows
 
 build-freebsd:
