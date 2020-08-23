@@ -54,7 +54,8 @@ type DeenTask struct {
 // corresponding task.
 func (dt *DeenTask) Close() error {
 	err := dt.PipeWriter.Close()
-	dt.DoneChan <- true
+	// TODO: should we also send to DoneChan?
+	//dt.DoneChan <- true
 	return err
 }
 
