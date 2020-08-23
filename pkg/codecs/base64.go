@@ -84,18 +84,18 @@ func NewPluginBase64() (p types.DeenPlugin) {
 		enc := parseBase64Encoding(flags)
 		unprocessBase64(enc, task)
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		b64Cmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		b64Cmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Base64 encoding defined in RFC 4648. By default, decoding tries to decode raw URL and default Base64 data.\n\n")
-			b64Cmd.PrintDefaults()
+			fmt.Fprintf(os.Stderr, "Base64 encoding defined in RFC 4648. By default, decoding\ntries to decode raw URL and default Base64 data.\n\n")
+			flags.PrintDefaults()
 		}
-		b64Cmd.Bool("strict", false, "use strict Base64 decoding mode (don't try different encodings)")
-		b64Cmd.Bool("raw", false, "unpadded Base64 encoding (as defined in RFC 4648 section 3.2)")
-		b64Cmd.Bool("url", false, "use alternate, URL-safe Base64 encoding")
-		b64Cmd.Parse(args)
-		return b64Cmd
+		flags.Bool("strict", false, "use strict Base64 decoding mode (don't try different encodings)")
+		flags.Bool("raw", false, "unpadded Base64 encoding (as defined in RFC 4648 section 3.2)")
+		flags.Bool("url", false, "use alternate, URL-safe Base64 encoding")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }

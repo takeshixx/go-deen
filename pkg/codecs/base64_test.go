@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -58,8 +59,9 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task := types.NewDeenTask(destWriter)
 	task.Reader = strings.NewReader(b64InputData)
 	plugin := NewPluginBase64()
-	b64Flags := plugin.AddCliOptionsFunc(&plugin, []string{""})
-	plugin.ProcessDeenTaskWithFlags(b64Flags, task)
+	flags := helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{""})
+	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -73,8 +75,9 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task = types.NewDeenTask(destWriter)
 	task.Reader = strings.NewReader(b64InputData)
 	plugin = NewPluginBase64()
-	b64Flags = plugin.AddCliOptionsFunc(&plugin, []string{"-url"})
-	plugin.ProcessDeenTaskWithFlags(b64Flags, task)
+	flags = helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-url"})
+	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -88,8 +91,9 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task = types.NewDeenTask(destWriter)
 	task.Reader = strings.NewReader(b64InputData)
 	plugin = NewPluginBase64()
-	b64Flags = plugin.AddCliOptionsFunc(&plugin, []string{"-raw"})
-	plugin.ProcessDeenTaskWithFlags(b64Flags, task)
+	flags = helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw"})
+	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -103,8 +107,9 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task = types.NewDeenTask(destWriter)
 	task.Reader = strings.NewReader(b64InputData)
 	plugin = NewPluginBase64()
-	b64Flags = plugin.AddCliOptionsFunc(&plugin, []string{"-raw", "-url"})
-	plugin.ProcessDeenTaskWithFlags(b64Flags, task)
+	flags = helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw", "-url"})
+	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -120,8 +125,9 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task := types.NewDeenTask(destWriter)
 	task.Reader = bytes.NewReader(b64InputDataProcessed)
 	plugin := NewPluginBase64()
-	b64Flags := plugin.AddCliOptionsFunc(&plugin, []string{""})
-	plugin.UnprocessDeenTaskWithFlags(b64Flags, task)
+	flags := helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{""})
+	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -135,8 +141,9 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task = types.NewDeenTask(destWriter)
 	task.Reader = bytes.NewReader(b64InputDataProcessedURL)
 	plugin = NewPluginBase64()
-	b64Flags = plugin.AddCliOptionsFunc(&plugin, []string{"-url"})
-	plugin.UnprocessDeenTaskWithFlags(b64Flags, task)
+	flags = helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-url"})
+	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -150,8 +157,9 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task = types.NewDeenTask(destWriter)
 	task.Reader = bytes.NewReader(bytes.ReplaceAll(b64InputDataProcessed, []byte("="), []byte("")))
 	plugin = NewPluginBase64()
-	b64Flags = plugin.AddCliOptionsFunc(&plugin, []string{"-raw"})
-	plugin.UnprocessDeenTaskWithFlags(b64Flags, task)
+	flags = helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw"})
+	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -165,8 +173,9 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task = types.NewDeenTask(destWriter)
 	task.Reader = bytes.NewReader(bytes.ReplaceAll(b64InputDataProcessedURL, []byte("="), []byte("")))
 	plugin = NewPluginBase64()
-	b64Flags = plugin.AddCliOptionsFunc(&plugin, []string{"-raw", "-url"})
-	plugin.UnprocessDeenTaskWithFlags(b64Flags, task)
+	flags = helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw", "-url"})
+	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
 		t.Error(err)
@@ -179,11 +188,12 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 
 func TestPluginBase64Usage(t *testing.T) {
 	p := NewPluginBase64()
-	testFlags := p.AddCliOptionsFunc(&p, []string{})
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)
 	}
 	os.Stderr = w
-	testFlags.Usage()
+	flags.Usage()
 }
