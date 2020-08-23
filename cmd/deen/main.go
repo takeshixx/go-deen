@@ -9,15 +9,17 @@ import (
 	"strings"
 
 	"github.com/takeshixx/deen/internal/plugins"
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
 var version = "v3.1-alpha"
 
 func main() {
-	noNewLinePtr := flag.Bool("n", false, "omit new line")
+	noNewLinePtr := flag.Bool("n", false, "do not output the trailing newline")
 	printPluginsPtr := flag.Bool("l", false, "list available plugins")
 	versionPtr := flag.Bool("version", false, "print version")
+	filePtr := flag.String("file", "", "read from file")
 	flag.Parse()
 
 	if flag.NArg() > 0 {
@@ -35,7 +37,49 @@ func main() {
 		var pluginParser *flag.FlagSet
 		if plugin.AddCliOptionsFunc != nil {
 			// Add CLI descriptions/options for plugins
-			pluginParser = plugin.AddCliOptionsFunc(plugin, os.Args[2:])
+			pluginParser = plugin.AddCliOptionsFunc(plugin, helpers.RemoveBeforeSubcommand(os.Args, cmd))
+		} else if plugin.AddDefaultCliFunc != nil {
+			pluginParser = helpers.DefaultFlagSet()
+			pluginParser = plugin.AddDefaultCliFunc(plugin, pluginParser, helpers.RemoveBeforeSubcommand(os.Args, cmd))
+		}
+
+		if pluginParser.Lookup("n") != nil && helpers.IsBoolFlag(pluginParser, "n") {
+			tb := true
+			noNewLinePtr = &tb
+		}
+
+		// Create a new task
+		task := types.NewDeenTask(os.Stdout)
+
+		// Decide where we read from. Its either from a file,
+		// data from argv or stdin.
+		if *filePtr != "" {
+			mainFile, err := os.Open(*filePtr)
+			if err != nil {
+				log.Fatalf("Failed to open file: %v", err)
+			}
+			task.Reader = mainFile
+		} else if pluginParser != nil {
+			pluginFilePtr := pluginParser.Lookup("file")
+			if pluginFilePtr != nil && pluginFilePtr.Value.String() != "" {
+				pluginFile, err := os.Open(pluginFilePtr.Value.String())
+				if err != nil {
+					log.Fatalf("Failed to open file: %v", err)
+				}
+				task.Reader = pluginFile
+			} else if pluginParser.NArg() > 0 {
+				inputData := strings.Join(pluginParser.Args(), " ")
+				task.Reader = strings.NewReader(inputData)
+			} else {
+				task.Reader = os.Stdin
+			}
+		} else {
+			if flag.NArg() > 1 {
+				inputData := strings.Join(flag.Args()[1:], " ")
+				task.Reader = strings.NewReader(inputData)
+			} else {
+				task.Reader = os.Stdin
+			}
 		}
 
 		// TODO: this check will be removed as soon as the old
@@ -43,25 +87,13 @@ func main() {
 		// stubs.
 		if plugin.ProcessDeenTaskFunc != nil {
 			// PipeChanFunc prototype
-			// Create a new task
-			task := types.NewDeenTask(os.Stdout)
 			if plugin.ProcessDeenTaskWithFlags != nil || plugin.UnprocessDeenTaskWithFlags != nil {
-				if pluginParser.NArg() > 0 {
-					task.Reader = strings.NewReader(pluginParser.Arg(0))
-				} else {
-					task.Reader = os.Stdin
-				}
 				if plugin.Unprocess {
 					plugin.UnprocessDeenTaskWithFlags(pluginParser, task)
 				} else {
 					plugin.ProcessDeenTaskWithFlags(pluginParser, task)
 				}
 			} else if plugin.ProcessDeenTaskFunc != nil || plugin.UnprocessDeenTaskFunc != nil {
-				if flag.NArg() > 1 {
-					task.Reader = strings.NewReader(flag.Arg(1))
-				} else {
-					task.Reader = os.Stdin
-				}
 				if plugin.Unprocess {
 					plugin.UnprocessDeenTaskFunc(task)
 				} else {
@@ -88,16 +120,10 @@ func main() {
 		}
 
 		// Default stream implementation (will be removed soon?)
-		var inputReader io.Reader
+		inputReader := task.Reader
 
 		if plugin.ProcessStreamWithCliFlagsFunc != nil || plugin.UnprocessStreamWithCliFlagsFunc != nil {
 			// Process plugins that actually use additional CLI flags
-			if pluginParser.NArg() > 0 {
-				// Read data from CLI
-				inputReader = strings.NewReader(pluginParser.Arg(0))
-			} else {
-				inputReader = os.Stdin
-			}
 			if plugin.Unprocess {
 				processedData, err = plugin.UnprocessStreamWithCliFlagsFunc(pluginParser, inputReader)
 			} else {
@@ -105,11 +131,6 @@ func main() {
 			}
 		} else {
 			// Process plugins without additional CLI options
-			if flag.NArg() > 1 {
-				inputReader = strings.NewReader(flag.Arg(1))
-			} else {
-				inputReader = os.Stdin
-			}
 			if plugin.Unprocess {
 				processedData, err = plugin.UnprocessStreamFunc(inputReader)
 			} else {

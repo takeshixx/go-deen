@@ -20,6 +20,7 @@ func IsBoolFlag(flags *flag.FlagSet, name string) (cur bool) {
 // globally.
 func DefaultFlagSet() *flag.FlagSet {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
+	flags.Bool("n", false, "do not output the trailing newline")
 	flags.String("file", "", "read from file")
 	return flags
 }
