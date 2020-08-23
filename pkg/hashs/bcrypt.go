@@ -42,16 +42,16 @@ func NewPluginBcrypt() (p types.DeenPlugin) {
 		outBuf, err := bcrypt.GenerateFromPassword(inBuf.Bytes(), cost)
 		return outBuf, err
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		bcryptCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		bcryptCmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "bcrypt password hashing.\n\n")
-			bcryptCmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		bcryptCmd.Int("cost", 10, "calculation cost")
-		bcryptCmd.Parse(args)
-		return bcryptCmd
+		flags.Int("cost", 10, "calculation cost")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
