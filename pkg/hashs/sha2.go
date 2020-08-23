@@ -33,7 +33,7 @@ func NewPluginSHA224() (p types.DeenPlugin) {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
 			flags.PrintDefaults()
 		}
 		flags.Parse(args)
@@ -63,7 +63,7 @@ func NewPluginSHA256() (p types.DeenPlugin) {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
 			flags.PrintDefaults()
 		}
 		flags.Parse(args)
@@ -93,7 +93,7 @@ func NewPluginSHA384() (p types.DeenPlugin) {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
 			flags.PrintDefaults()
 		}
 		flags.Parse(args)
@@ -123,7 +123,7 @@ func NewPluginSHA512() (p types.DeenPlugin) {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA) .\n\n")
+			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
 			flags.PrintDefaults()
 		}
 		flags.Parse(args)
