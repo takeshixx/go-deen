@@ -2,10 +2,12 @@ package codecs
 
 import (
 	"bytes"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -41,4 +43,16 @@ func TestPluginHtmlUnprocess(t *testing.T) {
 	if c := bytes.Compare(d, []byte(htmlInputData)); c != 0 {
 		t.Errorf("HtmlUnprocess data wrong: %s", d)
 	}
+}
+
+func TestPluginHtmlUsage(t *testing.T) {
+	p := NewPluginHTML()
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+	flags.Usage()
 }
