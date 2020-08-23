@@ -78,18 +78,19 @@ func NewPluginBase32() (p types.DeenPlugin) {
 		}
 		unprocessBas32(enc, task)
 	}
-
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		b32Cmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		b32Cmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "Base32 encoding as specified by RFC 4648.\n\n")
-			b32Cmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		b32Cmd.Bool("hex", false, "use \"Extended Hex Alphabet\" defined in RFC 4648")
-		b32Cmd.Bool("no-pad", false, "disable padding")
-		b32Cmd.Parse(args)
-		return b32Cmd
+		flags.Bool("hex", false, "use \"Extended Hex Alphabet\" defined in RFC 4648")
+		if !self.Unprocess {
+			flags.Bool("no-pad", false, "disable padding")
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
