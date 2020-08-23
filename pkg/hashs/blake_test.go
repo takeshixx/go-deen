@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"testing"
+
+	"github.com/takeshixx/deen/pkg/helpers"
 )
 
 var blakeTestData = []byte("deenblaketest")
@@ -25,8 +27,9 @@ func TestPluginBLAKE2sProcessSteamFunc(t *testing.T) {
 func TestPluginBLAKE2sProcessStreamWithCliFlagsFunc(t *testing.T) {
 	p := NewPluginBLAKE2s()
 	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-key", blakeTestKey})
+	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE2sProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -36,8 +39,9 @@ func TestPluginBLAKE2sProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE2s()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE2sProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -47,8 +51,9 @@ func TestPluginBLAKE2sProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE2s()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-len", "16", "-key", blakeTestKey})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-len", "16", "-key", blakeTestKey})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE2sProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -72,8 +77,9 @@ func TestPluginBLAKE2bProcessStreamFunc(t *testing.T) {
 func TestPluginBLAKE2bProcessStreamWithCliFlagsFunc(t *testing.T) {
 	p := NewPluginBLAKE2b()
 	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey, "-len", "64"})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-key", blakeTestKey, "-len", "64"})
+	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE2bProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -83,8 +89,9 @@ func TestPluginBLAKE2bProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE2b()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-len", "64"})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-len", "64"})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE2bProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -108,8 +115,9 @@ func TestPluginBLAKE2xProcessStreamFunc(t *testing.T) {
 func TestPluginBLAKE2xProcessStreamWithCliFlagsFunc(t *testing.T) {
 	p := NewPluginBLAKE2x()
 	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey, "-len", "64"})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-key", blakeTestKey, "-len", "64"})
+	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginBLAKE2xProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -119,8 +127,9 @@ func TestPluginBLAKE2xProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE2x()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-len", "256"})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-len", "256"})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginBLAKE2xProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -144,8 +153,9 @@ func TestPluginBLAKE3512ProcessStreamFunc(t *testing.T) {
 func TestPluginBLAKE3512ProcessStreamWithCliFlagsFunc(t *testing.T) {
 	p := NewPluginBLAKE3()
 	r := bytes.NewReader(blakeTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-derive-key", blakeTestKey})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-derive-key", blakeTestKey})
+	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -155,8 +165,9 @@ func TestPluginBLAKE3512ProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE3()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-derive-key", blakeTestKey, "-context", "test context 123"})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-derive-key", blakeTestKey, "-context", "test context 123"})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -166,8 +177,9 @@ func TestPluginBLAKE3512ProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE3()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-length", "64"})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-length", "64"})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -177,16 +189,18 @@ func TestPluginBLAKE3512ProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE3()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-key", blakeTestKey})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e == nil {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc did not return an error with a small key")
 	}
 
 	p = NewPluginBLAKE3()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-key", blakeTestKey32})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-key", blakeTestKey32})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -196,8 +210,9 @@ func TestPluginBLAKE3512ProcessStreamWithCliFlagsFunc(t *testing.T) {
 
 	p = NewPluginBLAKE3()
 	r = bytes.NewReader(blakeTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("BLAKE3512ProcessStreamWithCliFlagsFunc failed: %s", e)
 	}
@@ -214,18 +229,22 @@ func TestPluginBlakeUsage(t *testing.T) {
 	os.Stderr = w
 
 	p := NewPluginBLAKE2s()
-	testFlags := p.AddCliOptionsFunc(&p, []string{})
-	testFlags.Usage()
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
 
 	p = NewPluginBLAKE2b()
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	testFlags.Usage()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
 
 	p = NewPluginBLAKE2x()
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	testFlags.Usage()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
 
 	p = NewPluginBLAKE3()
-	testFlags = p.AddCliOptionsFunc(&p, []string{})
-	testFlags.Usage()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
 }

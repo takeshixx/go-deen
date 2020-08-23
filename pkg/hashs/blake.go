@@ -68,18 +68,18 @@ func NewPluginBLAKE2x() (p types.DeenPlugin) {
 		}
 		return doBLAKE2x(&reader, key, uint16(length))
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "BLAKE2 is a fast and secure cryptographic hash function defined \nin RFC 7693.\n\n")
 			fmt.Fprintf(os.Stderr, "BLAKE2X is a family of extensible-output functions (XOFs). Whereas BLAKE2 is limited to 64-byte digests, BLAKE2X allows for digests of up to 256 GiB.\n\n")
-			blakeCmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		blakeCmd.String("key", "", "MAC key")
-		blakeCmd.Int("len", 32, "length of the output hash in bytes, must be between 1 and 65535")
-		blakeCmd.Parse(args)
-		return blakeCmd
+		flags.String("key", "", "MAC key")
+		flags.Int("len", 32, "length of the output hash in bytes, must be between 1 and 65535")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
@@ -139,18 +139,18 @@ func NewPluginBLAKE2s() (p types.DeenPlugin) {
 		}
 		return doBLAKE2s(&reader, key, length)
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "BLAKE2 is a fast and secure cryptographic hash function defined \nin RFC 7693.\n\n")
 			fmt.Fprintf(os.Stderr, "BLAKE2s is optimized for 8- to 32-bit platforms and produces\ndigests of any size between 1 and 32 bytes.\n\n")
-			blakeCmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		blakeCmd.String("key", "", "MAC key")
-		blakeCmd.Int("len", 32, "length of the output hash in bytes, must be either 16 or 32")
-		blakeCmd.Parse(args)
-		return blakeCmd
+		flags.String("key", "", "MAC key")
+		flags.Int("len", 32, "length of the output hash in bytes, must be either 16 or 32")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
@@ -201,18 +201,18 @@ func NewPluginBLAKE2b() (p types.DeenPlugin) {
 		}
 		return doBLAKE2b(&reader, key, length)
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "BLAKE2 is a fast and secure cryptographic hash function defined \nin RFC 7693.\n\n")
 			fmt.Fprintf(os.Stderr, "BLAKE2b (or just BLAKE2) is optimized for 64-bit platforms and\nproduces digests of any size between 1 and 64 bytes . This\nplugin generates 512 bit hashs.\n\n")
-			blakeCmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		blakeCmd.String("key", "", "MAC key")
-		blakeCmd.Int("len", 32, "length of the output hash in bytes, must be between 1 and 64")
-		blakeCmd.Parse(args)
-		return blakeCmd
+		flags.String("key", "", "MAC key")
+		flags.Int("len", 32, "length of the output hash in bytes, must be between 1 and 64")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
@@ -280,20 +280,20 @@ func NewPluginBLAKE3() (p types.DeenPlugin) {
 		}
 		return doBLAKE3(outLen, &reader, []byte{}, false, "")
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		blakeCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		blakeCmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "BLAKE3 is a cryptographic hash function that is fast and secure.\n")
 			fmt.Fprintf(os.Stderr, "It can be used as PRF, MAC, KDF, and XOF as well as a regular hash.\n\n")
-			blakeCmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		blakeCmd.String("key", "", "key (requires 32 bytes)")
-		blakeCmd.Int("length", 32, "number of output bytes")
-		blakeCmd.String("derive-key", "", "derive key")
-		blakeCmd.String("context", "", "context for key derivation")
-		blakeCmd.Parse(args)
-		return blakeCmd
+		flags.String("key", "", "key (requires 32 bytes)")
+		flags.Int("length", 32, "number of output bytes")
+		flags.String("derive-key", "", "derive key")
+		flags.String("context", "", "context for key derivation")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
