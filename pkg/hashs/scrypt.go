@@ -79,20 +79,20 @@ func NewPluginScrypt() (p types.DeenPlugin) {
 		outBuf = []byte(base64.StdEncoding.EncodeToString(tempBuf))
 		return outBuf, err
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		scryptCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		scryptCmd.Usage = func() {
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
 			fmt.Fprintf(os.Stderr, "scrypt key derivation function as defined in Colin Percival's\npaper \"Stronger Key Derivation via Sequential Memory-Hard\nFunctions\".\n\n")
-			scryptCmd.PrintDefaults()
+			flags.PrintDefaults()
 		}
-		scryptCmd.String("salt", "", "hex encoded string used as salt")
-		scryptCmd.Int("len", 32, "output key length")
-		scryptCmd.Int("cost", 1<<15, "calculation cost")
-		scryptCmd.Int("r", 8, "parallelization parameter")
-		scryptCmd.Int("p", 1, "blocksize parameter")
-		scryptCmd.Parse(args)
-		return scryptCmd
+		flags.String("salt", "", "hex encoded string used as salt")
+		flags.Int("len", 32, "output key length")
+		flags.Int("cost", 1<<15, "calculation cost")
+		flags.Int("r", 8, "parallelization parameter")
+		flags.Int("p", 1, "blocksize parameter")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }

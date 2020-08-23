@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/takeshixx/deen/pkg/helpers"
 )
 
 var scryptTestData = "verysecurepassword"
@@ -27,8 +29,9 @@ func TestPluginScryptProcess(t *testing.T) {
 func TestPluginScryptProcessWithFlags(t *testing.T) {
 	p := NewPluginScrypt()
 	r := strings.NewReader(scryptTestData)
-	testFlags := p.AddCliOptionsFunc(&p, []string{"-salt", scryptTestSaltHex})
-	d, e := p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-salt", scryptTestSaltHex})
+	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginScryptProcessWithFlags failed: %s", e)
 	}
@@ -38,8 +41,9 @@ func TestPluginScryptProcessWithFlags(t *testing.T) {
 
 	p = NewPluginScrypt()
 	r = strings.NewReader(scryptTestData)
-	testFlags = p.AddCliOptionsFunc(&p, []string{"-cost", fmt.Sprintf("%d", 1<<12), "-len", "96", "-salt", scryptTestSaltHex})
-	d, e = p.ProcessStreamWithCliFlagsFunc(testFlags, r)
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{"-cost", fmt.Sprintf("%d", 1<<12), "-len", "96", "-salt", scryptTestSaltHex})
+	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginScryptProcessWithFlags failed: %s", e)
 	}
@@ -50,11 +54,12 @@ func TestPluginScryptProcessWithFlags(t *testing.T) {
 
 func TestPluginScryptUsage(t *testing.T) {
 	p := NewPluginScrypt()
-	testFlags := p.AddCliOptionsFunc(&p, []string{})
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)
 	}
 	os.Stderr = w
-	testFlags.Usage()
+	flags.Usage()
 }
