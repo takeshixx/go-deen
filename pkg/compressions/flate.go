@@ -12,29 +12,33 @@ import (
 )
 
 func doFlate(task *types.DeenTask, level int) {
-	defer task.Close()
-	compressor, err := flate.NewWriter(task.PipeWriter, level)
-	if err != nil {
-		task.ErrChan <- err
-	}
-	if _, err := io.Copy(compressor, task.Reader); err != nil {
-		task.ErrChan <- err
-	}
-	err = compressor.Close()
-	if err != nil {
-		task.ErrChan <- err
-	}
+	go func() {
+		defer task.Close()
+		compressor, err := flate.NewWriter(task.PipeWriter, level)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		if _, err := io.Copy(compressor, task.Reader); err != nil {
+			task.ErrChan <- err
+		}
+		err = compressor.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
 }
 
 func doDeflate(task *types.DeenTask) {
-	defer task.Close()
-	wrappedReader := types.TrimReader{}
-	wrappedReader.Rd = task.Reader
-	decompressor := flate.NewReader(wrappedReader)
-	_, err := io.Copy(task.PipeWriter, decompressor)
-	if err != nil {
-		task.ErrChan <- err
-	}
+	go func() {
+		defer task.Close()
+		wrappedReader := types.TrimReader{}
+		wrappedReader.Rd = task.Reader
+		decompressor := flate.NewReader(wrappedReader)
+		_, err := io.Copy(task.PipeWriter, decompressor)
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
 }
 
 // NewPluginFlate creates a new PluginDeflate object
