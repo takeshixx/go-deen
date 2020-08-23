@@ -43,7 +43,7 @@ func main() {
 			pluginParser = plugin.AddDefaultCliFunc(plugin, pluginParser, helpers.RemoveBeforeSubcommand(os.Args, cmd))
 		}
 
-		if pluginParser.Lookup("n") != nil && helpers.IsBoolFlag(pluginParser, "n") {
+		if pluginParser != nil && pluginParser.Lookup("n") != nil && helpers.IsBoolFlag(pluginParser, "n") {
 			tb := true
 			noNewLinePtr = &tb
 		}
