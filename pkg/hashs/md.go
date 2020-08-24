@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"flag"
+	"fmt"
 	"io"
+	"os"
 
 	"golang.org/x/crypto/md4"
 	"golang.org/x/crypto/ripemd160"
@@ -37,6 +40,16 @@ func NewPluginMD4() (p types.DeenPlugin) {
 			}
 		}()
 	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "MD4 Message-Digest Algorithm is a cryptographic hash\nfunction with a digest length of 128 bits.\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
+	}
 	return
 }
 
@@ -57,6 +70,16 @@ func NewPluginMD5() (p types.DeenPlugin) {
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
 	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "MD5 Message-Digest Algorithm is a cryptographic hash\nfunction with a digest length of 128 bits.\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
+	}
 	return
 }
 
@@ -76,6 +99,16 @@ func NewPluginRIPEMD160() (p types.DeenPlugin) {
 		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
 		_ = hex.Encode(outBuf, hashSum[:])
 		return outBuf, err
+	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "RIPEMD (RIPE Message Digest) is a family of cryptographic\nhash functions developed in 1992.\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }

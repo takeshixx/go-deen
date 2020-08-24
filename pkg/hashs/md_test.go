@@ -2,8 +2,10 @@ package hashs
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -47,4 +49,27 @@ func TestNewPluginRIPEMD160(t *testing.T) {
 	if c := bytes.Compare(d, []byte("8bcf2832074848df4727aeb275e4905f2213814e")); c != 0 {
 		t.Errorf("RIPEMD160Process invalid data: %s", d)
 	}
+}
+
+func TestMDUsage(t *testing.T) {
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Error(err)
+	}
+	os.Stderr = w
+
+	p := NewPluginMD4()
+	flags := helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
+
+	p = NewPluginMD5()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
+
+	p = NewPluginRIPEMD160()
+	flags = helpers.DefaultFlagSet()
+	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags.Usage()
 }
