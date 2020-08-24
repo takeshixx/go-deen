@@ -35,10 +35,7 @@ func main() {
 			plugin.Unprocess = true
 		}
 		var pluginParser *flag.FlagSet
-		if plugin.AddCliOptionsFunc != nil {
-			// Add CLI descriptions/options for plugins
-			pluginParser = plugin.AddCliOptionsFunc(plugin, helpers.RemoveBeforeSubcommand(os.Args, cmd))
-		} else if plugin.AddDefaultCliFunc != nil {
+		if plugin.AddDefaultCliFunc != nil {
 			pluginParser = helpers.DefaultFlagSet()
 			pluginParser = plugin.AddDefaultCliFunc(plugin, pluginParser, helpers.RemoveBeforeSubcommand(os.Args, cmd))
 		}

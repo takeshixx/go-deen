@@ -8,7 +8,6 @@ import (
 )
 
 type PluginConstructor func() DeenPlugin
-type AddCliFuncStub func(*DeenPlugin, []string) *flag.FlagSet
 type AddDefaultCliFunc func(*DeenPlugin, *flag.FlagSet, []string) *flag.FlagSet
 
 type StreamFuncStub func(io.Reader) ([]byte, error)
@@ -22,7 +21,6 @@ type DeenPlugin struct {
 	Aliases           []string
 	Type              string
 	Unprocess         bool
-	AddCliOptionsFunc AddCliFuncStub
 	AddDefaultCliFunc AddDefaultCliFunc
 	CliHelp           string
 
