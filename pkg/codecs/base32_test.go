@@ -107,7 +107,7 @@ func TestPluginBase32ProcessBase32HexEncoding(t *testing.T) {
 	}
 }
 
-func TestPluginBase32AddCliOptionsFunc(t *testing.T) {
+func TestPluginBase32AddDefaultCliFunc(t *testing.T) {
 	plugin := NewPluginBase32()
 	flags := helpers.DefaultFlagSet()
 	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-hex", "-no-pad"})
