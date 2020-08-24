@@ -1,6 +1,7 @@
 package formatters
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,25 +14,43 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func processJSONFormatColored(reader io.Reader) (outBuf []byte, err error) {
-	data := make(map[string](interface{}))
-	decoder := json.NewDecoder(reader)
-	decoder.Decode(&data)
+func processJSONFormatColored(task *types.DeenTask) {
+	go func() {
+		defer task.Close()
+		data := make(map[string](interface{}))
+		decoder := json.NewDecoder(task.Reader)
+		decoder.Decode(&data)
 
-	f := colorjson.NewFormatter()
-	f.Indent = 4
-	outBuf, err = f.Marshal(data)
-
-	return
+		f := colorjson.NewFormatter()
+		f.Indent = 4
+		outBuf, err := f.Marshal(data)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		writeBuf := bytes.NewReader(outBuf)
+		_, err = io.Copy(task.PipeWriter, writeBuf)
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
 }
 
-func processJSONFormat(reader io.Reader) (outBuf []byte, err error) {
-	data := make(map[string](interface{}))
-	decoder := json.NewDecoder(reader)
-	decoder.Decode(&data)
-
-	outBuf, err = json.MarshalIndent(data, "", "")
-	return
+func processJSONFormat(task *types.DeenTask) {
+	go func() {
+		defer task.Close()
+		data := make(map[string](interface{}))
+		decoder := json.NewDecoder(task.Reader)
+		err := decoder.Decode(&data)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		encoder := json.NewEncoder(task.PipeWriter)
+		encoder.SetIndent("", "    ")
+		err = encoder.Encode(data)
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
 }
 
 // NewPluginJSONFormatter creates a new PluginJSONFormatter object
@@ -39,23 +58,23 @@ func NewPluginJSONFormatter() (p types.DeenPlugin) {
 	p.Name = "json"
 	p.Aliases = []string{"json-format"}
 	p.Type = "formatter"
-	p.ProcessStreamFunc = func(reader io.Reader) (outBuf []byte, err error) {
-		return processJSONFormat(reader)
+
+	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
+		processJSONFormat(task)
 	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
+	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
 		noColorFlag := flags.Lookup("no-color")
 		noColor, err := strconv.ParseBool(noColorFlag.Value.String())
 		if err != nil {
 			err = errors.New("Failed to parse --no-color option")
-			var outBuf []byte
-			return outBuf, err
 		}
 		if noColor {
-			return processJSONFormat(reader)
-		} else {
-			return processJSONFormatColored(reader)
+			processJSONFormat(task)
+			return
 		}
+		processJSONFormatColored(task)
 	}
+
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
