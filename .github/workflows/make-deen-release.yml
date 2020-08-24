@@ -35,7 +35,7 @@ jobs:
     - name: Get current version
       id: get_info
       run: |
-        version=$(bin/deen -version)
+        version=$(bin/deen-linux-x86_64 -version)
         echo ::set-output name=DEEN_VERSION::${version}
         commit=$(git log -1 --pretty=%B)
         echo ::set-output name=DEEN_LOG::${commit}
