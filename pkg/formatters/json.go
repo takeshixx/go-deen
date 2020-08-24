@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 
 	"github.com/TylerBrock/colorjson"
@@ -55,16 +56,16 @@ func NewPluginJSONFormatter() (p types.DeenPlugin) {
 			return processJSONFormatColored(reader)
 		}
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		jsonCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
-		jsonCmd.Usage = func() {
-			fmt.Printf("Usage of %s:\n\n", p.Name)
-			fmt.Printf("JSON beautifier with colorized output.\n\n")
-			jsonCmd.PrintDefaults()
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "JSON beautifier with colorized output.\n\n")
+			flags.PrintDefaults()
 		}
-		jsonCmd.Bool("no-color", false, "omit colors in output")
-		jsonCmd.Parse(args)
-		return jsonCmd
+		flags.Bool("no-color", false, "omit colors in output")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
