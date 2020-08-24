@@ -357,40 +357,40 @@ func NewPluginJwt() (p types.DeenPlugin) {
 		//return undoJWT(&reader, verify, isJWE, secret)
 		return
 	}
-	p.AddCliOptionsFunc = func(self *types.DeenPlugin, args []string) *flag.FlagSet {
-		jwtCmd := flag.NewFlagSet(p.Name, flag.ExitOnError)
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
 		if self.Unprocess {
 			// Decoding
-			jwtCmd.Usage = func() {
-				fmt.Printf("Usage of %s:\n\n", p.Name)
-				fmt.Printf("Decode JSON Web Tokens (JWT) (RFC7519).\n\n")
-				jwtCmd.PrintDefaults()
+			flags.Usage = func() {
+				fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+				fmt.Fprintf(os.Stderr, "Decode JSON Web Tokens (JWT) (RFC7519).\n\n")
+				flags.PrintDefaults()
 			}
-			jwtCmd.Bool("verify", false, "verify signature")
-			jwtCmd.String("secret", "", "secret key")
-			jwtCmd.String("key", "", "key file")
-			jwtCmd.Bool("decrypt", false, "decrypt JWE token")
-			jwtCmd.Parse(args)
-			return jwtCmd
+			flags.Bool("verify", false, "verify signature")
+			flags.String("secret", "", "secret key")
+			flags.String("key", "", "key file")
+			flags.Bool("decrypt", false, "decrypt JWE token")
+			flags.Parse(args)
+			return flags
 		}
 		// Encoding
-		jwtCmd.Usage = func() {
-			fmt.Printf("Usage of %s:\n\n", p.Name)
-			fmt.Printf("Encode JSON Web Tokens (JWT) (RFC7519).\n\n")
-			jwtCmd.PrintDefaults()
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "Encode JSON Web Tokens (JWT) (RFC7519).\n\n")
+			flags.PrintDefaults()
 		}
-		jwtCmd.Bool("list", false, "list supported algorithms")
-		jwtCmd.String("header", "", "token header")
+		flags.Bool("list", false, "list supported algorithms")
+		flags.String("header", "", "token header")
 
-		jwtCmd.String("sign-alg", "HS256", "signature algorithm")
-		jwtCmd.String("sign-secret", "", "signature secret")
-		jwtCmd.String("sign-keyfile", "", "signature key file")
-		jwtCmd.String("enc-alg", "", "encryption algorithm")
-		jwtCmd.String("enc-secret", "", "encryption secret")
-		jwtCmd.String("enc-keyfile", "", "encryption key file")
-		jwtCmd.String("key-alg", "", "key management algorithm")
-		jwtCmd.Parse(args)
-		return jwtCmd
+		flags.String("sign-alg", "HS256", "signature algorithm")
+		flags.String("sign-secret", "", "signature secret")
+		flags.String("sign-keyfile", "", "signature key file")
+		flags.String("enc-alg", "", "encryption algorithm")
+		flags.String("enc-secret", "", "encryption secret")
+		flags.String("enc-keyfile", "", "encryption key file")
+		flags.String("key-alg", "", "key management algorithm")
+		flags.Parse(args)
+		return flags
 	}
 	return
 }
