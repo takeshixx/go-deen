@@ -21,7 +21,6 @@ build-freebsd:
 	GOOS=freebsd GOARCH=amd64 go build -o bin/deen-freebsd-x86_64 ./cmd/deen
 
 build-macos:
-	GOOS=darwin GOARCH=386 go build -o bin/deen-darwin-x86 ./cmd/deen
 	GOOS=darwin GOARCH=amd64 go build -o bin/deen-darwin-x86_64 ./cmd/deen
 
 build-linux:
