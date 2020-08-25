@@ -53,15 +53,6 @@ func processJSONFormat(task *types.DeenTask) {
 	}()
 }
 
-func processJSONFormat(reader io.Reader) (outBuf []byte, err error) {
-	data := make(map[string](interface{}))
-	decoder := json.NewDecoder(reader)
-	decoder.Decode(&data)
-
-	outBuf, err = json.MarshalIndent(data, "", "")
-	return
-}
-
 // NewPluginJSONFormatter creates a new PluginJSONFormatter object
 func NewPluginJSONFormatter() (p types.DeenPlugin) {
 	p.Name = "json"
