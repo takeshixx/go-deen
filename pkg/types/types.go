@@ -84,6 +84,8 @@ func NewDeenTask(writer io.Writer) *DeenTask {
 	return dt
 }
 
+// TrimReader creates a reader that
+// trims the input while reading.
 type TrimReader struct {
 	Rd io.Reader
 }
