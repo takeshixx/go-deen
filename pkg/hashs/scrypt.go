@@ -17,6 +17,7 @@ import (
 
 // NewPluginScrypt creates a new plugin
 func NewPluginScrypt() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "scrypt"
 	p.Aliases = []string{}
 	p.Type = "hash"

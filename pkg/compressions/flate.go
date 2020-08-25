@@ -43,6 +43,7 @@ func doDeflate(task *types.DeenTask) {
 
 // NewPluginFlate creates a new PluginDeflate object
 func NewPluginFlate() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "flate"
 	p.Aliases = []string{".flate"}
 	p.Type = "compression"

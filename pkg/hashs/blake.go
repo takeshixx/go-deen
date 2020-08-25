@@ -43,6 +43,7 @@ func doBLAKE2x(reader *io.Reader, macKey []byte, length uint16) ([]byte, error) 
 
 // NewPluginBLAKE2x creates a plugin
 func NewPluginBLAKE2x() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "blake2x"
 	p.Aliases = []string{"b2x"}
 	p.Type = "hash"
@@ -114,6 +115,7 @@ func doBLAKE2s(reader *io.Reader, macKey []byte, length int) ([]byte, error) {
 
 // NewPluginBLAKE2s creates a plugin
 func NewPluginBLAKE2s() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "blake2s"
 	p.Aliases = []string{"b2s"}
 	p.Type = "hash"
@@ -176,6 +178,7 @@ func doBLAKE2b(reader *io.Reader, macKey []byte, length int) ([]byte, error) {
 
 // NewPluginBLAKE2b creates a plugin
 func NewPluginBLAKE2b() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "blake2b"
 	p.Aliases = []string{"b2b"}
 	p.Type = "hash"
@@ -243,6 +246,7 @@ func doBLAKE3(outLen int, reader *io.Reader, key []byte, derive bool, ctx string
 
 // NewPluginBLAKE3 creates a plugin
 func NewPluginBLAKE3() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "blake3"
 	p.Aliases = []string{"b3"}
 	p.Type = "hash"

@@ -28,6 +28,7 @@ func doGzipCompress(task *types.DeenTask, level int) {
 
 // NewPluginGzip creates a new zlib plugin
 func NewPluginGzip() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "gzip"
 	p.Aliases = []string{".gzip"}
 	p.Type = "compression"

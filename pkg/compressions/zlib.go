@@ -30,6 +30,7 @@ func doZlibCompress(task *types.DeenTask, level int) {
 
 // NewPluginZlib creates a new zlib plugin
 func NewPluginZlib() (p types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "zlib"
 	p.Aliases = []string{".zlib"}
 	p.Type = "compression"
