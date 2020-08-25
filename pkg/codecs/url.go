@@ -1,9 +1,12 @@
 package codecs
 
 import (
+	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
+	"os"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
@@ -19,7 +22,6 @@ func NewPluginURL() (p types.DeenPlugin) {
 		var err error
 		data, err := ioutil.ReadAll(reader)
 		if err != nil {
-			//log.Fatal(err)
 			return outBuf, err
 		}
 		outBuf = []byte(url.QueryEscape(string(data)))
@@ -38,6 +40,16 @@ func NewPluginURL() (p types.DeenPlugin) {
 		}
 		outBuf = []byte(decodedData)
 		return outBuf, err
+	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "Escapes the string so it can be safely placed inside a URL query.\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }

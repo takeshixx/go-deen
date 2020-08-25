@@ -1,9 +1,12 @@
 package codecs
 
 import (
+	"flag"
+	"fmt"
 	"html"
 	"io"
 	"io/ioutil"
+	"os"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
@@ -34,6 +37,16 @@ func NewPluginHTML() (p types.DeenPlugin) {
 		escapedData := html.UnescapeString(string(data))
 		outBuf = []byte(escapedData)
 		return outBuf, err
+	}
+	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
+		flags.Init(p.Name, flag.ExitOnError)
+		flags.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
+			fmt.Fprintf(os.Stderr, "Escapes special characters like \"<\" to become \"&lt;\".\nIt escapes only five such characters: <, >, &, ' and \".\n\n")
+			flags.PrintDefaults()
+		}
+		flags.Parse(args)
+		return flags
 	}
 	return
 }

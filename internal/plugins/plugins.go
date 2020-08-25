@@ -15,9 +15,7 @@ import (
 
 var pluginConstructors = []types.PluginConstructor{
 	codecs.NewPluginBase32,
-	codecs.NewPluginBase32Hex,
 	codecs.NewPluginBase64,
-	codecs.NewPluginBase64Url,
 	codecs.NewPluginBase85,
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,
@@ -28,15 +26,19 @@ var pluginConstructors = []types.PluginConstructor{
 	hashs.NewPluginSHA256,
 	hashs.NewPluginSHA384,
 	hashs.NewPluginSHA512,
+	hashs.NewPluginSHA3224,
+	hashs.NewPluginSHA3256,
+	hashs.NewPluginSHA3384,
+	hashs.NewPluginSHA3512,
 	hashs.NewPluginMD4,
 	hashs.NewPluginMD5,
 	hashs.NewPluginRIPEMD160,
 	hashs.NewPluginBLAKE2s,
-	hashs.NewPluginBLAKE2s128,
 	hashs.NewPluginBLAKE2b,
-	hashs.NewPluginBLAKE2b384,
-	hashs.NewPluginBLAKE2b256,
+	hashs.NewPluginBLAKE2x,
 	hashs.NewPluginBLAKE3,
+	hashs.NewPluginBcrypt,
+	hashs.NewPluginScrypt,
 	compressions.NewPluginFlate,
 	compressions.NewPluginLZMA,
 	compressions.NewPluginLZMA2,
@@ -44,6 +46,7 @@ var pluginConstructors = []types.PluginConstructor{
 	compressions.NewPluginGzip,
 	compressions.NewPluginZlib,
 	compressions.NewPluginBzip2,
+	compressions.NewPluginBrotli,
 	formatters.NewPluginJSONFormatter,
 }
 
@@ -53,14 +56,25 @@ var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
 // and their aliases.
 func PrintAvailable() {
 	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 0, 8, 0, '\t', 0)
+	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
+	var pluginList []types.DeenPlugin
 	for _, constructor := range pluginConstructors {
 		p := constructor()
-		if len(p.Aliases) > 0 {
-			fmt.Fprintln(w, fmt.Sprintf("%s\t%s", p.Name, p.Aliases))
-		} else {
-			fmt.Fprintln(w, p.Name)
+		pluginList = append(pluginList, p)
+	}
+	for _, category := range PluginCategories {
+		fmt.Fprintf(w, "%s:\n", category)
+		for _, p := range pluginList {
+			if p.Type != category {
+				continue
+			}
+			if len(p.Aliases) > 0 {
+				fmt.Fprintf(w, " \t%s\t%s\n", p.Name, p.Aliases)
+			} else {
+				fmt.Fprintf(w, " \t%s\n", p.Name)
+			}
 		}
+		fmt.Fprintln(w, "")
 	}
 	w.Flush()
 }
