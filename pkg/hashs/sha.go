@@ -12,7 +12,7 @@ import (
 )
 
 // NewPluginSHA1 creates a plugin
-func NewPluginSHA1() (p types.DeenPlugin) {
+func NewPluginSHA1() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha1"
 	p.Aliases = []string{}

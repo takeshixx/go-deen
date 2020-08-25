@@ -30,7 +30,7 @@ func doBZip2Compress(task *types.DeenTask, level int) {
 }
 
 // NewPluginBzip2 creates a new zlib plugin
-func NewPluginBzip2() (p types.DeenPlugin) {
+func NewPluginBzip2() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "bzip2"
 	p.Aliases = []string{".bzip2"}

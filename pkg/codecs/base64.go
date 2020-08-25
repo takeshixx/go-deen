@@ -65,7 +65,7 @@ func parseBase64Encoding(flags *flag.FlagSet) (enc *base64.Encoding) {
 }
 
 // NewPluginBase64 creates a new PluginBase64 object
-func NewPluginBase64() (p types.DeenPlugin) {
+func NewPluginBase64() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "base64"
 	p.Aliases = []string{".base64", "b64", ".b64"}

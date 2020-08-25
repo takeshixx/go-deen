@@ -27,8 +27,8 @@ type DeenPlugin struct {
 }
 
 // NewPlugin creates a plugin skeleton.
-func NewPlugin() DeenPlugin {
-	p := DeenPlugin{}
+func NewPlugin() *DeenPlugin {
+	p := &DeenPlugin{}
 	return p
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 // NewPluginHex creates a new PluginHex object
-func NewPluginHex() (p types.DeenPlugin) {
+func NewPluginHex() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "hex"
 	p.Aliases = []string{".hex", "asciihex", ".asciihex"}

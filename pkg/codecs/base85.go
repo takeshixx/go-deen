@@ -12,7 +12,7 @@ import (
 )
 
 // NewPluginBase85 creates a new PluginBase85 object
-func NewPluginBase85() (p types.DeenPlugin) {
+func NewPluginBase85() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "base85"
 	p.Aliases = []string{".base85", "b85", ".b85",

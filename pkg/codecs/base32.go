@@ -45,7 +45,7 @@ func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
 
 // NewPluginBase32 creates a new PluginBase32 object
 // Standard base32 encoding, as defined in RFC 4648
-func NewPluginBase32() (p types.DeenPlugin) {
+func NewPluginBase32() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "base32"
 	p.Aliases = []string{".base32", "b32", ".b32"}

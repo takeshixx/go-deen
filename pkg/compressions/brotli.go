@@ -48,7 +48,7 @@ func doBrotliDecompress(task *types.DeenTask) {
 }
 
 // NewPluginBrotli creates a new brotli plugin
-func NewPluginBrotli() (p types.DeenPlugin) {
+func NewPluginBrotli() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "brotli"
 	p.Aliases = []string{".brotli", "br", ".br"}

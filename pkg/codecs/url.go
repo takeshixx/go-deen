@@ -12,7 +12,7 @@ import (
 )
 
 // NewPluginURL creates a new PluginUrl object
-func NewPluginURL() (p types.DeenPlugin) {
+func NewPluginURL() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "url"
 	p.Aliases = []string{".url", "urlencode", ".urlencode"}

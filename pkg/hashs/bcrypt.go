@@ -13,7 +13,7 @@ import (
 )
 
 // NewPluginBcrypt creates a plugin
-func NewPluginBcrypt() (p types.DeenPlugin) {
+func NewPluginBcrypt() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "bcrypt"
 	p.Aliases = []string{}

@@ -60,16 +60,16 @@ func TestMDUsage(t *testing.T) {
 
 	p := NewPluginMD4()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 
 	p = NewPluginMD5()
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 
 	p = NewPluginRIPEMD160()
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 }

@@ -16,7 +16,7 @@ var hexInputDataProcessed = []byte("61736431323339393939")
 
 func TestNewPluginHex(t *testing.T) {
 	p := NewPluginHex()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
+	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
 		t.Errorf("Invalid return type for NewPluginHex: %s", reflect.TypeOf(p))
 	}
 }
@@ -56,7 +56,7 @@ func TestPluginHexUnprocessDeenTask(t *testing.T) {
 func TestPluginHexUsage(t *testing.T) {
 	p := NewPluginHex()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

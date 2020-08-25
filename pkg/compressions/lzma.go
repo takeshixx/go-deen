@@ -12,7 +12,7 @@ import (
 )
 
 // NewPluginLZMA creates a new PluginLZMA object
-func NewPluginLZMA() (p types.DeenPlugin) {
+func NewPluginLZMA() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "lzma"
 	p.Aliases = []string{".lzma"}
@@ -67,7 +67,7 @@ func NewPluginLZMA() (p types.DeenPlugin) {
 }
 
 // NewPluginLZMA2 creates a new PluginLZMA2 object
-func NewPluginLZMA2() (p types.DeenPlugin) {
+func NewPluginLZMA2() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "lzma2"
 	p.Aliases = []string{".lzma2"}

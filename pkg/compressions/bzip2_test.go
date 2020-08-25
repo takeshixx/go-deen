@@ -40,7 +40,7 @@ func TestPluginBZip2ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(bzip2TestData)
 	plugin := NewPluginBzip2()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-level", "1"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-level", "1"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	compressedData, err := hex.DecodeString(bzip2CompressedDataLevel1)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestPluginBZip2UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(compressedData)
 	plugin := NewPluginBzip2()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -101,7 +101,7 @@ func TestPluginBZip2UnprocessDeenTaskWithFlags(t *testing.T) {
 func TestPluginBZip2AddDefaultCliFunc(t *testing.T) {
 	p := NewPluginBzip2()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

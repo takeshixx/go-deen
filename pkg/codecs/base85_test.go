@@ -16,7 +16,7 @@ var b85InputDataProcessed = []byte("@<5s61,CpN3B7")
 
 func TestNewPluginBase85(t *testing.T) {
 	p := NewPluginBase85()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
+	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
 		t.Errorf("Invalid return type for NewPluginBase85: %s", reflect.TypeOf(p))
 	}
 }
@@ -56,7 +56,7 @@ func TestPluginBase85UnprocessDeenTask(t *testing.T) {
 func TestPluginBase85Usage(t *testing.T) {
 	p := NewPluginBase85()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

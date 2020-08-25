@@ -17,7 +17,7 @@ import (
 )
 
 // NewPluginMD4 creates a plugin
-func NewPluginMD4() (p types.DeenPlugin) {
+func NewPluginMD4() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "md4"
 	p.Aliases = []string{}
@@ -55,7 +55,7 @@ func NewPluginMD4() (p types.DeenPlugin) {
 }
 
 // NewPluginMD5 creates a plugin
-func NewPluginMD5() (p types.DeenPlugin) {
+func NewPluginMD5() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "md5"
 	p.Aliases = []string{}
@@ -86,7 +86,7 @@ func NewPluginMD5() (p types.DeenPlugin) {
 }
 
 // NewPluginRIPEMD160 creates a plugin
-func NewPluginRIPEMD160() (p types.DeenPlugin) {
+func NewPluginRIPEMD160() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "ripemd160"
 	p.Aliases = []string{"md160"}

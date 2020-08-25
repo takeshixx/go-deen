@@ -13,7 +13,7 @@ import (
 )
 
 // NewPluginSHA224 creates a plugin
-func NewPluginSHA224() (p types.DeenPlugin) {
+func NewPluginSHA224() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha224"
 	p.Aliases = []string{}
@@ -44,7 +44,7 @@ func NewPluginSHA224() (p types.DeenPlugin) {
 }
 
 // NewPluginSHA256 creates a plugin
-func NewPluginSHA256() (p types.DeenPlugin) {
+func NewPluginSHA256() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha256"
 	p.Aliases = []string{}
@@ -75,7 +75,7 @@ func NewPluginSHA256() (p types.DeenPlugin) {
 }
 
 // NewPluginSHA384 creates a plugin
-func NewPluginSHA384() (p types.DeenPlugin) {
+func NewPluginSHA384() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha384"
 	p.Aliases = []string{}
@@ -106,7 +106,7 @@ func NewPluginSHA384() (p types.DeenPlugin) {
 }
 
 // NewPluginSHA512 creates a plugin
-func NewPluginSHA512() (p types.DeenPlugin) {
+func NewPluginSHA512() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha512"
 	p.Aliases = []string{}

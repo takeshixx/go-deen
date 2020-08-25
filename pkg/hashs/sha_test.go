@@ -30,6 +30,6 @@ func TestSHA1Usage(t *testing.T) {
 
 	p := NewPluginSHA1()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 }
