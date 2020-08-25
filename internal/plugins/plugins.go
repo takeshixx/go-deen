@@ -13,7 +13,7 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-var pluginConstructors = []types.PluginConstructor{
+var pluginConstructors = []func() types.DeenPlugin{
 	codecs.NewPluginBase32,
 	codecs.NewPluginBase64,
 	codecs.NewPluginBase85,

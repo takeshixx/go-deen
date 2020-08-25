@@ -7,33 +7,29 @@ import (
 	"log"
 )
 
-type PluginConstructor func() DeenPlugin
-type AddDefaultCliFunc func(*DeenPlugin, *flag.FlagSet, []string) *flag.FlagSet
-
-type StreamFuncStub func(io.Reader) ([]byte, error)
-type StreamFuncWithCliFlagsStub func(*flag.FlagSet, io.Reader) ([]byte, error)
-
-type DeenTaskFuncStub func(*DeenTask)
-type DeenTaskWithFlagsStub func(*flag.FlagSet, *DeenTask)
-
+// DeenPlugin is the base struct for
+// each plugin instance.
 type DeenPlugin struct {
-	Name              string
-	Aliases           []string
-	Type              string
-	Unprocess         bool
-	AddDefaultCliFunc AddDefaultCliFunc
-	CliHelp           string
+	Name                            string
+	Aliases                         []string
+	Type                            string
+	Unprocess                       bool
+	CliHelp                         string
+	AddDefaultCliFunc               func(*DeenPlugin, *flag.FlagSet, []string) *flag.FlagSet
+	ProcessDeenTaskFunc             func(*DeenTask)
+	UnprocessDeenTaskFunc           func(*DeenTask)
+	ProcessDeenTaskWithFlags        func(*flag.FlagSet, *DeenTask)
+	UnprocessDeenTaskWithFlags      func(*flag.FlagSet, *DeenTask)
+	ProcessStreamFunc               func(io.Reader) ([]byte, error)
+	UnprocessStreamFunc             func(io.Reader) ([]byte, error)
+	ProcessStreamWithCliFlagsFunc   func(*flag.FlagSet, io.Reader) ([]byte, error)
+	UnprocessStreamWithCliFlagsFunc func(*flag.FlagSet, io.Reader) ([]byte, error)
+}
 
-	ProcessDeenTaskFunc        DeenTaskFuncStub
-	UnprocessDeenTaskFunc      DeenTaskFuncStub
-	ProcessDeenTaskWithFlags   DeenTaskWithFlagsStub
-	UnprocessDeenTaskWithFlags DeenTaskWithFlagsStub
-
-	// TODO: port and remove old stream funcs
-	ProcessStreamFunc               StreamFuncStub
-	UnprocessStreamFunc             StreamFuncStub
-	ProcessStreamWithCliFlagsFunc   StreamFuncWithCliFlagsStub
-	UnprocessStreamWithCliFlagsFunc StreamFuncWithCliFlagsStub
+// NewPlugin creates a plugin skeleton.
+func NewPlugin() DeenPlugin {
+	p := DeenPlugin{}
+	return p
 }
 
 // DeenTask describes a (un)processing
