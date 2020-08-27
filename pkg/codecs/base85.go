@@ -22,6 +22,7 @@ func NewPluginBase85() (p *types.DeenPlugin) {
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
+			defer task.Close()
 			encoder := ascii85.NewEncoder(task.PipeWriter)
 			_, err := io.Copy(encoder, task.Reader)
 			if err != nil {
@@ -31,24 +32,17 @@ func NewPluginBase85() (p *types.DeenPlugin) {
 			if err != nil {
 				task.ErrChan <- errors.Wrap(err, "Closing encoder in Base85 failed")
 			}
-			err = task.PipeWriter.Close()
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Closing PipeWriter in Base85 failed")
-			}
 		}()
 	}
 	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
+			defer task.Close()
 			wrappedReader := types.TrimReader{}
 			wrappedReader.Rd = task.Reader
 			decoder := ascii85.NewDecoder(wrappedReader)
 			_, err := io.Copy(task.PipeWriter, decoder)
 			if err != nil {
 				task.ErrChan <- errors.Wrap(err, "Copy in Base85 failed")
-			}
-			err = task.PipeWriter.Close()
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Closing PipeWriter in Base85 failed")
 			}
 		}()
 	}

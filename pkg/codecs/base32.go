@@ -13,6 +13,7 @@ import (
 
 func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		encoder := base32.NewEncoder(encoding, task.PipeWriter)
 		_, err := io.Copy(encoder, task.Reader)
 		if err != nil {
@@ -22,21 +23,14 @@ func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
 		if err != nil {
 			task.ErrChan <- err
 		}
-		err = task.PipeWriter.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
 	}()
 }
 
 func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		decoder := base32.NewDecoder(encoding, task.Reader)
 		_, err := io.Copy(task.PipeWriter, decoder)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		err = task.PipeWriter.Close()
 		if err != nil {
 			task.ErrChan <- err
 		}

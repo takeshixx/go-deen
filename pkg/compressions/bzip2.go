@@ -13,20 +13,22 @@ import (
 )
 
 func doBZip2Compress(task *types.DeenTask, level int) {
-	defer task.Close()
-	config := &bzip2.WriterConfig{Level: level}
-	compressor, err := bzip2.NewWriter(task.PipeWriter, config)
-	if err != nil {
-		task.ErrChan <- err
-	}
-	_, err = io.Copy(compressor, task.Reader)
-	if err != nil {
-		task.ErrChan <- err
-	}
-	err = compressor.Close()
-	if err != nil {
-		task.ErrChan <- err
-	}
+	go func() {
+		defer task.Close()
+		config := &bzip2.WriterConfig{Level: level}
+		compressor, err := bzip2.NewWriter(task.PipeWriter, config)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		_, err = io.Copy(compressor, task.Reader)
+		if err != nil {
+			task.ErrChan <- err
+		}
+		err = compressor.Close()
+		if err != nil {
+			task.ErrChan <- err
+		}
+	}()
 }
 
 // NewPluginBzip2 creates a new zlib plugin
@@ -51,17 +53,19 @@ func NewPluginBzip2() (p *types.DeenPlugin) {
 		doBZip2Compress(task, level)
 	}
 	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		defer task.Close()
-		wrappedReader := types.TrimReader{}
-		wrappedReader.Rd = task.Reader
-		decompressor, err := bzip2.NewReader(wrappedReader, nil)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		_, err = io.Copy(task.PipeWriter, decompressor)
-		if err != nil {
-			task.ErrChan <- err
-		}
+		go func() {
+			defer task.Close()
+			wrappedReader := types.TrimReader{}
+			wrappedReader.Rd = task.Reader
+			decompressor, err := bzip2.NewReader(wrappedReader, nil)
+			if err != nil {
+				task.ErrChan <- err
+			}
+			_, err = io.Copy(task.PipeWriter, decompressor)
+			if err != nil {
+				task.ErrChan <- err
+			}
+		}()
 	}
 	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
 		p.UnprocessDeenTaskFunc(task)
