@@ -21,6 +21,7 @@ var jsonTestDataProcessedColor = `{
     "enable": true,
     "version": "v1.0"
 }`
+var jsonTestDataMinified = "{\"enable\":true,\"version\":\"v1.0\"}"
 
 func TestNewPluginJSONFormat(t *testing.T) {
 	p := NewPluginJSONFormatter()
@@ -75,6 +76,40 @@ func TestPluginJSONFormatProcessDeenTaskWithFlags(t *testing.T) {
 	case <-task.DoneChan:
 		if c := bytes.Compare(destWriter.Bytes(), []byte(jsonTestDataProcessed)); c != 0 {
 			t.Errorf("TestPluginJSONFormatProcessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), jsonTestDataProcessed)
+		}
+	}
+}
+
+func TestPluginJSONFormatUnprocessDeenTaskFunc(t *testing.T) {
+	destWriter := new(bytes.Buffer)
+	task := types.NewDeenTask(destWriter)
+	task.Reader = strings.NewReader(jsonTestDataProcessed)
+	plugin := NewPluginJSONFormatter()
+	plugin.UnprocessDeenTaskFunc(task)
+	select {
+	case err := <-task.ErrChan:
+		t.Error(err)
+	case <-task.DoneChan:
+		if c := bytes.Compare(destWriter.Bytes(), []byte(jsonTestDataMinified)); c != 0 {
+			t.Errorf("TestPluginJSONFormatUnprocessDeenTaskFunc data wrong: %s != %s", destWriter.Bytes(), jsonTestDataMinified)
+		}
+	}
+}
+
+func TestPluginJSONFormatUnprocessDeenTaskWithFlags(t *testing.T) {
+	destWriter := new(bytes.Buffer)
+	task := types.NewDeenTask(destWriter)
+	task.Reader = strings.NewReader(jsonTestDataProcessed)
+	plugin := NewPluginJSONFormatter()
+	flags := helpers.DefaultFlagSet()
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{})
+	plugin.UnprocessDeenTaskWithFlags(flags, task)
+	select {
+	case err := <-task.ErrChan:
+		t.Error(err)
+	case <-task.DoneChan:
+		if c := bytes.Compare(destWriter.Bytes(), []byte(jsonTestDataMinified)); c != 0 {
+			t.Errorf("TestPluginJSONFormatUnprocessDeenTaskFunc data wrong: %s != %s", destWriter.Bytes(), jsonTestDataMinified)
 		}
 	}
 }
