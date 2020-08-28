@@ -5,7 +5,7 @@ else
 	go build -o ./bin/deen ./cmd/deen
 endif
 
-build-all: build build-freebsd build-macos build-linux build-windows
+build-all: build build-freebsd build-macos build-linux build-windows build-wasm
 
 build-freebsd:
 	GOOS=freebsd GOARCH=386 go build -o bin/deen-freebsd-x86 ./cmd/deen
