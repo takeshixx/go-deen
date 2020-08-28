@@ -11,7 +11,7 @@ import (
 
 // RunGUI creates a GUI instance
 func RunGUI() {
-	app := app.New()
+	app := app.NewWithID("io.deen.app")
 
 	w := app.NewWindow("deen")
 	dg, err := NewDeenGUI(app, w)
@@ -40,9 +40,11 @@ func RunGUI() {
 			fyne.NewMenu("Theme",
 				fyne.NewMenuItem("Light", func() {
 					app.Settings().SetTheme(theme.LightTheme())
+					app.Preferences().SetString("theme", "light")
 				}),
 				fyne.NewMenuItem("Dark", func() {
 					app.Settings().SetTheme(theme.DarkTheme())
+					app.Preferences().SetString("theme", "dark")
 				}),
 			),
 			fyne.NewMenu("Help",
@@ -50,6 +52,11 @@ func RunGUI() {
 					dialog.ShowInformation("About", "deen is a DEcoding/ENcoding application that processes arbitrary input data with a wide range of plugins.", w)
 				}),
 			)))
+	if app.Preferences().String("theme") == "light" {
+		app.Settings().SetTheme(theme.LightTheme())
+	} else {
+		app.Settings().SetTheme(theme.DarkTheme())
+	}
 	w.SetMaster()
 	w.SetContent(dg.Layout)
 	w.Resize(fyne.NewSize(640, 480))
