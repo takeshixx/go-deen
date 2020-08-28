@@ -28,7 +28,7 @@ func TestPluginBcryptProcessWithFlags(t *testing.T) {
 	p := NewPluginBcrypt()
 	r := bytes.NewReader(bcryptTestData)
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginBcryptProcessWithFlags failed: %s", e)
@@ -41,7 +41,7 @@ func TestPluginBcryptProcessWithFlags(t *testing.T) {
 	p = NewPluginBcrypt()
 	r = bytes.NewReader(bcryptTestData)
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{"-cost", "7"})
+	flags = p.AddDefaultCliFunc(p, flags, []string{"-cost", "7"})
 	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginBcryptProcessWithFlags failed: %s", e)
@@ -55,7 +55,7 @@ func TestPluginBcryptProcessWithFlags(t *testing.T) {
 func TestPluginBcryptUsage(t *testing.T) {
 	p := NewPluginBcrypt()
 	flags := helpers.DefaultFlagSet()
-	testFlags := p.AddDefaultCliFunc(&p, flags, []string{})
+	testFlags := p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

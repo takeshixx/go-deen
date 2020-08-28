@@ -13,7 +13,7 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-var pluginConstructors = []types.PluginConstructor{
+var pluginConstructors = []func() *types.DeenPlugin{
 	codecs.NewPluginBase32,
 	codecs.NewPluginBase64,
 	codecs.NewPluginBase85,
@@ -57,7 +57,7 @@ var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
 func PrintAvailable() {
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
-	var pluginList []types.DeenPlugin
+	var pluginList []*types.DeenPlugin
 	for _, constructor := range pluginConstructors {
 		p := constructor()
 		pluginList = append(pluginList, p)
@@ -86,11 +86,10 @@ func CmdAvailable(cmd string) bool {
 		p := constructor()
 		if cmd == p.Name {
 			return true
-		} else {
-			for _, alias := range p.Aliases {
-				if alias == cmd {
-					return true
-				}
+		}
+		for _, alias := range p.Aliases {
+			if alias == cmd {
+				return true
 			}
 		}
 	}
@@ -102,12 +101,12 @@ func GetForCmd(cmd string) (plugin *types.DeenPlugin) {
 	for _, constructor := range pluginConstructors {
 		p := constructor()
 		if p.Name == cmd {
-			plugin = &p
+			plugin = p
 			break
 		} else {
 			for _, alias := range p.Aliases {
 				if alias == cmd {
-					plugin = &p
+					plugin = p
 					break
 				}
 			}

@@ -14,7 +14,7 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-var version = "v3.1.1-alpha"
+var version = "v3.1.2-alpha"
 
 func main() {
 	noNewLinePtr := flag.Bool("n", false, "do not output the trailing newline")

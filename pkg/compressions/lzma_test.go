@@ -103,11 +103,11 @@ func TestPluginLZMAAddDefaultCliFunc(t *testing.T) {
 
 	p := NewPluginLZMA()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 
 	p = NewPluginLZMA2()
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 }

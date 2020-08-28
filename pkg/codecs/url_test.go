@@ -16,7 +16,7 @@ var urlInputDataProcessed = []byte("test%3Fdeen%3Dtrue")
 
 func TestNewPluginURL(t *testing.T) {
 	p := NewPluginURL()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
+	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
 		t.Errorf("Invalid return type for NewPluginHTML: %s", reflect.TypeOf(p))
 	}
 }
@@ -48,7 +48,7 @@ func TestPluginURLUnprocess(t *testing.T) {
 func TestPluginURLUsage(t *testing.T) {
 	p := NewPluginURL()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

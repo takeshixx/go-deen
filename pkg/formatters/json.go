@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 
 	"github.com/TylerBrock/colorjson"
 	"github.com/takeshixx/deen/pkg/types"
+	"github.com/tdewolff/minify/v2"
+	minijson "github.com/tdewolff/minify/v2/json"
 )
 
 func processJSONFormatColored(task *types.DeenTask) {
@@ -54,11 +57,12 @@ func processJSONFormat(task *types.DeenTask) {
 }
 
 // NewPluginJSONFormatter creates a new PluginJSONFormatter object
-func NewPluginJSONFormatter() (p types.DeenPlugin) {
+func NewPluginJSONFormatter() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "json"
-	p.Aliases = []string{"json-format"}
+	p.Aliases = []string{".json", "json-format"}
 	p.Type = "formatter"
-
+	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processJSONFormat(task)
 	}
@@ -75,14 +79,31 @@ func NewPluginJSONFormatter() (p types.DeenPlugin) {
 		processJSONFormatColored(task)
 	}
 
+	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
+		go func() {
+			defer task.Close()
+			minifier := minify.New()
+			minifier.AddFuncRegexp(regexp.MustCompile("[/+]json$"), minijson.Minify)
+			err := minifier.Minify("text/json", task.PipeWriter, task.Reader)
+			if err != nil {
+				task.ErrChan <- err
+			}
+		}()
+	}
+	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
+		p.UnprocessDeenTaskFunc(task)
+	}
+
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
 		flags.Init(p.Name, flag.ExitOnError)
 		flags.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "JSON beautifier with colorized output.\n\n")
+			fmt.Fprintf(os.Stderr, "JSON formatter plugin that processes JSON to a readable,\nprettified representation, and unprocesses beautified\nJSON to minified JSON.\n\n")
 			flags.PrintDefaults()
 		}
-		flags.Bool("no-color", false, "omit colors in output")
+		if !self.Unprocess {
+			flags.Bool("no-color", false, "omit colors in output")
+		}
 		flags.Parse(args)
 		return flags
 	}

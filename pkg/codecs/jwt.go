@@ -270,7 +270,8 @@ func undoSignedJWE(reader io.Reader, verify bool, secret []byte) (outBuf []byte,
 }
 
 // NewPluginJwt creates a new PluginJwt object
-func NewPluginJwt() (p types.DeenPlugin) {
+func NewPluginJwt() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "jwt"
 	p.Aliases = []string{".jwt"}
 	p.Type = "codec"

@@ -1,0 +1,55 @@
+root: true
+parser: "@typescript-eslint/parser"
+parserOptions:
+  project: "./tsconfig.json"
+env:
+  es6: true
+  node: true
+plugins:
+  - "@typescript-eslint"
+extends:
+  - "eslint:recommended"
+  - "plugin:@typescript-eslint/recommended"
+rules:
+  # Details can be found here:
+  # - https://eslint.org/docs/rules/
+  # - https://github.com/typescript-eslint/typescript-eslint/tree/master/packages/eslint-plugin
+  "semi": [2, "always"]
+  "curly": 1
+  "eqeqeq": 1
+  "no-unused-expressions": 1
+  "no-promise-executor-return": 1
+  "no-template-curly-in-string": 1
+  "require-atomic-updates": 1
+  "no-return-await": 1
+  "no-throw-literal": 1
+  "no-eval": 1
+  "no-implied-eval": 1
+  "complexity": 1
+  "no-duplicate-imports": 1
+  "arrow-body-style": 1
+  "consistent-return": 1
+
+  "@typescript-eslint/no-floating-promises": 1
+  "@typescript-eslint/await-thenable": 1
+  "@typescript-eslint/no-require-imports": 1
+  "@typescript-eslint/class-literal-property-style": 1
+  "@typescript-eslint/consistent-type-assertions": 1
+  "@typescript-eslint/naming-convention": 1
+  "@typescript-eslint/indent": ["warn", 2]
+  "@typescript-eslint/adjacent-overload-signatures": 1
+  "@typescript-eslint/no-loss-of-precision": 1
+  "@typescript-eslint/no-confusing-non-null-assertion": 1
+  "@typescript-eslint/no-invalid-this": 1
+  "@typescript-eslint/no-dupe-class-members": 1
+  "@typescript-eslint/no-misused-promises": 1
+
+  # TODO: Remove this?
+  "@typescript-eslint/no-magic-numbers": 1
+  "@typescript-eslint/quotes": 1
+  "@typescript-eslint/ban-types": 1
+overrides:
+  - files:
+      - "src/test/**"
+    rules:
+      "@typescript-eslint/no-magic-numbers": 0

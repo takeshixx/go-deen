@@ -65,21 +65,21 @@ func TestSHA3Usage(t *testing.T) {
 
 	p := NewPluginSHA3224()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 
 	p = NewPluginSHA3256()
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 
 	p = NewPluginSHA3384()
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 
 	p = NewPluginSHA3512()
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	flags.Usage()
 }

@@ -16,7 +16,7 @@ var htmlInputDataProcessed = []byte("&lt;h1&gt;deen&lt;/h1&gt;")
 
 func TestNewPluginHtml(t *testing.T) {
 	p := NewPluginHTML()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
+	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
 		t.Errorf("Invalid return type for NewPluginHTML: %s", reflect.TypeOf(p))
 	}
 }
@@ -48,7 +48,7 @@ func TestPluginHtmlUnprocess(t *testing.T) {
 func TestPluginHtmlUsage(t *testing.T) {
 	p := NewPluginHTML()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

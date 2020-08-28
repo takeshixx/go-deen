@@ -14,6 +14,7 @@ import (
 
 func processBase64(encoding *base64.Encoding, task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		encoder := base64.NewEncoder(encoding, task.PipeWriter)
 		_, err := io.Copy(encoder, task.Reader)
 		if err != nil {
@@ -23,23 +24,16 @@ func processBase64(encoding *base64.Encoding, task *types.DeenTask) {
 		if err != nil {
 			task.ErrChan <- errors.Wrap(err, "Closing encoder in processBase64 failed")
 		}
-		err = task.PipeWriter.Close()
-		if err != nil {
-			task.ErrChan <- errors.Wrap(err, "Closing PipeWriter in processBase64 failed")
-		}
 	}()
 }
 
 func unprocessBase64(encoding *base64.Encoding, task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		decoder := base64.NewDecoder(encoding, task.Reader)
 		_, err := io.Copy(task.PipeWriter, decoder)
 		if err != nil {
 			task.ErrChan <- errors.Wrap(err, "Copy in unprocessBase64 failed")
-		}
-		err = task.PipeWriter.Close()
-		if err != nil {
-			task.ErrChan <- errors.Wrap(err, "Closing PipeWriter in unprocessBase64 failed")
 		}
 	}()
 }
@@ -65,7 +59,8 @@ func parseBase64Encoding(flags *flag.FlagSet) (enc *base64.Encoding) {
 }
 
 // NewPluginBase64 creates a new PluginBase64 object
-func NewPluginBase64() (p types.DeenPlugin) {
+func NewPluginBase64() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "base64"
 	p.Aliases = []string{".base64", "b64", ".b64"}
 	p.Type = "codec"

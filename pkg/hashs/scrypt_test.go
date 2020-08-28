@@ -30,7 +30,7 @@ func TestPluginScryptProcessWithFlags(t *testing.T) {
 	p := NewPluginScrypt()
 	r := strings.NewReader(scryptTestData)
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{"-salt", scryptTestSaltHex})
+	flags = p.AddDefaultCliFunc(p, flags, []string{"-salt", scryptTestSaltHex})
 	d, e := p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginScryptProcessWithFlags failed: %s", e)
@@ -42,7 +42,7 @@ func TestPluginScryptProcessWithFlags(t *testing.T) {
 	p = NewPluginScrypt()
 	r = strings.NewReader(scryptTestData)
 	flags = helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{"-cost", fmt.Sprintf("%d", 1<<12), "-len", "96", "-salt", scryptTestSaltHex})
+	flags = p.AddDefaultCliFunc(p, flags, []string{"-cost", fmt.Sprintf("%d", 1<<12), "-len", "96", "-salt", scryptTestSaltHex})
 	d, e = p.ProcessStreamWithCliFlagsFunc(flags, r)
 	if e != nil {
 		t.Errorf("TestPluginScryptProcessWithFlags failed: %s", e)
@@ -55,7 +55,7 @@ func TestPluginScryptProcessWithFlags(t *testing.T) {
 func TestPluginScryptUsage(t *testing.T) {
 	p := NewPluginScrypt()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

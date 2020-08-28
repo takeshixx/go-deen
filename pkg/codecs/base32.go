@@ -13,6 +13,7 @@ import (
 
 func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		encoder := base32.NewEncoder(encoding, task.PipeWriter)
 		_, err := io.Copy(encoder, task.Reader)
 		if err != nil {
@@ -22,21 +23,14 @@ func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
 		if err != nil {
 			task.ErrChan <- err
 		}
-		err = task.PipeWriter.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
 	}()
 }
 
 func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		decoder := base32.NewDecoder(encoding, task.Reader)
 		_, err := io.Copy(task.PipeWriter, decoder)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		err = task.PipeWriter.Close()
 		if err != nil {
 			task.ErrChan <- err
 		}
@@ -45,7 +39,8 @@ func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
 
 // NewPluginBase32 creates a new PluginBase32 object
 // Standard base32 encoding, as defined in RFC 4648
-func NewPluginBase32() (p types.DeenPlugin) {
+func NewPluginBase32() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "base32"
 	p.Aliases = []string{".base32", "b32", ".b32"}
 	p.Type = "codec"

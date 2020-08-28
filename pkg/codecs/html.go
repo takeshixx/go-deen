@@ -12,7 +12,8 @@ import (
 )
 
 // NewPluginHTML creates a new PluginHTML object
-func NewPluginHTML() (p types.DeenPlugin) {
+func NewPluginHTML() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "html"
 	p.Aliases = []string{".html"}
 	p.Type = "codec"

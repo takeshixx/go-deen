@@ -40,7 +40,7 @@ func TestPluginFlateProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(flateTestData)
 	plugin := NewPluginFlate()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-level", "1"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-level", "1"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	compressedData, err := hex.DecodeString(deflateDataLevel1)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestPluginFlateUnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(compressedData)
 	plugin := NewPluginFlate()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -101,7 +101,7 @@ func TestPluginFlateUnprocessDeenTaskWithFlags(t *testing.T) {
 func TestPluginFlateAddDefaultCliFunc(t *testing.T) {
 	p := NewPluginFlate()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

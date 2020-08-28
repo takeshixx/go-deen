@@ -15,6 +15,7 @@ import (
 
 func doBrotliCompress(task *types.DeenTask, options brotli.WriterOptions) {
 	go func() {
+		defer task.Close()
 		compressor := brotli.NewWriterOptions(task.PipeWriter, options)
 		_, err := io.Copy(compressor, task.Reader)
 		if err != nil {
@@ -24,15 +25,12 @@ func doBrotliCompress(task *types.DeenTask, options brotli.WriterOptions) {
 		if err != nil {
 			task.ErrChan <- err
 		}
-		err = task.PipeWriter.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
 	}()
 }
 
 func doBrotliDecompress(task *types.DeenTask) {
 	go func() {
+		defer task.Close()
 		wrappedReader := types.TrimReader{}
 		wrappedReader.Rd = task.Reader
 		decompressor := brotli.NewReader(wrappedReader)
@@ -40,15 +38,12 @@ func doBrotliDecompress(task *types.DeenTask) {
 		if err != nil {
 			task.ErrChan <- err
 		}
-		err = task.PipeWriter.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
 	}()
 }
 
 // NewPluginBrotli creates a new brotli plugin
-func NewPluginBrotli() (p types.DeenPlugin) {
+func NewPluginBrotli() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "brotli"
 	p.Aliases = []string{".brotli", "br", ".br"}
 	p.Type = "compression"

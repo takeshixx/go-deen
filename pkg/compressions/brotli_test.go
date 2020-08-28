@@ -41,7 +41,7 @@ func TestPluginBrotliProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(brotliTestData)
 	plugin := NewPluginBrotli()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-level", "3", "-lgwin", "2"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-level", "3", "-lgwin", "2"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	compressedData, err := hex.DecodeString(brotliTestDataModifiedHex)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestPluginBrotliUnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(compressedData)
 	plugin := NewPluginBrotli()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-level", "3", "-lgwin", "2"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-level", "3", "-lgwin", "2"})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -102,7 +102,7 @@ func TestPluginBrotliUnprocessDeenTaskFunc(t *testing.T) {
 func TestPluginBrotliAddDefaultCliFunc(t *testing.T) {
 	p := NewPluginBrotli()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

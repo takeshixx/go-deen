@@ -10,8 +10,10 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dsnet/compress v0.0.1
 	github.com/fatih/color v1.9.0 // indirect
+	github.com/google/go-cmp v0.5.2
 	github.com/pkg/errors v0.9.1
 	github.com/schollz/closestmatch v2.1.0+incompatible
+	github.com/tdewolff/minify/v2 v2.9.0
 	github.com/ulikunitz/xz v0.5.8
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	gopkg.in/square/go-jose.v2 v2.5.1

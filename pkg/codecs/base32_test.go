@@ -18,7 +18,7 @@ var b32InputDataProcessedHex = []byte("CHIMARJKCLPN8P31EHGN6T3ID5N6EPBOEHIMSP35C
 
 func TestNewPluginBase32(t *testing.T) {
 	p := NewPluginBase32()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
+	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
 		t.Errorf("Invalid return type for NewPluginBase32: %s", reflect.TypeOf(p))
 	}
 }
@@ -110,7 +110,7 @@ func TestPluginBase32ProcessBase32HexEncoding(t *testing.T) {
 func TestPluginBase32AddDefaultCliFunc(t *testing.T) {
 	plugin := NewPluginBase32()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-hex", "-no-pad"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-hex", "-no-pad"})
 	if flags == nil {
 		t.Error("Failed to create FlagSet")
 	}
@@ -128,7 +128,7 @@ func TestPluginBase32ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b32InputData)
 	plugin := NewPluginBase32()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-hex"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-hex"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -144,7 +144,7 @@ func TestPluginBase32ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b32InputData)
 	plugin = NewPluginBase32()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-no-pad"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-no-pad"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -160,7 +160,7 @@ func TestPluginBase32ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b32InputData)
 	plugin = NewPluginBase32()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-hex", "-no-pad"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-hex", "-no-pad"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -178,7 +178,7 @@ func TestPluginBase32UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(b32InputDataProcessed)
 	plugin := NewPluginBase32()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -194,7 +194,7 @@ func TestPluginBase32UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(b32InputDataProcessedHex)
 	plugin = NewPluginBase32()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-hex"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-hex"})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -209,7 +209,7 @@ func TestPluginBase32UnprocessDeenTaskWithFlags(t *testing.T) {
 func TestPluginBase32Usage(t *testing.T) {
 	p := NewPluginBase32()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

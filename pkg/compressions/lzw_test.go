@@ -40,7 +40,7 @@ func TestPluginLzwProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(lzwTestData)
 	plugin := NewPluginLzw()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-order", "1", "-lit-width", "7"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-order", "1", "-lit-width", "7"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	compressedData, err := hex.DecodeString(lzwCompressedDataFlags)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestPluginLzwUnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(compressedData)
 	plugin := NewPluginLzw()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-order", "1", "-lit-width", "7"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-order", "1", "-lit-width", "7"})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -101,7 +101,7 @@ func TestPluginLzwUnprocessDeenTaskWithFlags(t *testing.T) {
 func TestPluginLzwAddDefaultCliFunc(t *testing.T) {
 	p := NewPluginLzw()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)

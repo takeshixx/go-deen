@@ -43,7 +43,8 @@ func doLzwUncompress(task *types.DeenTask, order lzw.Order, litWidth int) {
 }
 
 // NewPluginLzw creates a new zlib plugin
-func NewPluginLzw() (p types.DeenPlugin) {
+func NewPluginLzw() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "lzw"
 	p.Aliases = []string{".lzw"}
 	p.Type = "compression"

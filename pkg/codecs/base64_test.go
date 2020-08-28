@@ -17,7 +17,7 @@ var b64InputDataProcessedURL = []byte("YXNkMTIzPDw8PD4-Pj5kZWVudGVzdGRhdGEyM3h4e
 
 func TestNewPluginBase64(t *testing.T) {
 	p := NewPluginBase64()
-	if reflect.TypeOf(p) != reflect.TypeOf(types.DeenPlugin{}) {
+	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
 		t.Errorf("Invalid return type for NewPluginBase64: %s", reflect.TypeOf(p))
 	}
 }
@@ -60,7 +60,7 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b64InputData)
 	plugin := NewPluginBase64()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{""})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{""})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -76,7 +76,7 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b64InputData)
 	plugin = NewPluginBase64()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-url"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-url"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -92,7 +92,7 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b64InputData)
 	plugin = NewPluginBase64()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -108,7 +108,7 @@ func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = strings.NewReader(b64InputData)
 	plugin = NewPluginBase64()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw", "-url"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw", "-url"})
 	plugin.ProcessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -126,7 +126,7 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(b64InputDataProcessed)
 	plugin := NewPluginBase64()
 	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{""})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{""})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -142,7 +142,7 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(b64InputDataProcessedURL)
 	plugin = NewPluginBase64()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-url"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-url"})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -158,7 +158,7 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(bytes.ReplaceAll(b64InputDataProcessed, []byte("="), []byte("")))
 	plugin = NewPluginBase64()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw"})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -174,7 +174,7 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 	task.Reader = bytes.NewReader(bytes.ReplaceAll(b64InputDataProcessedURL, []byte("="), []byte("")))
 	plugin = NewPluginBase64()
 	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(&plugin, flags, []string{"-raw", "-url"})
+	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw", "-url"})
 	plugin.UnprocessDeenTaskWithFlags(flags, task)
 	select {
 	case err := <-task.ErrChan:
@@ -189,7 +189,7 @@ func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
 func TestPluginBase64Usage(t *testing.T) {
 	p := NewPluginBase64()
 	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(&p, flags, []string{})
+	flags = p.AddDefaultCliFunc(p, flags, []string{})
 	_, w, err := os.Pipe()
 	if err != nil {
 		t.Error(err)
