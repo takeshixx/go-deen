@@ -28,6 +28,9 @@ func NewPluginHex() (p *types.DeenPlugin) {
 			}
 		}()
 	}
+	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
+		p.ProcessDeenTaskFunc(task)
+	}
 	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
 			defer task.Close()
@@ -39,6 +42,9 @@ func NewPluginHex() (p *types.DeenPlugin) {
 				task.ErrChan <- errors.Wrap(err, "Copy in Hex failed")
 			}
 		}()
+	}
+	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
+		p.UnprocessDeenTaskFunc(task)
 	}
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
 		flags.Init(p.Name, flag.ExitOnError)
