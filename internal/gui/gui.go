@@ -17,17 +17,17 @@ import (
 
 // DeenGUI represents a GUI instance.
 type DeenGUI struct {
-	App               fyne.App
-	MainWindow        fyne.Window
-	Layout            *fyne.Container
-	PluginList        *widget.ScrollContainer
-	Plugins           []string
-	EncoderListScroll *widget.ScrollContainer
-	EncoderList       *widget.Box
-	Encoders          []*DeenEncoder
-	HistoryList       *widget.Group
-	History           []string
-	CurrentFocus      int // The index of the encoder widget in Encoders
+	App                  fyne.App
+	MainWindow           fyne.Window
+	Layout               *fyne.Container
+	PluginList           *widget.ScrollContainer
+	Plugins              []string
+	EncoderWidgetsScroll *widget.ScrollContainer
+	EncoderWidgets       *widget.Box
+	Encoders             []*DeenEncoder
+	HistoryList          *widget.Group
+	History              []string
+	CurrentFocus         int // The index of the encoder widget in Encoders
 }
 
 // Process the Encoders chain starting from the root widget.
@@ -90,22 +90,26 @@ func (dg *DeenGUI) RunPlugin(pluginCmd string) {
 	log.Printf("[DEBUG] Found plugin: %s\n", plugin.Name)
 	ce := dg.CurrentEncoder()
 	ce.Plugin = plugin
-	//dg.processChain()
 	dg.updateGUI()
-
-	// TODO: always set focus to last encoder widget?
-	//dg.SetEncoderFocus(dg.CurrentFocus + 1)
-	dg.SetEncoderFocus(len(dg.Encoders) - 1)
 }
 
 // Reprocess all encoder widgets and update the GUI elements.
 func (dg *DeenGUI) updateGUI() (err error) {
 	log.Println("[DEBUG] Updating GUI")
-	dg.EncoderList = widget.NewVBox()
+	// We should only start processing
+	// when at least the root widget
+	// has a plugin set.
+	if dg.Encoders[0].Plugin != nil {
+		// We have to process all
+		// encoders before creating
+		// the GUI layouts.
+		dg.processChain()
+	}
+	dg.EncoderWidgets = widget.NewVBox()
 	dg.HistoryList = widget.NewGroup("History")
 	var historyName string
 	for _, e := range dg.Encoders {
-		dg.EncoderList.Append(e.createLayout())
+		dg.EncoderWidgets.Append(e.createLayout())
 		if e.Plugin != nil {
 			if e.Plugin.Unprocess {
 				historyName = "." + e.Plugin.Name
@@ -115,14 +119,17 @@ func (dg *DeenGUI) updateGUI() (err error) {
 			dg.HistoryList.Append(widget.NewLabel(historyName))
 		}
 	}
+	dg.EncoderWidgetsScroll = widget.NewScrollContainer(dg.EncoderWidgets)
 	dg.Layout = fyne.NewContainerWithLayout(
 		layout.NewBorderLayout(nil, nil, dg.PluginList, dg.HistoryList),
-		dg.PluginList,  // left
-		dg.HistoryList, // right
-		dg.EncoderList, // middle
+		dg.PluginList,           // left
+		dg.HistoryList,          // right
+		dg.EncoderWidgetsScroll, // middle
 	)
-	dg.processChain()
 	dg.MainWindow.SetContent(dg.Layout)
+	dg.EncoderWidgetsScroll.ScrollToBottom()
+	// Always set focus to the newest encoder.
+	dg.SetEncoderFocus(len(dg.Encoders) - 1)
 	return
 }
 
@@ -133,11 +140,6 @@ func (dg *DeenGUI) AddEncoder() (enc *DeenEncoder, err error) {
 		return
 	}
 	dg.Encoders = append(dg.Encoders, enc)
-	// Create the layout and add it to the EncoderList
-	dg.EncoderList.Append(enc.createLayout())
-	dg.EncoderListScroll = widget.NewScrollContainer(dg.EncoderList)
-	dg.EncoderListScroll.SetMinSize(fyne.NewSize(dg.EncoderList.MinSize().Width, 0))
-	dg.EncoderListScroll.Refresh()
 	return
 }
 
@@ -268,23 +270,6 @@ func (dg *DeenGUI) loadPluginList() (err error) {
 	return
 }
 
-// Populate the DeenGUI.EncoderList field
-func (dg *DeenGUI) loadEncoderList() (err error) {
-	dg.EncoderList = widget.NewVBox()
-	_, err = dg.AddEncoder() // Create the root encoder widget (must always exist)
-	if err != nil {
-		return
-	}
-	// Set initial focus to root widget
-	dg.SetEncoderFocus(0)
-
-	// Ensure that the scroll container is wide enough
-	/* 	dg.EncoderListScroll.SetMinSize(fyne.NewSize(dg.EncoderList.MinSize().Width, 0))
-	dg.EncoderListScroll.Refresh() */
-
-	return
-}
-
 func (dg *DeenGUI) addCustomShortcuts() {
 	ctrlR := desktop.CustomShortcut{KeyName: fyne.KeyR, Modifier: desktop.ControlModifier}
 	dg.MainWindow.Canvas().AddShortcut(&ctrlR, func(shortcut fyne.Shortcut) {
@@ -337,17 +322,12 @@ func NewDeenGUI(a fyne.App, w fyne.Window) (dg *DeenGUI, err error) {
 	if err != nil {
 		return
 	}
-	err = dg.loadEncoderList()
+	// Create the root encoder widget (must always exist)
+	_, err = dg.AddEncoder()
 	if err != nil {
 		return
 	}
 	dg.addCustomShortcuts()
-	dg.HistoryList = widget.NewGroup("History")
-	dg.Layout = fyne.NewContainerWithLayout(
-		layout.NewBorderLayout(nil, nil, dg.PluginList, dg.HistoryList),
-		dg.PluginList,        // left
-		dg.HistoryList,       // right
-		dg.EncoderListScroll, // middle
-	)
+	dg.updateGUI()
 	return
 }
