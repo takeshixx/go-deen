@@ -261,34 +261,6 @@ func (dg *DeenGUI) loadPluginList() (err error) {
 		pluginList.Append(pluginGroup)
 	}
 
-	/* 	var pluginGroup *widget.Group
-	   	for _, c := range plugins.PluginCategories {
-	   		pluginGroup = widget.NewGroup(c)
-	   		filteredPlugins := plugins.GetForCategory(c, false)
-	   		for _, p := range filteredPlugins {
-	   			pluginName := p
-	   			pluginGroup.Append(widget.NewButton(p, func() {
-	   				dg.RunPlugin(pluginName)
-	   			}))
-	   		}
-	   		allPlugins := plugins.GetForCategory(c, true)
-	   		for _, p := range allPlugins {
-	   			pluginName := p
-	   			dg.Plugins = append(dg.Plugins, pluginName)
-	   		}
-	   		pluginList.Append(pluginGroup)
-	   	} */
-	// Alternative way to display plugins in dropdown boxes
-	/* 	pluginGroup = widget.NewGroup("Plugins")
-	for _, c := range plugins.PluginCategories {
-		plugins := plugins.GetForCategory(c, false)
-		pluginSelect := widget.NewSelect(plugins, func(selectedPlugin string) {
-			dg.RunPlugin(selectedPlugin)
-		})
-		pluginGroup.Append(pluginSelect)
-	}
-	dg.PluginList.Append(pluginGroup) */
-
 	dg.PluginList = widget.NewScrollContainer(pluginList)
 	// Ensure that the scroll container is wide enough
 	dg.PluginList.SetMinSize(fyne.NewSize(pluginList.MinSize().Width, 0))
@@ -308,7 +280,8 @@ func (dg *DeenGUI) loadEncoderList() (err error) {
 
 	// Ensure that the scroll container is wide enough
 	/* 	dg.EncoderListScroll.SetMinSize(fyne.NewSize(dg.EncoderList.MinSize().Width, 0))
-	   	dg.EncoderListScroll.Refresh() */
+	dg.EncoderListScroll.Refresh() */
+
 	return
 }
 

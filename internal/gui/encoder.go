@@ -90,11 +90,26 @@ func (de *DeenEncoder) Process() (processed []byte, err error) {
 		}
 	}
 	if de.Plugin != nil {
-		// TODO: is there a situation where at this point the plugin might not be set?
-		if de.Plugin.Unprocess {
-			processed, err = de.Plugin.UnprocessStreamFunc(reader)
+		if de.Plugin.ProcessDeenTaskFunc != nil {
+			var outWriter bytes.Buffer
+			task := types.NewDeenTask(&outWriter)
+			task.Reader = reader
+			if de.Plugin.Unprocess {
+				de.Plugin.UnprocessDeenTaskFunc(task)
+			} else {
+				de.Plugin.ProcessDeenTaskFunc(task)
+			}
+			select {
+			case err = <-task.ErrChan:
+			case <-task.DoneChan:
+			}
+			processed = outWriter.Bytes()
 		} else {
-			processed, err = de.Plugin.ProcessStreamFunc(reader)
+			if de.Plugin.Unprocess {
+				processed, err = de.Plugin.UnprocessStreamFunc(reader)
+			} else {
+				processed, err = de.Plugin.ProcessStreamFunc(reader)
+			}
 		}
 	} else {
 		err = errors.New("Plugin not set")
