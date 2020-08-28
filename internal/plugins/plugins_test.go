@@ -4,6 +4,10 @@ import (
 	"testing"
 )
 
+func TestPrintAvailable(t *testing.T) {
+	PrintAvailable()
+}
+
 func TestCmdAvailable(t *testing.T) {
 	if !CmdAvailable("html") {
 		t.Error("HTML plugin not found")
@@ -36,3 +40,25 @@ func TestCmdAvailable(t *testing.T) {
 	}
 }
 */
+
+func TestGetForCategory(t *testing.T) {
+	validCategory := GetForCategory("codec", true)
+	if validCategory == nil || len(validCategory) < 1 {
+		t.Error("No plugins found for valid category")
+	}
+
+	validCategory = GetForCategory("codec", false)
+	if validCategory == nil || len(validCategory) < 1 {
+		t.Error("No plugins found for valid category")
+	}
+
+	invalidCategory := GetForCategory("nocategory", true)
+	if len(invalidCategory) > 0 {
+		t.Error("Invalid category returned plugin list")
+	}
+
+	invalidCategory = GetForCategory("nocategory", false)
+	if len(invalidCategory) > 0 {
+		t.Error("Invalid category returned plugin list")
+	}
+}
