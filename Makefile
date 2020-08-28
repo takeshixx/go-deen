@@ -5,16 +5,7 @@ else
 	go build -o ./bin/deen ./cmd/deen
 endif
 
-run:
-	go run ./cmd/deen/main.go
-
-clean:
-	rm -rf ./bin
-
-test:
-	go test -timeout 20s -cover ./...
-
-build-all: build-freebsd build-macos build-linux build-windows
+build-all: build build-freebsd build-macos build-linux build-windows
 
 build-freebsd:
 	GOOS=freebsd GOARCH=386 go build -o bin/deen-freebsd-x86 ./cmd/deen
@@ -30,3 +21,17 @@ build-linux:
 build-windows:
 	GOOS=windows GOARCH=386 go build -o bin/deen-windows-x86.exe ./cmd/deen
 	GOOS=windows GOARCH=amd64 go build -o bin/deen-windows-x86_64.exe ./cmd/deen
+
+build-wasm:
+	GOOS=js GOARCH=wasm go build -o bin/deen.wasm ./cmd/deen
+
+run:
+	go run ./cmd/deen/main.go
+
+clean:
+	rm -rf ./bin
+
+test:
+	go test -timeout 20s -cover ./...
+
+all: clean build-all test
