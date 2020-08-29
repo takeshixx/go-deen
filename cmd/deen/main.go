@@ -18,6 +18,7 @@ var version = "v3.1.2-alpha"
 func main() {
 	noNewLinePtr := flag.Bool("n", false, "do not output the trailing newline")
 	printPluginsPtr := flag.Bool("l", false, "list available plugins")
+	printPluginsJSONPtr := flag.Bool("lj", false, "list available plugins in JSON format")
 	versionPtr := flag.Bool("version", false, "print version")
 	filePtr := flag.String("file", "", "read from file")
 	flag.Parse()
@@ -147,7 +148,9 @@ func main() {
 			fmt.Println(outputData)
 		}
 	} else if *printPluginsPtr {
-		plugins.PrintAvailable()
+		plugins.PrintAvailable(false)
+	} else if *printPluginsJSONPtr {
+		plugins.PrintAvailable(true)
 	} else if *versionPtr {
 		fmt.Println(version)
 	} else {

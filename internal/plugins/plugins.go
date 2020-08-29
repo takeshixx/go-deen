@@ -1,7 +1,9 @@
 package plugins
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -50,33 +52,66 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginJSONFormatter,
 }
 
-var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
+var pluginCategories = []string{"codec", "compression", "hash", "formatter"}
+
+type pluginDescription struct {
+	Name    string
+	Aliases []string
+}
 
 // PrintAvailable prints a list of available plugins
 // and their aliases.
-func PrintAvailable() {
-	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
+func PrintAvailable(outputJSON bool) {
 	var pluginList []*types.DeenPlugin
 	for _, constructor := range pluginConstructors {
 		p := constructor()
 		pluginList = append(pluginList, p)
 	}
-	for _, category := range PluginCategories {
-		fmt.Fprintf(w, "%s:\n", category)
+	var jsonObj map[string][]pluginDescription
+	jsonObj = make(map[string][]pluginDescription)
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
+	for _, category := range pluginCategories {
+		if !outputJSON {
+			fmt.Fprintf(w, "%s:\n", category)
+		}
 		for _, p := range pluginList {
 			if p.Type != category {
 				continue
 			}
 			if len(p.Aliases) > 0 {
-				fmt.Fprintf(w, " \t%s\t%s\n", p.Name, p.Aliases)
+				if outputJSON {
+					jsonObj[category] = append(jsonObj[category], pluginDescription{
+						Name:    p.Name,
+						Aliases: []string{},
+					})
+				} else {
+					fmt.Fprintf(w, " \t%s\t%s\n", p.Name, p.Aliases)
+				}
 			} else {
-				fmt.Fprintf(w, " \t%s\n", p.Name)
+				if outputJSON {
+					jsonObj[category] = append(jsonObj[category], pluginDescription{
+						Name:    p.Name,
+						Aliases: []string{},
+					})
+				} else {
+					fmt.Fprintf(w, " \t%s\n", p.Name)
+				}
 			}
 		}
-		fmt.Fprintln(w, "")
+		if !outputJSON {
+			fmt.Fprintln(w, "")
+		}
 	}
-	w.Flush()
+	if outputJSON {
+		encoded, err := json.Marshal(jsonObj)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(string(encoded))
+	} else {
+		w.Flush()
+	}
 }
 
 // CmdAvailable checks if the given cmd is the name or
