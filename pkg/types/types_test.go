@@ -33,3 +33,32 @@ func TestTrimReader(t *testing.T) {
 		t.Error(errors.New("Invalid data returned"))
 	}
 }
+
+func TestDeenTask(t *testing.T) {
+	var w bytes.Buffer
+	task := NewDeenTask(&w)
+	err := task.Close()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDeenTaskError(t *testing.T) {
+	var w bytes.Buffer
+	testErr := errors.New("a test error")
+	task := NewDeenTask(&w)
+	go func() {
+		select {
+		case err := <-task.ErrChan:
+			if err != testErr {
+				t.Errorf("Invalid error returned: %v != %v", testErr, err)
+			}
+		case <-task.DoneChan:
+		}
+	}()
+	task.Error(testErr)
+	err := task.Close()
+	if err != nil {
+		t.Error(err)
+	}
+}
