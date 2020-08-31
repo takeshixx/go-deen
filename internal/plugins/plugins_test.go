@@ -5,7 +5,8 @@ import (
 )
 
 func TestPrintAvailable(t *testing.T) {
-	PrintAvailable()
+	PrintAvailable(false)
+	PrintAvailable(true)
 }
 
 func TestCmdAvailable(t *testing.T) {

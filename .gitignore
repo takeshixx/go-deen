@@ -17,3 +17,4 @@
 bin/
 internal/oldgui/
 *.bak
+.scannerwork

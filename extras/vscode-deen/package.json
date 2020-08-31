@@ -10,19 +10,7 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:deen.helloWorld",
-		"onCommand:deen.base32Encode",
-		"onCommand:deen.base32Decode",
-		"onCommand:deen.base64Encode",
-		"onCommand:deen.base64Decode",
-		"onCommand:deen.base85Encode",
-		"onCommand:deen.base85Decode",
-		"onCommand:deen.urlEncode",
-		"onCommand:deen.urlDecode",
-		"onCommand:deen.htmlEncode",
-		"onCommand:deen.htmlDecode",
-		"onCommand:deen.jsonFormat",
-		"onCommand:deen.jsonUnformat"
+		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -68,12 +56,156 @@
 				"title": "deen: HTML Decode"
 			},
 			{
+				"command": "deen.hexEncode",
+				"title": "deen: Hex Encode"
+			},
+			{
+				"command": "deen.hexDecode",
+				"title": "deen: Hex Decode"
+			},
+			{
 				"command": "deen.jsonFormat",
 				"title": "deen: JSON Format"
 			},
 			{
 				"command": "deen.jsonUnformat",
 				"title": "deen: JSON Unformat"
+			},
+			{
+				"command": "deen.flateCompress",
+				"title": "deen: flate Compress"
+			},
+			{
+				"command": "deen.flateUncompress",
+				"title": "deen: flate Uncompress"
+			},
+			{
+				"command": "deen.lzmaCompress",
+				"title": "deen: lzma Compress"
+			},
+			{
+				"command": "deen.lzmaUncompress",
+				"title": "deen: lzma Uncompress"
+			},
+			{
+				"command": "deen.lzma2Compress",
+				"title": "deen: lzma2 Compress"
+			},
+			{
+				"command": "deen.lzma2Uncompress",
+				"title": "deen: lzma2 Uncompress"
+			},
+			{
+				"command": "deen.lzwCompress",
+				"title": "deen: lzw Compress"
+			},
+			{
+				"command": "deen.lzwUncompress",
+				"title": "deen: lzw Uncompress"
+			},
+			{
+				"command": "deen.gzipCompress",
+				"title": "deen: gzip Compress"
+			},
+			{
+				"command": "deen.gzipUncompress",
+				"title": "deen: gzip Uncompress"
+			},
+			{
+				"command": "deen.zlibCompress",
+				"title": "deen: zlib Compress"
+			},
+			{
+				"command": "deen.zlibUncompress",
+				"title": "deen: zlib Uncompress"
+			},
+			{
+				"command": "deen.bzip2Compress",
+				"title": "deen: bzip2 Compress"
+			},
+			{
+				"command": "deen.bzip2Uncompress",
+				"title": "deen: bzip2 Uncompress"
+			},
+			{
+				"command": "deen.brotliCompress",
+				"title": "deen: brotli Compress"
+			},
+			{
+				"command": "deen.brotliUncompress",
+				"title": "deen: brotli Uncompress"
+			},
+			{
+				"command": "deen.sha1Hash",
+				"title": "deen: SHA1 Hash"
+			},
+			{
+				"command": "deen.sha224Hash",
+				"title": "deen: SHA224 Hash"
+			},
+			{
+				"command": "deen.sha256Hash",
+				"title": "deen: SHA256 Hash"
+			},
+			{
+				"command": "deen.sha384Hash",
+				"title": "deen: SHA384 Hash"
+			},
+			{
+				"command": "deen.sha512Hash",
+				"title": "deen: SHA512 Hash"
+			},
+			{
+				"command": "deen.sha3-224Hash",
+				"title": "deen: SHA3-224 Hash"
+			},
+			{
+				"command": "deen.sha3-256Hash",
+				"title": "deen: SHA3-256 Hash"
+			},
+			{
+				"command": "deen.sha3-384Hash",
+				"title": "deen: SHA3-384 Hash"
+			},
+			{
+				"command": "deen.sha3-512Hash",
+				"title": "deen: SHA3512 Hash"
+			},
+			{
+				"command": "deen.md4Hash",
+				"title": "deen: MD4 Hash"
+			},
+			{
+				"command": "deen.md5Hash",
+				"title": "deen: MD5 Hash"
+			},
+			{
+				"command": "deen.sha1Hash",
+				"title": "deen: RIPEMD160 Hash"
+			},
+			{
+				"command": "deen.blake2sHash",
+				"title": "deen: BLAKE2s Hash"
+			},
+			{
+				"command": "deen.blake2bHash",
+				"title": "deen: BLAKE2b Hash"
+			},
+			{
+				"command": "deen.blake2xHash",
+				"title": "deen: BLAKE2x Hash"
+			},
+			{
+				"command": "deen.blake3Hash",
+				"title": "deen: BLAKE3 Hash"
+			},
+			{
+				"command": "deen.bcryptHash",
+				"title": "deen: bcrypt Hash"
+			},
+			{
+				"command": "deen.scryptHash",
+				"title": "deen: scrypt Hash"
 			}
 		]
 	},
