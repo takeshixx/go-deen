@@ -31,12 +31,12 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y npm
-        sudo npm install -g vsce
+        sudo npm install -g vscode vsce
 
     - name: Build vsix package
       run: |
         cd extras/vscode-deen
-        sudo npm install -g
+        npm install
         vsce package
 
     - name: Upload artifacts
