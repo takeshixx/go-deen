@@ -52,7 +52,9 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginJSONFormatter,
 }
 
-var pluginCategories = []string{"codec", "compression", "hash", "formatter"}
+// PluginCategories is a list of plugin categories that
+// should be available accross all modules.
+var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
 
 type pluginDescription struct {
 	Name    string
