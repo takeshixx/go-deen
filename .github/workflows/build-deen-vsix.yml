@@ -29,14 +29,14 @@ jobs:
 
     - name: Install build dependencies
       run: |
-        apt update
-        apt install -y npm
-        npm install vsce
+        sudo apt update
+        sudo apt install -y npm
+        sudo npm install -g vsce
 
     - name: Build vsix package
       run: |
         cd extras/vscode-deen
-        npm install
+        sudo npm install -g
         vsce package
 
     - name: Upload artifacts
