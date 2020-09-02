@@ -18,7 +18,7 @@ rules:
   "curly": 1
   "eqeqeq": 1
   "no-unused-expressions": 1
-  "no-promise-executor-return": 1
+  #"no-promise-executor-return": 1
   "no-template-curly-in-string": 1
   "require-atomic-updates": 1
   "no-return-await": 1
@@ -38,11 +38,12 @@ rules:
   "@typescript-eslint/naming-convention": 1
   "@typescript-eslint/indent": ["warn", 2]
   "@typescript-eslint/adjacent-overload-signatures": 1
-  "@typescript-eslint/no-loss-of-precision": 1
-  "@typescript-eslint/no-confusing-non-null-assertion": 1
+  #"@typescript-eslint/no-loss-of-precision": 1
+  #"@typescript-eslint/no-confusing-non-null-assertion": 1
   "@typescript-eslint/no-invalid-this": 1
   "@typescript-eslint/no-dupe-class-members": 1
   "@typescript-eslint/no-misused-promises": 1
+  "@typescript-eslint/no-non-null-assertion": 'off'
 
   # TODO: Remove this?
   "@typescript-eslint/no-magic-numbers": 1

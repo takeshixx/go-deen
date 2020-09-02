@@ -18,3 +18,4 @@ bin/
 internal/oldgui/
 *.bak
 .scannerwork
+*.vsix
