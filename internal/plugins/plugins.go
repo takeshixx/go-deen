@@ -73,7 +73,7 @@ func PrintAvailable(outputJSON bool) {
 	jsonObj = make(map[string][]pluginDescription)
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
-	for _, category := range pluginCategories {
+	for _, category := range PluginCategories {
 		if !outputJSON {
 			fmt.Fprintf(w, "%s:\n", category)
 		}
