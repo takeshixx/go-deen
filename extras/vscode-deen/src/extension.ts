@@ -33,7 +33,13 @@ function runDeenPlugin(plugin: string, content: string): void {
 function addDeenPlugin(plugin: string, vscodeCommand: string, context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerTextEditorCommand("deen."+vscodeCommand, (editor: vscode.TextEditor) => {
-      const content = editor.document.getText();
+      let content;
+      const selection = editor.selection;
+      if (!selection.isEmpty) {
+        content = editor.document.getText(selection);
+      } else {
+        content = editor.document.getText();
+      }
       runDeenPlugin(plugin, content);
     })
   );
