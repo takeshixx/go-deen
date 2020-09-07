@@ -12,8 +12,13 @@ import (
 // RunGUI creates a GUI instance
 func RunGUI() {
 	app := app.NewWithID("io.deen.app")
-
 	w := app.NewWindow("deen")
+	setUpGUI(app, w)
+}
+
+// setUpGUI is seperate to make it easier to
+// be used in unit tests.
+func setUpGUI(app fyne.App, w fyne.Window) {
 	dg, err := NewDeenGUI(app, w)
 	if err != nil {
 		log.Fatal(err)

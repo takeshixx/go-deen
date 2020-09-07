@@ -33,17 +33,6 @@ type DeenInputField struct {
 	Parent *DeenEncoder
 }
 
-// NewDeenInputField initializes a new DeenInputField
-func NewDeenInputField(parent *DeenEncoder) *DeenInputField {
-	e := &DeenInputField{
-		widget.Entry{MultiLine: true},
-		parent,
-	}
-	e.Wrapping = fyne.TextWrapBreak
-	e.ExtendBaseWidget(e)
-	return e
-}
-
 func (de *DeenEncoder) createLayout() (layout *widget.Box) {
 	layout = widget.NewVBox()
 	encoderWrapper := widget.NewScrollContainer(de.InputField)
@@ -65,6 +54,18 @@ func (de *DeenEncoder) SetContent(data []byte) {
 	de.ContentLen.SetText(fmt.Sprintf("CL: %d", len(de.Content)))
 	de.InputField.SetText(string(data))
 	de.InputLen.SetText(fmt.Sprintf("IL: %d", len(de.InputField.Text)))
+}
+
+// GetContent returns the content of the encoder widget.
+func (de *DeenEncoder) GetContent() []byte {
+	if len(de.Content) > 0 {
+		return de.Content
+	}
+	curData := de.InputField.Text
+	if len(curData) > 0 {
+		return []byte(curData)
+	}
+	return []byte("")
 }
 
 // ClearContent clears the content of the DeenEncoder.
@@ -154,4 +155,15 @@ func NewDeenEncoderWidget(parent *DeenGUI) (de *DeenEncoder, err error) {
 	de.ContentLen = widget.NewLabel(fmt.Sprintf("CL: %d", len(de.Content)))
 	de.InputLen = widget.NewLabel(fmt.Sprintf("IL: %d", len(de.InputField.Text)))
 	return
+}
+
+// NewDeenInputField initializes a new DeenInputField
+func NewDeenInputField(parent *DeenEncoder) *DeenInputField {
+	e := &DeenInputField{
+		widget.Entry{MultiLine: true},
+		parent,
+	}
+	e.Wrapping = fyne.TextWrapBreak
+	e.ExtendBaseWidget(e)
+	return e
 }
