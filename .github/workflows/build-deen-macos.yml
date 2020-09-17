@@ -7,7 +7,7 @@ jobs:
 
   build:
     name: Build deen
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
 
     - name: Set up Go 1.x
@@ -22,10 +22,9 @@ jobs:
     - name: Get dependencies
       run: |
         go get -v -t -d ./...
-        if [ -f Gopkg.toml ]; then
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure
-        fi
+
+    - name: Test
+      run: make test
 
     - name: Build
       run: make build-macos
