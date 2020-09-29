@@ -381,52 +381,34 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 			header, payload, signature, err = undoJWS(reader, verify, secret)
 		}
 
+		if err != nil {
+			return
+		}
+
+		if len(header) == 0 || len(payload) == 0 {
+			return
+		}
+
 		plainFlag := flags.Lookup("plain")
 		plain, err := strconv.ParseBool(plainFlag.Value.String())
 
 		noColorFlag := flags.Lookup("no-color")
 		noColor, err := strconv.ParseBool(noColorFlag.Value.String())
 
-		var headerBuf, payloadBuf []byte
-		var outStr string
+		outObj := make(map[string]interface{})
+		outObj["header"] = header
+		outObj["payload"] = payload
+		outObj["signature"] = signature
 
 		if !plain {
 			if noColor {
-				headerBuf, err = prettyEncodeJSON(header)
-				if err != nil {
-					return
-				}
-				payloadBuf, err = prettyEncodeJSON(payload)
-				if err != nil {
-					return
-				}
-				outStr = fmt.Sprintf("%s%s%s", string(headerBuf), string(payloadBuf), signature)
+				outBuf, err = prettyEncodeJSON(outObj)
 			} else {
-				headerBuf, err = prettyEncodeJSONColored(header)
-				if err != nil {
-					return
-				}
-				payloadBuf, err = prettyEncodeJSONColored(payload)
-				if err != nil {
-					return
-				}
-				outStr = fmt.Sprintf("%s\n%s\n%s", string(headerBuf), string(payloadBuf), signature)
+				outBuf, err = prettyEncodeJSONColored(outObj)
 			}
-			outBuf = []byte(outStr)
 		} else {
-			headerBuf, err = json.Marshal(header)
-			if err != nil {
-				return
-			}
-			payloadBuf, err = json.Marshal(payload)
-			if err != nil {
-				return
-			}
-			outStr := fmt.Sprintf("%s %s %s", string(headerBuf), string(payloadBuf), signature)
-			outBuf = []byte(outStr)
+			outBuf, err = json.Marshal(outObj)
 		}
-
-		//return undoJWT(&reader, verify, isJWE, secret)
 		return
 	}
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
