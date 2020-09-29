@@ -1,4 +1,4 @@
-name: Verify Master is Working
+name: Build & Test
 
 on:
   push:
