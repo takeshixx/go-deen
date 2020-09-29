@@ -22,7 +22,6 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,
 	codecs.NewPluginHTML,
-	codecs.NewPluginJwt,
 	hashs.NewPluginSHA1,
 	hashs.NewPluginSHA224,
 	hashs.NewPluginSHA256,
@@ -50,6 +49,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	compressions.NewPluginBzip2,
 	compressions.NewPluginBrotli,
 	formatters.NewPluginJSONFormatter,
+	formatters.NewPluginJwt,
 }
 
 // PluginCategories is a list of plugin categories that
