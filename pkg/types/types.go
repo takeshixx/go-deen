@@ -15,6 +15,7 @@ type DeenPlugin struct {
 	Type                            string
 	Unprocess                       bool
 	CliHelp                         string
+	Command                         string // The command with which the plugin was called
 	AddDefaultCliFunc               func(*DeenPlugin, *flag.FlagSet, []string) *flag.FlagSet
 	ProcessDeenTaskFunc             func(*DeenTask)
 	UnprocessDeenTaskFunc           func(*DeenTask)
@@ -41,6 +42,7 @@ type DeenTask struct {
 	PipeWriter *io.PipeWriter
 	DoneChan   chan bool
 	ErrChan    chan error
+	Command    string // The command with which the plugin was called
 }
 
 // Close is responsible for closing all
