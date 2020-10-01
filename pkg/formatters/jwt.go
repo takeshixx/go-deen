@@ -307,13 +307,13 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		if signKeyFlag := flags.Lookup("sign-keyfile"); signKeyFlag != nil {
 			signKey = signKeyFlag.Value.String()
 		}
-		if encAlgFlag := flags.Lookup("sign-alg"); encAlgFlag != nil {
+		if encAlgFlag := flags.Lookup("enc-alg"); encAlgFlag != nil {
 			encAlg = encAlgFlag.Value.String()
 		}
-		if encSecretFlag := flags.Lookup("sign-secret"); encSecretFlag != nil {
+		if encSecretFlag := flags.Lookup("enc-secret"); encSecretFlag != nil {
 			encSecret = encSecretFlag.Value.String()
 		}
-		if encKeyFlag := flags.Lookup("sign-keyfile"); encKeyFlag != nil {
+		if encKeyFlag := flags.Lookup("enc-keyfile"); encKeyFlag != nil {
 			encKey = encKeyFlag.Value.String()
 		}
 		if keyAlgFlag := flags.Lookup("key-alg"); keyAlgFlag != nil {
