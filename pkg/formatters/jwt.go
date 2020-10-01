@@ -280,7 +280,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "jwt"
 	p.Aliases = []string{".jwt"}
-	p.Type = "codec"
+	p.Type = "formatter"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var outBuf bytes.Buffer
