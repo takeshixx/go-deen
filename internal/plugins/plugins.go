@@ -22,6 +22,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,
 	codecs.NewPluginHTML,
+	codecs.NewPluginUnicode,
 	hashs.NewPluginSHA1,
 	hashs.NewPluginSHA224,
 	hashs.NewPluginSHA256,
