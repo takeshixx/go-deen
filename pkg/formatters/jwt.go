@@ -102,12 +102,45 @@ func getHeader(token *jwt.JSONWebToken, key string) (value string, err error) {
 	return
 }
 
-func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string) (outBuf []byte, err error) {
-	var tokenPayload, tokenHeader map[string]interface{}
-	if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
+func encode(obj map[string]interface{}) (outStr string, err error) {
+	jsonEncoded, err := json.Marshal(obj)
+	if err != nil {
 		return
 	}
-	if header != "" {
+	outStr = base64.RawURLEncoding.EncodeToString(jsonEncoded)
+	return
+}
+
+func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string) (outBuf []byte, err error) {
+	var token, tokenPayload, tokenHeader map[string]interface{}
+	var encodedPayload, encodedHeader string
+
+	// If header is not set, we expect a full token object with header, payload and signature
+	if header == "" {
+		if err = json.NewDecoder(reader).Decode(&token); err != nil {
+			return
+		}
+		if _, ok := token["header"]; !ok {
+			// Create a default headerg
+			tokenHeader = make(map[string]interface{})
+			tokenHeader["alg"] = signAlg
+			tokenHeader["typ"] = "JWT"
+		} else {
+			header := token["header"]
+			tokenHeader = header.(map[string]interface{})
+			if _, ok := tokenHeader["alg"]; ok {
+				signAlg = tokenHeader["alg"].(string)
+			}
+		}
+		if _, ok := token["payload"]; !ok {
+			return nil, fmt.Errorf("No payload found in input")
+		}
+		payload := token["payload"]
+		tokenPayload = payload.(map[string]interface{})
+	} else {
+		if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
+			return
+		}
 		if err = json.Unmarshal([]byte(header), &tokenHeader); err != nil {
 			return
 		}
@@ -116,18 +149,25 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 		}
 	}
 
+	if len(tokenHeader) < 1 || len(tokenPayload) < 1 {
+		err = fmt.Errorf("Token header or payload not set")
+		return
+	}
+
 	if signAlg != "" && strings.ToLower(signAlg) == "none" {
 		// Create a static token header with the given payload in the proper format
-		noneHeader := "{\"alg\":\"none\",\"typ\":\"JWT\"}"
-		encodedHeader := base64.RawURLEncoding.EncodeToString([]byte(noneHeader))
-		var payloadBytes []byte
-		payloadBytes, err = json.Marshal(tokenPayload)
+		tokenHeader["alg"] = "none"
+		encodedHeader, err = encode(tokenHeader)
 		if err != nil {
 			return
 		}
-		encodedPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+		encodedPayload, err = encode(tokenPayload)
+		if err != nil {
+			return
+		}
 		noneToken := fmt.Sprintf("%s.%s.", encodedHeader, encodedPayload)
-		return []byte(noneToken), err
+		outBuf = []byte(noneToken)
+		return
 	}
 
 	var signer jose.Signer
@@ -214,7 +254,7 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload map[
 
 	// Keep encoded signature
 	if len(parts) > 2 {
-		signature = parts[2]
+		signature = strings.TrimSpace(parts[2])
 	}
 
 	token, err := jwt.ParseSigned(inBuf.String())
@@ -242,14 +282,6 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload map[
 			return
 		}
 	}
-
-	/* 	payloadSerialized, err := json.Marshal(payloadData)
-	   	if err != nil {
-	   		return
-	   	}
-	   	payload = string(payloadSerialized) */
-	/* 	outStr := fmt.Sprintf("%s %s %s", tokenHeader, string(payloadSerialized), tokenSignature)
-	   	outBuf = []byte(outStr) */
 	return
 }
 
