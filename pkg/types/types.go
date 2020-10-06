@@ -12,7 +12,7 @@ import (
 type DeenPlugin struct {
 	Name                            string
 	Aliases                         []string
-	Type                            string
+	Category                        string
 	Unprocess                       bool
 	CliHelp                         string
 	Command                         string // The command with which the plugin was called

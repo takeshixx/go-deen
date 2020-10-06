@@ -20,7 +20,7 @@ import (
 func NewPluginExample() (p types.DeenPlugin) {
 	p.Name = "example"
 	p.Aliases = []string{".example", "ex", ".ex"}
-	p.Type = "codec"
+	p.Category = "codecs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		// Processing of DeenTasks is done in goroutines
@@ -117,7 +117,7 @@ func NewPluginExample() (p types.DeenPlugin) {
 func NewPluginStreamExample() (p types.DeenPlugin) {
 	p.Name = "streamexample"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		// Example processing with SHA1

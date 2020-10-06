@@ -69,7 +69,7 @@ func NewPluginUnicode() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "unicode"
 	p.Aliases = []string{".unicode", "utf8", ".utf8", "utf16", ".utf16", "utf32", ".utf32", "euckr", ".euckr"}
-	p.Type = "codec"
+	p.Category = "codecs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doTransformer(unicode.UTF8, task)

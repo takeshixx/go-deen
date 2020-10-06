@@ -21,7 +21,7 @@ func NewPluginMD4() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "md4"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
@@ -59,7 +59,7 @@ func NewPluginMD5() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "md5"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
@@ -90,7 +90,7 @@ func NewPluginRIPEMD160() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "ripemd160"
 	p.Aliases = []string{"md160"}
-	p.Type = "hash"
+	p.Category = "hash"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error

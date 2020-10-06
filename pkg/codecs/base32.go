@@ -43,7 +43,7 @@ func NewPluginBase32() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "base32"
 	p.Aliases = []string{".base32", "b32", ".b32"}
-	p.Type = "codec"
+	p.Category = "codecs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processBase32(base32.StdEncoding, task)
