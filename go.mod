@@ -16,6 +16,7 @@ require (
 	github.com/tdewolff/minify/v2 v2.9.0
 	github.com/ulikunitz/xz v0.5.8
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
+	golang.org/x/text v0.3.2
 	gopkg.in/square/go-jose.v2 v2.5.1
 	lukechampine.com/blake3 v1.1.4
 )

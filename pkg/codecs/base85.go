@@ -18,7 +18,7 @@ func NewPluginBase85() (p *types.DeenPlugin) {
 	p.Aliases = []string{".base85", "b85", ".b85",
 		"ascii85", ".ascii85", "a85",
 		".a85"}
-	p.Type = "codec"
+	p.Category = "codecs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {

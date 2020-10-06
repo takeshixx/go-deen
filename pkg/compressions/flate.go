@@ -46,7 +46,7 @@ func NewPluginFlate() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "flate"
 	p.Aliases = []string{".flate"}
-	p.Type = "compression"
+	p.Category = "compressions"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doFlate(task, flate.DefaultCompression)

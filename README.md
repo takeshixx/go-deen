@@ -1,4 +1,4 @@
-# deen
+# deen ![Build & Test](https://github.com/takeshixx/go-deen/workflows/Build%20&%20Test/badge.svg?branch=master)
 
 Decoder/Encoder application for arbitrary input data. Version 3 is a reimplementation of deen in Golang.
 

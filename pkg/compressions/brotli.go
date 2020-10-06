@@ -46,7 +46,7 @@ func NewPluginBrotli() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "brotli"
 	p.Aliases = []string{".brotli", "br", ".br"}
-	p.Type = "compression"
+	p.Category = "compressions"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		options := &brotli.WriterOptions{

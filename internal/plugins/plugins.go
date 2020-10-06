@@ -22,7 +22,8 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,
 	codecs.NewPluginHTML,
-	codecs.NewPluginJwt,
+	codecs.NewPluginUnicode,
+	codecs.NewPluginStrconv,
 	hashs.NewPluginSHA1,
 	hashs.NewPluginSHA224,
 	hashs.NewPluginSHA256,
@@ -50,11 +51,12 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	compressions.NewPluginBzip2,
 	compressions.NewPluginBrotli,
 	formatters.NewPluginJSONFormatter,
+	formatters.NewPluginJwt,
 }
 
 // PluginCategories is a list of plugin categories that
 // should be available accross all modules.
-var PluginCategories = []string{"codec", "compression", "hash", "formatter"}
+var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters"}
 
 type pluginDescription struct {
 	Name    string
@@ -78,7 +80,7 @@ func PrintAvailable(outputJSON bool) {
 			fmt.Fprintf(w, "%s:\n", category)
 		}
 		for _, p := range pluginList {
-			if p.Type != category {
+			if p.Category != category {
 				continue
 			}
 			if len(p.Aliases) > 0 {
@@ -161,7 +163,7 @@ func GetForCategory(category string, aliases bool) []string {
 	var r []string
 	for _, constructor := range pluginConstructors {
 		p := constructor()
-		if p.Type == category {
+		if p.Category == category {
 			r = append(r, p.Name)
 			if aliases == false {
 				if len(p.Aliases) > 0 {

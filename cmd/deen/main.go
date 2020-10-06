@@ -36,6 +36,7 @@ func main() {
 		if strings.HasPrefix(cmd, ".") {
 			plugin.Unprocess = true
 		}
+		plugin.Command = strings.TrimPrefix(cmd, ".")
 		var pluginParser *flag.FlagSet
 		if plugin.AddDefaultCliFunc != nil {
 			pluginParser = helpers.DefaultFlagSet()
@@ -49,6 +50,7 @@ func main() {
 
 		// Create a new task
 		task := types.NewDeenTask(os.Stdout)
+		task.Command = strings.TrimPrefix(cmd, ".")
 
 		// Decide where we read from. Its either from a file,
 		// data from argv or stdin.
