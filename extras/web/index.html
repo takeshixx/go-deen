@@ -2,12 +2,66 @@
 	<head>
 		<meta charset="utf-8"/>
 		<script src="wasm_exec.js"></script>
+		<script src="deen.js"></script>
 		<script>
 			const go = new Go();
 			WebAssembly.instantiateStreaming(fetch("deen.wasm"), go.importObject).then((result) => {
 				go.run(result.instance);
 			});
+
+			console.log("started");
+			initPlugins();
 		</script>
+		
 	</head>
-	<body></body>
+	<body>
+
+		<div id="main">
+
+			<div class="encoder-wdiget">
+				<textarea></textarea>
+				<div class="plugin-container">
+					<ul>
+						<li>
+							<label for="codecs-encode">Encode</label>
+							<select name="codecs-encode">
+								<option value="base64">Base64</option>
+								<option value="base64">Base32</option>
+							</select>
+						</li>
+						<li>
+						<label for="codecs-decode">Decode</label>
+						<select name="codecs-decode">
+							<option value="base64">Base64</option>
+							<option value="base64">Base32</option>
+						</select>
+					</li>
+					</ul>
+				</div>
+			</div>
+			
+			<div class="encoder-wdiget">
+				<textarea></textarea>
+				<div class="plugin-container">
+					<ul>
+						<li>
+							<label for="codecs-encode">Encode</label>
+							<select name="codecs-encode">
+								<option value="base64">Base64</option>
+								<option value="base64">Base32</option>
+							</select>
+						</li>
+						<li>
+						<label for="codecs-decode">Decode</label>
+						<select name="codecs-decode">
+							<option value="base64">Base64</option>
+							<option value="base64">Base32</option>
+						</select>
+					</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+
+	</body>
 </html>
