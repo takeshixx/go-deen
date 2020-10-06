@@ -6,9 +6,11 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/takeshixx/deen/internal/plugins"
+	"github.com/takeshixx/deen/internal/web"
 	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
@@ -16,6 +18,14 @@ import (
 var version = "v3.1.2-alpha"
 
 func main() {
+	if runtime.GOOS == "js" && runtime.GOARCH == "wasm" {
+		// Spawn web interface
+		dw := web.NewDeenWeb()
+		if err := dw.Run(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	noNewLinePtr := flag.Bool("n", false, "do not output the trailing newline")
 	printPluginsPtr := flag.Bool("l", false, "list available plugins")
 	printPluginsJSONPtr := flag.Bool("lj", false, "list available plugins in JSON format")
