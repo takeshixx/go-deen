@@ -4,14 +4,10 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
-
-	"fyne.io/fyne/test"
 )
 
 func TestNewDeenEncoderWidget(t *testing.T) {
-	a := test.NewApp()
-	w := a.NewWindow("deen test")
-	g, err := NewDeenGUI(a, w)
+	g, err := NewDeenGUI()
 	if err != nil {
 		t.Error(err)
 	}
@@ -25,9 +21,7 @@ func TestNewDeenEncoderWidget(t *testing.T) {
 }
 
 func TestEncoderSetContent(t *testing.T) {
-	a := test.NewApp()
-	w := a.NewWindow("deen test")
-	g, err := NewDeenGUI(a, w)
+	g, err := NewDeenGUI()
 	if err != nil {
 		t.Error(err)
 	}
@@ -47,9 +41,7 @@ func TestEncoderSetContent(t *testing.T) {
 }
 
 func TestEncoderTypeText(t *testing.T) {
-	a := test.NewApp()
-	w := a.NewWindow("deen test")
-	g, err := NewDeenGUI(a, w)
+	g, err := NewDeenGUI()
 	if err != nil {
 		t.Error(err)
 	}

@@ -158,6 +158,10 @@ func main() {
 		fmt.Println(version)
 	} else {
 		//flag.Usage()
-		gui.RunGUI()
+		dg, err := gui.NewDeenGUI()
+		if err != nil {
+			log.Fatal(err)
+		}
+		dg.Run()
 	}
 }
