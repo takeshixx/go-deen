@@ -13,6 +13,7 @@ import (
 	"github.com/takeshixx/deen/pkg/formatters"
 	"github.com/takeshixx/deen/pkg/hashs"
 	"github.com/takeshixx/deen/pkg/types"
+	"github.com/takeshixx/deen/pkg/utils"
 )
 
 var pluginConstructors = []func() *types.DeenPlugin{
@@ -53,6 +54,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	compressions.NewPluginBrotli,
 	formatters.NewPluginJSONFormatter,
 	formatters.NewPluginJwt,
+	utils.NewPluginX509Clone,
 }
 
 // PluginCategories is a list of plugin categories that
