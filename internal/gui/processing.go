@@ -1,19 +1,18 @@
 package gui
 
 import (
-	"fmt"
 	"log"
 
-	"fyne.io/fyne"
 	"fyne.io/fyne/dialog"
-	"fyne.io/fyne/widget"
-	"github.com/schollz/closestmatch"
 	"github.com/takeshixx/deen/internal/plugins"
 )
 
 // RunPlugin executes a given plugin
 func (dg *DeenGUI) RunPlugin(pluginCmd string) {
 	plugin := plugins.GetForCmd(pluginCmd)
+	if plugin == nil {
+		return
+	}
 	log.Printf("[DEBUG] Found plugin: %s\n", plugin.Name)
 	ce := dg.CurrentEncoder()
 	ce.Plugin = plugin
@@ -21,30 +20,10 @@ func (dg *DeenGUI) RunPlugin(pluginCmd string) {
 }
 
 func (dg *DeenGUI) showPluginSearch() {
-	content := widget.NewEntry()
-	content.SetPlaceHolder("Type plugin name")
-
-	var closest []string
-	bagSizes := []int{2}
-	cm := closestmatch.New(dg.Plugins, bagSizes)
-
-	layout := widget.NewVBox()
-	layout.Append(content)
-
-	content.OnChanged = func(text string) {
-		fmt.Println("Entered:", text)
-		closest = cm.ClosestN(text, 5)
-		fmt.Println("Closest:", closest)
-
-		layout.Children = []fyne.CanvasObject{}
-		layout.Append(content)
-
-		for _, s := range closest {
-			layout.Append(widget.NewButton(s, func() {}))
-		}
-	}
-
-	dialog.ShowCustom("Search Plugin", "Cancel", layout, dg.MainWindow)
+	search := NewDeenSearchField(dg)
+	search.Dialog = dialog.NewCustomConfirm("Search Plugin", "Run", "Cancel", search.Layout, search.ConfirmCallBack, dg.MainWindow)
+	search.Show()
+	dg.MainWindow.Canvas().Focus(search)
 }
 
 // Process the Encoders chain starting from the root widget.

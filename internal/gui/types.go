@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"encoding/hex"
 	"io/ioutil"
 	"log"
 
@@ -13,7 +12,6 @@ import (
 	"fyne.io/fyne/theme"
 	"fyne.io/fyne/widget"
 	"github.com/takeshixx/deen/internal/plugins"
-	"github.com/takeshixx/deen/pkg/types"
 )
 
 // DeenGUI represents a GUI instance.
@@ -151,8 +149,8 @@ func (dg *DeenGUI) loadPluginList() {
 }
 
 func (dg *DeenGUI) addCustomShortcuts() {
-	ctrlR := desktop.CustomShortcut{KeyName: fyne.KeyR, Modifier: desktop.ControlModifier}
-	dg.MainWindow.Canvas().AddShortcut(&ctrlR, func(shortcut fyne.Shortcut) {
+	f2 := desktop.CustomShortcut{KeyName: fyne.KeyF2}
+	dg.MainWindow.Canvas().AddShortcut(&f2, func(shortcut fyne.Shortcut) {
 		// Show fuzzy search
 		dg.showPluginSearch()
 	})
@@ -205,90 +203,4 @@ func (dg *DeenGUI) fileOpened(f fyne.URIReadCloser) {
 		dialog.ShowError(err, dg.MainWindow)
 	}
 	dg.Encoders[0].SetContent(input)
-}
-
-// DeenEncoder represents an encoder that can be added to the GUI's Encoders list.
-type DeenEncoder struct {
-	Parent      *DeenGUI
-	Content     []byte // The actual content of the widget. Should never be changed, only by following encoder widgets.
-	ContentLen  *widget.Label
-	View        string // The current view (plain/hex)
-	Layout      *widget.Box
-	InputField  *DeenInputField
-	InputLen    *widget.Label
-	ViewButton  *widget.Select // Change the view of the encoder (plain/hex)
-	CopyButton  *widget.Button // Copy the content of the encoder to the clipboard
-	ClearButton *widget.Button // Clear the contents of the encoder/Remove the encoder widget
-	Plugin      *types.DeenPlugin
-}
-
-// DeenInputField is a subclass of widget.Entry with additional fields.
-type DeenInputField struct {
-	widget.Entry
-	Parent *DeenEncoder
-}
-
-// NewDeenEncoderWidget initializes a new DeenEconder widget.
-func NewDeenEncoderWidget(parent *DeenGUI) (de *DeenEncoder, err error) {
-	de = &DeenEncoder{
-		Parent:     parent,
-		InputField: NewDeenInputField(de),
-		ContentLen: widget.NewLabel("CL: "),
-		InputLen:   widget.NewLabel("IL: "),
-	}
-	de.InputField.OnChanged = de.OnChangedWrapper
-	de.Layout = de.createLayout()
-	de.newButtons()
-	return
-}
-
-func (de *DeenEncoder) createLayout() (layout *widget.Box) {
-	layout = widget.NewVBox()
-	encoderWrapper := widget.NewScrollContainer(de.InputField)
-	encoderWrapper.SetMinSize(fyne.NewSize(0, 200))
-	layout.Append(encoderWrapper)
-	buttonsLayout := widget.NewHBox()
-	buttonsLayout.Append(de.ViewButton)
-	buttonsLayout.Append(de.CopyButton)
-	buttonsLayout.Append(de.ClearButton)
-	buttonsLayout.Append(de.ContentLen)
-	buttonsLayout.Append(de.InputLen)
-	layout.Append(buttonsLayout)
-	return
-}
-
-func (de *DeenEncoder) newButtons() {
-	de.ViewButton = widget.NewSelect([]string{"Plain", "Hexdump"}, func(mode string) {
-		if len(de.Content) < 1 && len(de.InputField.Text) < 1 {
-			return
-		}
-		if mode == "Hexdump" {
-			if len(de.Content) < 1 {
-				de.Content = []byte(de.InputField.Text)
-			}
-			processed := hex.Dump(de.Content)
-			de.InputField.SetText(processed)
-		} else {
-			de.InputField.SetText(string(de.Content))
-		}
-	})
-	de.ViewButton.SetSelected("Plain") // Default to plain view
-	de.CopyButton = widget.NewButton("Copy", func() {
-		clipboard := fyne.CurrentApp().Driver().AllWindows()[0].Clipboard()
-		clipboard.SetContent(string(de.Content))
-	})
-	de.ClearButton = widget.NewButton("Clear", func() {
-		de.Parent.RemoveEncoder(de)
-	})
-}
-
-// NewDeenInputField initializes a new DeenInputField
-func NewDeenInputField(parent *DeenEncoder) *DeenInputField {
-	e := &DeenInputField{
-		widget.Entry{MultiLine: true},
-		parent,
-	}
-	e.Wrapping = fyne.TextWrapBreak
-	e.ExtendBaseWidget(e)
-	return e
 }
