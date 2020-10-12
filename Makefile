@@ -25,6 +25,9 @@ build-windows:
 build-wasm:
 	GOOS=js GOARCH=wasm go build -o bin/deen.wasm ./cmd/deen
 
+web: build-wasm
+	http_server -no-auth -root extras/web -port 9090
+
 run:
 	go run ./cmd/deen/main.go
 
