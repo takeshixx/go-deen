@@ -7,7 +7,6 @@
 			WebAssembly.instantiateStreaming(fetch("deen.wasm"), go.importObject).then((result) => {
 				go.run(result.instance);
 			});
-			console.log("started");
 		</script>
 	</head>
 	<body></body>
