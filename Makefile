@@ -5,7 +5,7 @@ else
 	CGO_ENABLED=0 go build -o ./bin/deen ./cmd/deen
 endif
 
-build-all: build build-freebsd build-macos build-linux build-windows build-wasm
+build-all: build build-freebsd build-macos build-linux build-windows
 
 build-freebsd:
 	CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -o bin/deen-freebsd-x86 ./cmd/deen
@@ -22,14 +22,18 @@ build-windows:
 	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -o bin/deen-windows-x86.exe ./cmd/deen
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/deen-windows-x86_64.exe ./cmd/deen
 
-build-wasm:
-	GOOS=js GOARCH=wasm go build -o bin/deen.wasm ./cmd/deen
+web: 
+	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
+	GOOS=js GOARCH=wasm go build -o extras/web/deen.wasm ./cmd/deen
+	cp $$(go env GOROOT)/misc/wasm/wasm_exec.js extras/web/wasm_exec.js
+	http_server -no-auth -root extras/web -port 9090
 
 run:
 	go run ./cmd/deen/main.go
 
 clean:
 	rm -rf ./bin
+	rm extras/web/deen.wasm extras/web/wasm_exec.js
 
 test:
 	go test -timeout 20s -cover ./...
