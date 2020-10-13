@@ -18,10 +18,12 @@ import (
 type EncoderWidget struct {
 	vecty.Core
 	Parent     *DeenWeb
+	InputField vecty.MarkupOrChild
 	Content    string
 	ContentLen vecty.MarkupOrChild
 	Plugin     *types.DeenPlugin
 	Border     bool
+	HexView    bool
 }
 
 func (e *EncoderWidget) Render() vecty.ComponentOrHTML {
@@ -31,29 +33,33 @@ func (e *EncoderWidget) Render() vecty.ComponentOrHTML {
 	} else {
 		m = vecty.Style("border", "1px dotted black")
 	}
+	fmt.Printf("Rendering with content: %s\n", e.Content)
+	e.InputField = elem.TextArea(
+		vecty.Markup(
+			m,
+			vecty.Style("font-family", "monospace"),
+			vecty.Style("width", "80%"),
+			vecty.Style("display", "inline-block"),
+			vecty.Property("rows", 20),
+			event.Input(func(event *vecty.Event) {
+				e.Content = event.Target.Get("value").String()
+				e.Parent.RunChainFrom(e)
+				fmt.Printf("content: %s\n", e.Content)
+				vecty.Rerender(e)
+			}),
+			event.Click(func(event *vecty.Event) {
+				e.Parent.SetCurrentEncoder(e)
+			}),
+		),
+		vecty.Text(e.Content),
+	)
 	w := elem.Div(
 		vecty.Markup(
 			vecty.Style("margin-bottom", "15px"),
 		),
 		e.CreatePluginSelects(),
-		elem.TextArea(
-			vecty.Markup(
-				m,
-				vecty.Style("font-family", "monospace"),
-				vecty.Style("width", "80%"),
-				vecty.Style("display", "inline-block"),
-				vecty.Property("rows", 20),
-				event.Input(func(event *vecty.Event) {
-					e.Content = event.Target.Get("value").String()
-					e.Parent.RunChainFrom(e)
-					vecty.Rerender(e)
-				}),
-				event.Click(func(event *vecty.Event) {
-					e.Parent.SetCurrentEncoder(e)
-				}),
-			),
-			vecty.Text(e.Content),
-		),
+		e.InputField,
+		e.CreateControls(),
 	)
 	return w
 }
@@ -64,7 +70,9 @@ func (e *EncoderWidget) SetContent(data string) {
 }
 
 func (e *EncoderWidget) ClearContent() {
+	fmt.Println("blablabla")
 	e.Content = ""
+	fmt.Println("xxxx")
 	e.Render()
 }
 
@@ -114,7 +122,8 @@ func (e *EncoderWidget) CreatePluginSelects() vecty.ComponentOrHTML {
 		var options []vecty.MarkupOrChild
 		options = append(options, elem.Option(
 			vecty.Markup(
-				vecty.Attribute("disabled", nil),
+				vecty.Attribute("selected", "true"),
+				vecty.Attribute("disabled", "disabled"),
 			),
 			vecty.Text(c),
 		))
@@ -149,10 +158,55 @@ func (e *EncoderWidget) CreateEncoderInfo() vecty.MarkupOrChild {
 	return e.ContentLen
 }
 
+func (e *EncoderWidget) CreateControls() vecty.MarkupOrChild {
+	w := elem.UnorderedList(
+		vecty.Markup(
+			vecty.Style("list-style-type", "none"),
+		),
+		elem.ListItem(
+			elem.ListItem(
+				elem.Select(
+					elem.Option(
+						vecty.Markup(
+							vecty.Attribute("selected", "true"),
+							vecty.Attribute("disabled", "disabled"),
+						),
+						vecty.Text("View"),
+					),
+					elem.Option(
+						vecty.Text("Plain"),
+					),
+					elem.Option(
+						vecty.Markup(
+							event.Click(func(event *vecty.Event) {
+								e.HexView = true
+								e.Parent.Reload()
+							}),
+						),
+						vecty.Text("Hex"),
+					),
+				),
+			),
+			elem.Button(
+				vecty.Markup(
+					event.Click(func(event *vecty.Event) {
+						fmt.Println("Clear button clicked")
+						e.Parent.RemoveEncoder(e)
+					}),
+				),
+				vecty.Text("Clear"),
+			),
+		),
+	)
+	return w
+}
+
 func NewEncoderWidget(parent *DeenWeb) (e *EncoderWidget) {
 	e = &EncoderWidget{
-		Parent: parent,
-		Border: false,
+		Parent:  parent,
+		Border:  false,
+		Content: "",
+		HexView: false,
 	}
 	return
 }

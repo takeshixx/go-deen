@@ -20,6 +20,10 @@ func (dw *DeenWeb) Run() (err error) {
 	return
 }
 
+func (dw *DeenWeb) Reload() {
+	vecty.Rerender(dw)
+}
+
 // NewDeenWeb creates a new deen web instance.
 func NewDeenWeb() (dw *DeenWeb) {
 	dw = &DeenWeb{}

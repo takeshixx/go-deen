@@ -86,11 +86,15 @@ func (dw *DeenWeb) AddEncoder() (e *EncoderWidget) {
 
 func (dw *DeenWeb) RemoveEncoder(e *EncoderWidget) {
 	if e == dw.EncoderWidgets[0] {
-		// We cannot remove the root widget, just clearing content and plugin
-		e.ClearContent()
-		dw.EncoderWidgets[0].Plugin = nil
-		// And remove all following widgets.
-		dw.EncoderWidgets = []*EncoderWidget{dw.EncoderWidgets[0]}
+		fmt.Println("Clearing root encoder")
+		/* 		// And remove all following widgets.
+		   		dw.EncoderWidgets = []*EncoderWidget{dw.EncoderWidgets[0]}
+		   		// We cannot remove the root widget, just clearing content and plugin
+		   		dw.EncoderWidgets[0].ClearContent()
+		   		dw.EncoderWidgets[0].Plugin = nil */
+		dw.EncoderWidgets = nil
+		dw.AddEncoder()
+		return
 	} else {
 		// If enc is not the root widget, we have a previous widget
 		previous := dw.PreviousEncoder()
