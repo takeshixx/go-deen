@@ -1,8 +1,15 @@
 build:
 ifeq ($(OS),Windows_NT)
-	CGO_ENABLED=0 go build -o ./bin/deen.exe ./cmd/deen
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags)" -o ./bin/deen.exe ./cmd/deen
 else
-	CGO_ENABLED=0 go build -o ./bin/deen ./cmd/deen
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags)" -o ./bin/deen ./cmd/deen
+endif
+
+stripped:
+ifeq ($(OS),Windows_NT)
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -w -s" -o ./bin/deen.exe ./cmd/deen
+else
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -w -s" -o ./bin/deen ./cmd/deen
 endif
 
 build-all: build build-freebsd build-macos build-linux build-windows
@@ -24,7 +31,7 @@ build-windows:
 
 web: 
 	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
-	GOOS=js GOARCH=wasm go build -o extras/web/deen.wasm ./cmd/deen
+	GOOS=js GOARCH=wasm go build -ldflags="-w -s" -o extras/web/deen.wasm ./cmd/deen
 	cp $$(go env GOROOT)/misc/wasm/wasm_exec.js extras/web/wasm_exec.js
 	http_server -no-auth -root extras/web -port 9090
 
