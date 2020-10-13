@@ -14,7 +14,8 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-var version = "v3.1.2-alpha"
+var version string
+var branch string
 
 func main() {
 	noNewLinePtr := flag.Bool("n", false, "do not output the trailing newline")
@@ -155,7 +156,11 @@ func main() {
 	} else if *printPluginsJSONPtr {
 		plugins.PrintAvailable(true)
 	} else if *versionPtr {
-		fmt.Println(version)
+		fmt.Print(version)
+		if branch != "" {
+			fmt.Printf("-%s", branch)
+		}
+		fmt.Print("\n")
 	} else {
 		//flag.Usage()
 		dg, err := gui.NewDeenGUI()

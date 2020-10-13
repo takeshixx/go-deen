@@ -24,6 +24,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	codecs.NewPluginHTML,
 	codecs.NewPluginUnicode,
 	codecs.NewPluginStrconv,
+	codecs.NewPluginPEM,
 	hashs.NewPluginSHA1,
 	hashs.NewPluginSHA224,
 	hashs.NewPluginSHA256,
@@ -56,7 +57,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 
 // PluginCategories is a list of plugin categories that
 // should be available accross all modules.
-var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters"}
+var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "utils"}
 
 type pluginDescription struct {
 	Name    string
