@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/TylerBrock/colorjson"
 	"github.com/takeshixx/deen/pkg/types"
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
@@ -101,12 +102,45 @@ func getHeader(token *jwt.JSONWebToken, key string) (value string, err error) {
 	return
 }
 
-func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string) (outBuf []byte, err error) {
-	var tokenPayload, tokenHeader map[string]interface{}
-	if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
+func encode(obj map[string]interface{}) (outStr string, err error) {
+	jsonEncoded, err := json.Marshal(obj)
+	if err != nil {
 		return
 	}
-	if header != "" {
+	outStr = base64.RawURLEncoding.EncodeToString(jsonEncoded)
+	return
+}
+
+func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string) (outBuf []byte, err error) {
+	var token, tokenPayload, tokenHeader map[string]interface{}
+	var encodedPayload, encodedHeader string
+
+	// If header is not set, we expect a full token object with header, payload and signature
+	if header == "" {
+		if err = json.NewDecoder(reader).Decode(&token); err != nil {
+			return
+		}
+		if _, ok := token["header"]; !ok {
+			// Create a default headerg
+			tokenHeader = make(map[string]interface{})
+			tokenHeader["alg"] = signAlg
+			tokenHeader["typ"] = "JWT"
+		} else {
+			header := token["header"]
+			tokenHeader = header.(map[string]interface{})
+			if _, ok := tokenHeader["alg"]; ok {
+				signAlg = tokenHeader["alg"].(string)
+			}
+		}
+		if _, ok := token["payload"]; !ok {
+			return nil, fmt.Errorf("No payload found in input")
+		}
+		payload := token["payload"]
+		tokenPayload = payload.(map[string]interface{})
+	} else {
+		if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
+			return
+		}
 		if err = json.Unmarshal([]byte(header), &tokenHeader); err != nil {
 			return
 		}
@@ -115,18 +149,25 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 		}
 	}
 
+	if len(tokenHeader) < 1 || len(tokenPayload) < 1 {
+		err = fmt.Errorf("Token header or payload not set")
+		return
+	}
+
 	if signAlg != "" && strings.ToLower(signAlg) == "none" {
 		// Create a static token header with the given payload in the proper format
-		noneHeader := "{\"alg\":\"none\",\"typ\":\"JWT\"}"
-		encodedHeader := base64.RawURLEncoding.EncodeToString([]byte(noneHeader))
-		var payloadBytes []byte
-		payloadBytes, err = json.Marshal(tokenPayload)
+		tokenHeader["alg"] = "none"
+		encodedHeader, err = encode(tokenHeader)
 		if err != nil {
 			return
 		}
-		encodedPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+		encodedPayload, err = encode(tokenPayload)
+		if err != nil {
+			return
+		}
 		noneToken := fmt.Sprintf("%s.%s.", encodedHeader, encodedPayload)
-		return []byte(noneToken), err
+		outBuf = []byte(noneToken)
+		return
 	}
 
 	var signer jose.Signer
@@ -193,22 +234,27 @@ func printSerializedToken(token string) (outBuf []byte, err error) {
 	return
 }
 
-func undoJWS(reader io.Reader, verify bool, secret []byte) (outBuf []byte, err error) {
+func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload map[string]interface{}, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
 
 	parts := strings.Split(inBuf.String(), ".")
 	if len(parts) < 1 || len(parts) > 3 {
-		return nil, fmt.Errorf("Tokens must have at least one part and at max three parts")
+		err = fmt.Errorf("Tokens must have at least one part and at max three parts")
+		return
 	}
 	tokenHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return nil, err
+		return
 	}
+	err = json.Unmarshal(tokenHeader, &header)
+	if err != nil {
+		return
+	}
+
 	// Keep encoded signature
-	var tokenSignature string
 	if len(parts) > 2 {
-		tokenSignature = parts[2]
+		signature = strings.TrimSpace(parts[2])
 	}
 
 	token, err := jwt.ParseSigned(inBuf.String())
@@ -218,7 +264,7 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (outBuf []byte, err e
 
 	tokenCty, err := getHeader(token, "cty")
 	if err == nil {
-		// cry header found
+		// cty header found
 		if tokenCty == "JWT" {
 			// Nested token: https://tools.ietf.org/html/draft-yusef-oauth-nested-jwt-03
 			err = errors.New("Nested tokens are currently not supported")
@@ -226,7 +272,6 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (outBuf []byte, err e
 		}
 	}
 
-	var payload map[string]interface{}
 	if verify {
 		// if err = token.Claims(secret, &payload); err != nil {
 		// 	return
@@ -237,17 +282,10 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (outBuf []byte, err e
 			return
 		}
 	}
-
-	payloadSerialized, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	outStr := fmt.Sprintf("%s %s %s", tokenHeader, string(payloadSerialized), tokenSignature)
-	outBuf = []byte(outStr)
 	return
 }
 
-func undoJWE(reader io.Reader, secret []byte) (outBuf []byte, err error) {
+func undoJWE(reader io.Reader, secret []byte) (header, payload map[string]interface{}, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
 	//var token *jwt.JSONWebToken
@@ -258,7 +296,7 @@ func undoJWE(reader io.Reader, secret []byte) (outBuf []byte, err error) {
 	return
 }
 
-func undoSignedJWE(reader io.Reader, verify bool, secret []byte) (outBuf []byte, err error) {
+func undoSignedJWE(reader io.Reader, verify bool, secret []byte) (header, payload map[string]interface{}, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
 	//var token *jwt.JSONWebToken
@@ -274,7 +312,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "jwt"
 	p.Aliases = []string{".jwt"}
-	p.Type = "codec"
+	p.Category = "formatters"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var outBuf bytes.Buffer
@@ -301,13 +339,13 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		if signKeyFlag := flags.Lookup("sign-keyfile"); signKeyFlag != nil {
 			signKey = signKeyFlag.Value.String()
 		}
-		if encAlgFlag := flags.Lookup("sign-alg"); encAlgFlag != nil {
+		if encAlgFlag := flags.Lookup("enc-alg"); encAlgFlag != nil {
 			encAlg = encAlgFlag.Value.String()
 		}
-		if encSecretFlag := flags.Lookup("sign-secret"); encSecretFlag != nil {
+		if encSecretFlag := flags.Lookup("enc-secret"); encSecretFlag != nil {
 			encSecret = encSecretFlag.Value.String()
 		}
-		if encKeyFlag := flags.Lookup("sign-keyfile"); encKeyFlag != nil {
+		if encKeyFlag := flags.Lookup("enc-keyfile"); encKeyFlag != nil {
 			encKey = encKeyFlag.Value.String()
 		}
 		if keyAlgFlag := flags.Lookup("key-alg"); keyAlgFlag != nil {
@@ -328,8 +366,25 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		return doJWS(inBuf, header, signAlg, []byte(signSecret), []byte(signKey), encAlg, []byte(encSecret), []byte(encKey), keyAlg)
 	}
 	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var secret []byte
-		return undoJWS(reader, false, secret)
+		var secret, headerBuf, payloadBuf []byte
+		var err error
+		header, payload, signature, err := undoJWS(reader, false, secret)
+		if err != nil {
+			return nil, err
+		}
+		headerBuf, err = json.Marshal(header)
+		if err != nil {
+			return nil, err
+		}
+		payloadBuf, err = json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		outStr := fmt.Sprintf("%s %s %s", string(headerBuf), string(payloadBuf), signature)
+		outBuf := []byte(outStr)
+		return outBuf, nil
+
+		//return undoJWS(reader, false, secret)
 	}
 	p.UnprocessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) (outBuf []byte, err error) {
 		verifyFlag := flags.Lookup("verify")
@@ -347,15 +402,45 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		secretFlag := flags.Lookup("secret")
 		secret := []byte(secretFlag.Value.String())
 
+		var header, payload map[string]interface{}
+		var signature string
+
 		if isJWE {
-			outBuf, err = undoSignedJWE(reader, verify, secret)
+			header, payload, signature, err = undoSignedJWE(reader, verify, secret)
 		} else if isJWE {
-			outBuf, err = undoJWE(reader, secret)
+			header, payload, signature, err = undoJWE(reader, secret)
 		} else {
-			outBuf, err = undoJWS(reader, verify, secret)
+			header, payload, signature, err = undoJWS(reader, verify, secret)
 		}
 
-		//return undoJWT(&reader, verify, isJWE, secret)
+		if err != nil {
+			return
+		}
+
+		if len(header) == 0 || len(payload) == 0 {
+			return
+		}
+
+		plainFlag := flags.Lookup("plain")
+		plain, err := strconv.ParseBool(plainFlag.Value.String())
+
+		noColorFlag := flags.Lookup("no-color")
+		noColor, err := strconv.ParseBool(noColorFlag.Value.String())
+
+		outObj := make(map[string]interface{})
+		outObj["header"] = header
+		outObj["payload"] = payload
+		outObj["signature"] = signature
+
+		if !plain {
+			if noColor {
+				outBuf, err = prettyEncodeJSON(outObj)
+			} else {
+				outBuf, err = prettyEncodeJSONColored(outObj)
+			}
+		} else {
+			outBuf, err = json.Marshal(outObj)
+		}
 		return
 	}
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
@@ -371,6 +456,8 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 			flags.String("secret", "", "secret key")
 			flags.String("key", "", "key file")
 			flags.Bool("decrypt", false, "decrypt JWE token")
+			flags.Bool("plain", false, "print unformatted token")
+			flags.Bool("no-color", false, "omit colors in formatted output")
 			flags.Parse(args)
 			return flags
 		}
@@ -394,4 +481,24 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		return flags
 	}
 	return
+}
+
+// Helper functions
+
+func prettyEncodeJSON(data interface{}) (outBuf []byte, err error) {
+	var outBufWriter bytes.Buffer
+	encoder := json.NewEncoder(&outBufWriter)
+	encoder.SetIndent("", "    ")
+	err = encoder.Encode(data)
+	if err != nil {
+		return
+	}
+	outBuf = outBufWriter.Bytes()
+	return
+}
+
+func prettyEncodeJSONColored(data interface{}) (outBuf []byte, err error) {
+	f := colorjson.NewFormatter()
+	f.Indent = 4
+	return f.Marshal(data)
 }

@@ -33,7 +33,7 @@ func NewPluginGzip() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "gzip"
 	p.Aliases = []string{".gzip"}
-	p.Type = "compression"
+	p.Category = "compressions"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doGzipCompress(task, gzip.DefaultCompression)

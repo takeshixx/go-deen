@@ -33,7 +33,7 @@ func NewPluginZlib() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "zlib"
 	p.Aliases = []string{".zlib"}
-	p.Type = "compression"
+	p.Category = "compressions"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doZlibCompress(task, zlib.DefaultCompression)
