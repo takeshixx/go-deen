@@ -1,15 +1,15 @@
 build:
 ifeq ($(OS),Windows_NT)
-	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags)" -o ./bin/deen.exe ./cmd/deen
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -X main.branch=$$(git branch --show-current)" -o ./bin/deen.exe ./cmd/deen
 else
-	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags)" -o ./bin/deen ./cmd/deen
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -X main.branch=$$(git branch --show-current)" -o ./bin/deen ./cmd/deen
 endif
 
 stripped:
 ifeq ($(OS),Windows_NT)
-	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -w -s" -o ./bin/deen.exe ./cmd/deen
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -X main.branch=$$(git branch --show-current) -w -s" -o ./bin/deen.exe ./cmd/deen
 else
-	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -w -s" -o ./bin/deen ./cmd/deen
+	CGO_ENABLED=0 go build -ldflags="-X main.version=$$(git describe --abbrev=0 --tags) -X main.branch=$$(git branch --show-current) -w -s" -o ./bin/deen ./cmd/deen
 endif
 
 build-all: build build-freebsd build-macos build-linux build-windows
