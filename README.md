@@ -1,8 +1,12 @@
 # deen ![Build & Test](https://github.com/takeshixx/go-deen/workflows/Build%20&%20Test/badge.svg?branch=master)
 
-Decoder/Encoder application for arbitrary input data. Version 3 is a reimplementation of deen in Golang.
+`deen` is a generic data encoding/decoding application. It provides several interfaces including a CLI, a GUI implemented with [fyne](https://github.com/fyne-io/fyne) and a (experimental) web interface built with [Vecty](https://github.com/hexops/vecty) that runes in [WebAssembly](https://de.wikipedia.org/wiki/WebAssembly). Additional interfaces and ways to interact and include `deen` in different workflows include a [Visual Studio Code extension](https://github.com/takeshixx/go-deen/tree/master/extras/vscode-deen). This project aims to be compatible with most common environments, including Linux, Windows and macOS. The resulting binary is static and should therefore run on all supported platforms without any additional dependencies.
 
-## Building
+`go-deen` is a Go reimplementation of the old `deen` versions that were initially implemented with Python and PyQt5.
+
+It should be noted that this code is still highly experimental. However, the majority of core plugins is already implemented and functional.
+
+## Building & Running
 
 The following command will create a `deen` binary in the `bin/` folder:
 
@@ -10,67 +14,25 @@ The following command will create a `deen` binary in the `bin/` folder:
 make
 ```
 
-## Usage
+Running the binary without any arguments spawns the GUI. The CLI is used when plugin names are supplied. By default, `deen` reads input from the first positional argument or stdin, but plugins also support the `-file` flag to read input data directly from files.
 
-List available plugins:
-
-```bash
-$ deen -l
-```
-
-Encode data:
+Processing is typically implemented by calling plugin names without a prefix. Depending on the plugin, this will encode, compress, hash or otherwise transform input data.
 
 ```bash
 $ deen b64 test
 dGVzdA==
 ```
 
-Decode data:
+Unprocessing is called by calling plugins with a "." (dot) prefix. Depending on the plugin, this will decode, decompress or otherwise transform input data in reverse. Therefore, plugin categories like `hashs` to not implement unprocessing functions.
 
 ```bash
 $ deen .b64 dGVzdA==
 test
 ```
 
-Encode from stdin:
-
-```bash
-echo -n test | deen b64
-dGVzdA==
-```
-
-Decode from stdin:
-
-```bash
-echo -n dGVzdA== | deen .b64
-test
-```
-
-Plugin help:
-
-```bash
-$ deen flate -h 
-Usage of flate:
-
-Implements the DEFLATE compressed data format (RFC1951).
-
-  -level int
-        compression level
-          No compression:       0
-          Best speed:           1
-          Best compression:     9
-          Default compression:  -1
-          (default -1)
-```
-
 ## TODO
 
-* Port additional plugins from previous version
-  * X509 certificates
-  * X509 certificate cloning
-  * JWT parsing/creation
-* GUI: Currently there is only an experimental GUI implementation that is not fully functional.
-* Add `--web`: Maybe add a frontend that can be used with a browser?
+Current and future features and TODOs are tracked in various [repository projects](https://github.com/takeshixx/go-deen/projects).
 
 ## WHY?
 
