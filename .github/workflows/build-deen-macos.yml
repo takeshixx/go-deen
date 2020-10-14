@@ -27,7 +27,7 @@ jobs:
       run: make test
 
     - name: Build
-      run: make build-macos
+      run: make stripped
 
     - name: Make executable
       run: chmod +x bin/deen*
