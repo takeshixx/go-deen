@@ -43,12 +43,12 @@ func TestCmdAvailable(t *testing.T) {
 */
 
 func TestGetForCategory(t *testing.T) {
-	validCategory := GetForCategory("codec", true)
+	validCategory := GetForCategory("codecs", true)
 	if validCategory == nil || len(validCategory) < 1 {
 		t.Error("No plugins found for valid category")
 	}
 
-	validCategory = GetForCategory("codec", false)
+	validCategory = GetForCategory("codecs", false)
 	if validCategory == nil || len(validCategory) < 1 {
 		t.Error("No plugins found for valid category")
 	}

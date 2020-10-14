@@ -16,7 +16,7 @@ func NewPluginSHA3224() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha3-224"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
@@ -50,7 +50,7 @@ func NewPluginSHA3256() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha3-256"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
@@ -84,7 +84,7 @@ func NewPluginSHA3384() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha3-384"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
@@ -118,7 +118,7 @@ func NewPluginSHA3512() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "sha3-512"
 	p.Aliases = []string{}
-	p.Type = "hash"
+	p.Category = "hashs"
 	p.Unprocess = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error

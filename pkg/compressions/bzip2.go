@@ -36,7 +36,7 @@ func NewPluginBzip2() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "bzip2"
 	p.Aliases = []string{".bzip2"}
-	p.Type = "compression"
+	p.Category = "compressions"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doBZip2Compress(task, bzip2.DefaultCompression)

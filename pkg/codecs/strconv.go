@@ -18,7 +18,7 @@ func NewPluginStrconv() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "strconv"
 	p.Aliases = []string{".strconv", "str", ".str"}
-	p.Type = "codec"
+	p.Category = "codecs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {

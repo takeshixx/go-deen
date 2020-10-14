@@ -4,7 +4,6 @@ go 1.15
 
 require (
 	fyne.io/fyne v1.3.3
-	gioui.org v0.0.0-20201012131656-e690c14ddc9f
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/andybalholm/brotli v1.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
