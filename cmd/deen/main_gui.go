@@ -1,4 +1,4 @@
-// +build gui
+// +build gui,!js,!wasm
 
 package main
 
