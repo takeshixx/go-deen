@@ -4,11 +4,6 @@ go 1.15
 
 require (
 	fyne.io/fyne v1.3.3
-<<<<<<< HEAD
-	gioui.org v0.0.0-20201012131656-e690c14ddc9f
-=======
-	gioui.org v0.0.0-20201005075949-29740ba59343
->>>>>>> master
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/andybalholm/brotli v1.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -20,11 +15,7 @@ require (
 	github.com/spacemonkeygo/openssl v0.0.0-20181017203307-c2dcc5cca94a
 	github.com/tdewolff/minify/v2 v2.9.7
 	github.com/ulikunitz/xz v0.5.8
-<<<<<<< HEAD
 	golang.org/x/crypto v0.0.0-20201012173705-84dcc777aaee
-=======
-	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
->>>>>>> master
 	golang.org/x/text v0.3.3
 	gopkg.in/square/go-jose.v2 v2.5.1
 	lukechampine.com/blake3 v1.1.4
