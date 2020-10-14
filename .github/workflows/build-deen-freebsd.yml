@@ -28,7 +28,7 @@ jobs:
         fi
 
     - name: Build
-      run: make build-freebsd
+      run: make stripped
 
     - name: Make executable
       run: chmod +x bin/deen*
