@@ -1,3 +1,5 @@
+// +build !gui
+
 package main
 
 import (
@@ -8,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/takeshixx/deen/internal/gui"
 	"github.com/takeshixx/deen/internal/plugins"
 	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
@@ -162,11 +163,6 @@ func main() {
 		}
 		fmt.Print("\n")
 	} else {
-		//flag.Usage()
-		dg, err := gui.NewDeenGUI()
-		if err != nil {
-			log.Fatal(err)
-		}
-		dg.Run()
+		flag.Usage()
 	}
 }
