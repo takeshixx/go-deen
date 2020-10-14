@@ -28,7 +28,7 @@ jobs:
       run: make.exe test
 
     - name: Build
-      run: make.exe build-windows
+      run: make.exe stripped
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
