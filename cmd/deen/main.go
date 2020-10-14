@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// +build !js
-=======
 // +build !gui
->>>>>>> master
 
 package main
 
