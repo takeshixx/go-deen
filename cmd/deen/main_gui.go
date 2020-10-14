@@ -3,17 +3,23 @@
 package main
 
 import (
+	"flag"
 	"log"
 
+	"github.com/takeshixx/deen/internal/core"
 	"github.com/takeshixx/deen/internal/gui"
 )
 
 func main() {
-	// Spawn the GUI
-	dg, err := gui.NewDeenGUI()
-	if err != nil {
-		log.Fatal(err)
+	core.ParseFlags()
+	if flag.NArg() > 0 {
+		core.RunCLI()
+	} else {
+		// Spawn the GUI
+		dg, err := gui.NewDeenGUI()
+		if err != nil {
+			log.Fatal(err)
+		}
+		dg.Run()
 	}
-	dg.Run()
-	return
 }
