@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ["1.15.x", "1.14.x"]
+        go-version: ["1.15.x"]
 
     steps:
     - name: Setup Go environment
@@ -29,19 +29,31 @@ jobs:
     - name: Get dependencies
       run: |
         go get -v -t -d ./...
+        
+    - name: Clean
+      run: make clean
 
     - name: Build Default
       run: make
     
+    - name: Clean
+      run: make clean
+    
     - name: Build Stripped
       run: make stripped
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+          name: deen-${{ matrix.os }}
+          path: bin/deen*
 
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ["1.15.x", "1.14.x"]
+        go-version: ["1.15.x"]
 
     steps:
     - name: Setup Go environment
