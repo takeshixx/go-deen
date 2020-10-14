@@ -1,5 +1,5 @@
-ldflags = -ldflags "-X main.version=$$(git describe --abbrev=0 --tags --always) -X main.branch=$$(git branch --show-current)"
-ldflagsstripped = -ldflags "-X main.version=$$(git describe --abbrev=0 --tags --always) -X main.branch=$$(git branch --show-current) -w -s"
+ldflags = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current)"
+ldflagsstripped = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current) -w -s"
 
 build:
 ifeq ($(OS),Windows_NT)
