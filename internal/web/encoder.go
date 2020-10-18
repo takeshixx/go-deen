@@ -17,13 +17,14 @@ import (
 
 type EncoderWidget struct {
 	vecty.Core
-	Parent     *DeenWeb
-	InputField vecty.MarkupOrChild
-	Content    string
-	ContentLen vecty.MarkupOrChild
-	Plugin     *types.DeenPlugin
-	Border     bool
-	HexView    bool
+	Parent      *DeenWeb
+	InputField  vecty.MarkupOrChild
+	Content     string
+	ContentLen  vecty.MarkupOrChild
+	PluginLabel vecty.MarkupOrChild
+	Plugin      *types.DeenPlugin
+	Border      bool
+	HexView     bool
 }
 
 func (e *EncoderWidget) Render() vecty.ComponentOrHTML {
@@ -110,16 +111,11 @@ func (e *EncoderWidget) Process() (processed []byte, err error) {
 }
 
 func (e *EncoderWidget) CreatePluginSelects() vecty.ComponentOrHTML {
-	var selectOptions []vecty.MarkupOrChild
-	selectOptions = append(selectOptions, vecty.Markup(
-		vecty.Style("display", "inline-block"),
-		vecty.Style("list-style-type", "none"),
-		vecty.Style("padding", "15px"),
-		vecty.Style("vertical-align", "top"),
-	))
+	//var selectOptions []vecty.MarkupOrChild
+	var selectOptions vecty.List
 	for _, c := range plugins.PluginCategories {
 		filteredPlugins := plugins.GetForCategory(c, false)
-		var options []vecty.MarkupOrChild
+		var options vecty.List
 		options = append(options, elem.Option(
 			vecty.Markup(
 				vecty.Attribute("selected", "true"),
@@ -143,12 +139,20 @@ func (e *EncoderWidget) CreatePluginSelects() vecty.ComponentOrHTML {
 				vecty.Style("display", "block"),
 				vecty.Style("margin", "10px 0 10px 0"),
 			),
-			elem.Select(options...)),
+			elem.Select(options)),
 		)
 	}
 	selectOptions = append(selectOptions, elem.ListItem(e.CreateEncoderInfo()))
-	w := elem.UnorderedList(selectOptions...)
-	return w
+	selectOptions = append(selectOptions, elem.ListItem(e.CreatePluginLabel()))
+	return elem.UnorderedList(
+		vecty.Markup(
+			vecty.Style("display", "inline-block"),
+			vecty.Style("list-style-type", "none"),
+			vecty.Style("padding", "15px"),
+			vecty.Style("vertical-align", "top"),
+		),
+		selectOptions,
+	)
 }
 
 func (e *EncoderWidget) CreateEncoderInfo() vecty.MarkupOrChild {
@@ -158,8 +162,24 @@ func (e *EncoderWidget) CreateEncoderInfo() vecty.MarkupOrChild {
 	return e.ContentLen
 }
 
+func (e *EncoderWidget) CreatePluginLabel() vecty.MarkupOrChild {
+	var name string
+	if e.Plugin == nil {
+		name = "-"
+	} else {
+		name = e.Plugin.Name
+		if e.Plugin.Unprocess {
+			name = "." + name
+		}
+	}
+	e.PluginLabel = elem.Label(
+		vecty.Text(fmt.Sprintf("Plugin: %s", name)),
+	)
+	return e.PluginLabel
+}
+
 func (e *EncoderWidget) CreateControls() vecty.MarkupOrChild {
-	w := elem.UnorderedList(
+	return elem.UnorderedList(
 		vecty.Markup(
 			vecty.Style("list-style-type", "none"),
 		),
@@ -198,7 +218,6 @@ func (e *EncoderWidget) CreateControls() vecty.MarkupOrChild {
 			),
 		),
 	)
-	return w
 }
 
 func NewEncoderWidget(parent *DeenWeb) (e *EncoderWidget) {

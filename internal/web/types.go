@@ -8,16 +8,14 @@ import (
 
 type DeenWeb struct {
 	vecty.Core
-	Body           vecty.ComponentOrHTML
 	EncoderWidgets []*EncoderWidget
 	currentEncoder *EncoderWidget
 }
 
 // Run is the main function of a deen web instance.
-func (dw *DeenWeb) Run() (err error) {
+func (dw *DeenWeb) Run() {
 	vecty.SetTitle("deen web")
 	vecty.RenderBody(dw)
-	return
 }
 
 func (dw *DeenWeb) Reload() {

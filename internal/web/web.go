@@ -11,35 +11,33 @@ import (
 )
 
 func (dw *DeenWeb) Render() vecty.ComponentOrHTML {
-	var e []vecty.MarkupOrChild
-	e = append(e, vecty.Markup(
-		vecty.Style("width", "100%"),
-	))
+	var encoders vecty.List
+	fmt.Printf("Rendering main with EncoderWidgets: %v\n", dw.EncoderWidgets)
 	for _, a := range dw.EncoderWidgets {
-		e = append(e, a)
+		b := a
+		encoders = append(encoders, b)
 	}
-	dw.Body = elem.Body(
-		// Display a textarea on the right-hand side of the page.
+	return elem.Body(
 		elem.Div(
-			e...,
+			vecty.Markup(
+				vecty.Style("width", "100%"),
+			),
+			encoders,
 		),
 	)
-	return dw.Body
 }
 
 func (dw *DeenWeb) SetCurrentEncoder(e *EncoderWidget) {
 	fmt.Printf("Setting current encoder: %v\n", e)
-	for i, enc := range dw.EncoderWidgets {
+	for i, x := range dw.EncoderWidgets {
+		enc := x
 		if e == enc {
 			dw.EncoderWidgets[i].Border = true
+			dw.currentEncoder = e
 		} else {
 			dw.EncoderWidgets[i].Border = false
 		}
-	}
-	e.Border = true
-	dw.currentEncoder = e
-	if len(dw.EncoderWidgets) > 1 {
-		vecty.Rerender(dw)
+		vecty.Rerender(enc)
 	}
 }
 
@@ -87,23 +85,19 @@ func (dw *DeenWeb) AddEncoder() (e *EncoderWidget) {
 func (dw *DeenWeb) RemoveEncoder(e *EncoderWidget) {
 	if e == dw.EncoderWidgets[0] {
 		fmt.Println("Clearing root encoder")
-		/* 		// And remove all following widgets.
-		   		dw.EncoderWidgets = []*EncoderWidget{dw.EncoderWidgets[0]}
-		   		// We cannot remove the root widget, just clearing content and plugin
-		   		dw.EncoderWidgets[0].ClearContent()
-		   		dw.EncoderWidgets[0].Plugin = nil */
 		dw.EncoderWidgets = nil
 		dw.AddEncoder()
-		return
 	} else {
 		// If enc is not the root widget, we have a previous widget
 		previous := dw.PreviousEncoder()
 		if e == dw.EncoderWidgets[len(dw.EncoderWidgets)-1] {
+			fmt.Println("Last encoder")
 			// Remove the last encoder
 			dw.EncoderWidgets = dw.EncoderWidgets[:len(dw.EncoderWidgets)-1]
 			// And clear the plugin of the previous encoder
 			previous.Plugin = nil
 		} else {
+			fmt.Println("Not last encoder")
 			for i, enc := range dw.EncoderWidgets {
 				if e == enc {
 					dw.EncoderWidgets = append(dw.EncoderWidgets[:i], dw.EncoderWidgets[i+1:]...)
@@ -114,6 +108,7 @@ func (dw *DeenWeb) RemoveEncoder(e *EncoderWidget) {
 			}
 		}
 	}
+	vecty.Rerender(dw)
 }
 
 func (dw *DeenWeb) RunPlugin(pluginCmd string) {
