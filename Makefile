@@ -36,6 +36,6 @@ clean:
 	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
 
 test:
-	go test -timeout 20s -cover ./...
+	go test -timeout 20s -count=1 -cover ./...
 
 all: clean build test
