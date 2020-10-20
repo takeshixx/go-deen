@@ -13,7 +13,7 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func processStrconv(t *types.DeenTask, ctrlOnly bool) {
+func processStrconv(t *types.DeenTask, ctrlOnly, graph bool) {
 	go func() {
 		defer t.Close()
 		str, err := ioutil.ReadAll(t.Reader)
@@ -23,6 +23,8 @@ func processStrconv(t *types.DeenTask, ctrlOnly bool) {
 		var quotedStr string
 		if ctrlOnly {
 			quotedStr = strconv.Quote(string(str))
+		} else if graph {
+			quotedStr = strconv.QuoteToGraphic(string(str))
 		} else {
 			quotedStr = strconv.QuoteToASCII(string(str))
 		}
@@ -44,13 +46,16 @@ func NewPluginStrconv() (p *types.DeenPlugin) {
 	p.Category = "codecs"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		processStrconv(task, false)
+		processStrconv(task, false, false)
 	}
 	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
 		ctrlOnlyPtr := flags.Lookup("ctrl")
 		ctflOnly := false
 		ctflOnly, _ = strconv.ParseBool(ctrlOnlyPtr.Value.String())
-		processStrconv(task, ctflOnly)
+		graphPtr := flags.Lookup("graph")
+		graph := false
+		graph, _ = strconv.ParseBool(graphPtr.Value.String())
+		processStrconv(task, ctflOnly, graph)
 	}
 	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
@@ -84,6 +89,7 @@ func NewPluginStrconv() (p *types.DeenPlugin) {
 		}
 		if !self.Unprocess {
 			flags.Bool("ctrl", false, "only escape control sequences")
+			flags.Bool("graph", false, "escape to graphs")
 		}
 		flags.Parse(args)
 		return flags
