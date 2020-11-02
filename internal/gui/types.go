@@ -1,3 +1,5 @@
+// +build gui
+
 package gui
 
 import (
