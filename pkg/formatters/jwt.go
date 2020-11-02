@@ -113,6 +113,7 @@ func encode(obj map[string]interface{}) (outStr string, err error) {
 
 func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string) (outBuf []byte, err error) {
 	var token, tokenPayload, tokenHeader map[string]interface{}
+	var tokenSignature []byte
 	var encodedPayload, encodedHeader string
 
 	// If header is not set, we expect a full token object with header, payload and signature
@@ -137,6 +138,10 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 		}
 		payload := token["payload"]
 		tokenPayload = payload.(map[string]interface{})
+
+		if _, ok := token["signature"]; ok {
+			tokenSignature = token["signature"].([]byte)
+		}
 	} else {
 		if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
 			return
