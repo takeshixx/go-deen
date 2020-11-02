@@ -6,6 +6,10 @@
 
 It should be noted that this code is still highly experimental. However, the majority of core plugins is already implemented and functional.
 
+### TODO
+
+Current and future features and TODOs are tracked in various [repository projects](https://github.com/takeshixx/go-deen/projects).
+
 ## Building & Running
 
 The following command will create a `deen` binary in the `bin/` folder:
@@ -30,11 +34,29 @@ $ deen .b64 dGVzdA==
 test
 ```
 
-## TODO
+### GUI
 
-Current and future features and TODOs are tracked in various [repository projects](https://github.com/takeshixx/go-deen/projects).
+Making a binary with GUI support:
 
-## WHY?
+```bash
+make gui
+```
+
+Running the resulting binary without any CLI arguments will start the GUI.
+
+### WebAssembly
+
+*Note*: WebAssembly code currently resides in the `web` branch.
+
+Build and run the web interface:
+
+```bash
+make web
+```
+
+This will spawn a local web server on TCP port 9090 (currently requires [http_server.go](https://github.com/takeshixx/tools/blob/master/net/daemons/http_server.go)) that services the web interface.
+
+## Why go-deen?
 
 tl;dr: Because we can.
 
