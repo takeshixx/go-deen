@@ -142,6 +142,9 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 		if _, ok := token["signature"]; ok {
 			tokenSignature = token["signature"].([]byte)
 		}
+		if len(tokenSignature) > 0 {
+			fmt.Printf("tokenSignature supplied")
+		}
 	} else {
 		if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
 			return
