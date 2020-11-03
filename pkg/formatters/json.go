@@ -60,8 +60,8 @@ func processJSONFormat(task *types.DeenTask) {
 func NewPluginJSONFormatter() (p *types.DeenPlugin) {
 	p = types.NewPlugin()
 	p.Name = "jsons"
-	p.Aliases = []string{".json", "json-format"}
-	p.Category = "formatter"
+	p.Aliases = []string{".json"}
+	p.Category = "formatters"
 	p.Unprocess = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processJSONFormat(task)
