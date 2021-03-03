@@ -44,6 +44,14 @@ make gui
 
 Running the resulting binary without any CLI arguments will start the GUI.
 
+In order to build the GUI, the following dependencies are required:
+
+**Ubuntu**
+
+```bash
+sudo apt update && sudo apt install xorg-dev
+```
+
 ### WebAssembly
 
 *Note*: WebAssembly code currently resides in the `web` branch.
