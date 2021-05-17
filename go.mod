@@ -11,6 +11,7 @@ require (
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20200707082815-5321531c36a2 // indirect
 	github.com/google/go-cmp v0.5.2
+	github.com/iancoleman/orderedmap v0.2.0
 	github.com/itchyny/gojq v0.11.2
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/pkg/errors v0.9.1
