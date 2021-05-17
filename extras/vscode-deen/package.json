@@ -1,9 +1,9 @@
 {
 	"name": "deen",
 	"displayName": "deen",
-  "description": "Generic data decoding and encoding",
-  "publisher": "takeshix",
-  "repository": "https://github.com/takeshixx/go-deen",
+	"description": "Generic data decoding and encoding",
+	"publisher": "takeshix",
+	"repository": "https://github.com/takeshixx/go-deen",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.48.0"
