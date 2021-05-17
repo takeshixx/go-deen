@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/TylerBrock/colorjson"
+	"github.com/iancoleman/orderedmap"
 	"github.com/takeshixx/deen/pkg/types"
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
@@ -102,7 +102,7 @@ func getHeader(token *jwt.JSONWebToken, key string) (value string, err error) {
 	return
 }
 
-func encode(obj map[string]interface{}) (outStr string, err error) {
+func encode(obj interface{}) (outStr string, err error) {
 	jsonEncoded, err := json.Marshal(obj)
 	if err != nil {
 		return
@@ -111,37 +111,65 @@ func encode(obj map[string]interface{}) (outStr string, err error) {
 	return
 }
 
-func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string) (outBuf []byte, err error) {
-	var token, tokenPayload, tokenHeader map[string]interface{}
+func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string, recreate bool) (outBuf []byte, err error) {
 	var tokenSignature []byte
 	var encodedPayload, encodedHeader string
+
+	token := orderedmap.New()
+	token.SetEscapeHTML(false)
+	tokenHeader := orderedmap.New()
+	tokenHeader.SetEscapeHTML(false)
+	tokenPayload := orderedmap.New()
+	tokenPayload.SetEscapeHTML(false)
 
 	// If header is not set, we expect a full token object with header, payload and signature
 	if header == "" {
 		if err = json.NewDecoder(reader).Decode(&token); err != nil {
 			return
 		}
-		if _, ok := token["header"]; !ok {
-			// Create a default headerg
-			tokenHeader = make(map[string]interface{})
-			tokenHeader["alg"] = signAlg
-			tokenHeader["typ"] = "JWT"
+		if _, ok := token.Get("header"); !ok {
+			// Create a default header
+			if signAlg == "" {
+				return nil, fmt.Errorf("Missing sign-alg")
+			}
+			tokenHeader.Set("alg", signAlg)
+			tokenHeader.Set("typ", "JWT")
 		} else {
-			header := token["header"]
-			tokenHeader = header.(map[string]interface{})
-			if _, ok := tokenHeader["alg"]; ok {
-				signAlg = tokenHeader["alg"].(string)
+			// Take the header from the given token
+			curHeader, ok := token.Get("header")
+			if !ok {
+				return nil, fmt.Errorf("Could not get header")
+			}
+			bla := curHeader.(orderedmap.OrderedMap)
+			tokenHeader = &bla
+			if _, ok := tokenHeader.Get("alg"); ok {
+				// Only overwrite if signAlg was not provided
+				if signAlg == "" {
+					signAlgRaw, ok := tokenHeader.Get("alg")
+					if !ok {
+						return nil, fmt.Errorf("Could not get alg from token header")
+					}
+					signAlg = signAlgRaw.(string)
+				}
 			}
 		}
-		if _, ok := token["payload"]; !ok {
-			return nil, fmt.Errorf("No payload found in input")
+		payload, ok := token.Get("payload")
+		if !ok {
+			return nil, fmt.Errorf("Could not get payload")
 		}
-		payload := token["payload"]
-		tokenPayload = payload.(map[string]interface{})
+		more := payload.(orderedmap.OrderedMap)
+		tokenPayload = &more
 
-		if _, ok := token["signature"]; ok {
-			tokenSignature = token["signature"].([]byte)
+		// Take the signature from the given token
+		if _, ok := token.Get("signature"); ok {
+			asd, ok := token.Get("signature")
+			if !ok {
+				return nil, fmt.Errorf("Could not get signature")
+			}
+			xxx := asd.(string)
+			tokenSignature = []byte(xxx)
 		}
+
 	} else {
 		if err = json.NewDecoder(reader).Decode(&tokenPayload); err != nil {
 			return
@@ -149,19 +177,34 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 		if err = json.Unmarshal([]byte(header), &tokenHeader); err != nil {
 			return
 		}
-		if val, ok := tokenHeader["alg"]; ok {
+		if val, ok := tokenHeader.Get("alg"); ok {
 			signAlg = fmt.Sprintf("%v", val)
 		}
 	}
 
-	if len(tokenHeader) < 1 || len(tokenPayload) < 1 {
+	if len(tokenHeader.Keys()) < 1 || len(tokenPayload.Keys()) < 1 {
 		err = fmt.Errorf("Token header or payload not set")
+		return
+	}
+
+	if recreate {
+		// Just create a new token based on the given JSON
+		encodedHeader, err = encode(tokenHeader)
+		if err != nil {
+			return
+		}
+		encodedPayload, err = encode(tokenPayload)
+		if err != nil {
+			return
+		}
+		noneToken := fmt.Sprintf("%s.%s.%s", encodedHeader, encodedPayload, tokenSignature)
+		outBuf = []byte(noneToken)
 		return
 	}
 
 	if signAlg != "" && strings.ToLower(signAlg) == "none" {
 		// Create a static token header with the given payload in the proper format
-		tokenHeader["alg"] = "none"
+		tokenHeader.Set("alg", "none")
 		encodedHeader, err = encode(tokenHeader)
 		if err != nil {
 			return
@@ -239,7 +282,7 @@ func printSerializedToken(token string) (outBuf []byte, err error) {
 	return
 }
 
-func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload map[string]interface{}, signature string, err error) {
+func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload *orderedmap.OrderedMap, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
 
@@ -290,7 +333,7 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload map[
 	return
 }
 
-func undoJWE(reader io.Reader, secret []byte) (header, payload map[string]interface{}, signature string, err error) {
+func undoJWE(reader io.Reader, secret []byte) (header, payload *orderedmap.OrderedMap, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
 	//var token *jwt.JSONWebToken
@@ -301,7 +344,7 @@ func undoJWE(reader io.Reader, secret []byte) (header, payload map[string]interf
 	return
 }
 
-func undoSignedJWE(reader io.Reader, verify bool, secret []byte) (header, payload map[string]interface{}, signature string, err error) {
+func undoSignedJWE(reader io.Reader, verify bool, secret []byte) (header, payload *orderedmap.OrderedMap, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
 	//var token *jwt.JSONWebToken
@@ -334,6 +377,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		}
 
 		var signAlg, signSecret, signKey, encAlg, encSecret, encKey, keyAlg, header string
+		var recreate bool
 
 		if signAlgFlag := flags.Lookup("sign-alg"); signAlgFlag != nil {
 			signAlg = signAlgFlag.Value.String()
@@ -360,6 +404,14 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 			header = headerFlag.Value.String()
 		}
 
+		if recreateFlag := flags.Lookup("r"); recreateFlag != nil {
+			recreate = false
+			recreate, err = strconv.ParseBool(recreateFlag.Value.String())
+			if err != nil {
+				return
+			}
+		}
+
 		inBuf := bufio.NewReader(reader)
 
 		// In case there is no input, print the help page
@@ -368,7 +420,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 			os.Exit(1)
 		}
 
-		return doJWS(inBuf, header, signAlg, []byte(signSecret), []byte(signKey), encAlg, []byte(encSecret), []byte(encKey), keyAlg)
+		return doJWS(inBuf, header, signAlg, []byte(signSecret), []byte(signKey), encAlg, []byte(encSecret), []byte(encKey), keyAlg, recreate)
 	}
 	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var secret, headerBuf, payloadBuf []byte
@@ -407,45 +459,35 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		secretFlag := flags.Lookup("secret")
 		secret := []byte(secretFlag.Value.String())
 
-		var header, payload map[string]interface{}
 		var signature string
+		orderedHeader := orderedmap.New()
+		orderedHeader.SetEscapeHTML(false)
+		orderedPayload := orderedmap.New()
+		orderedPayload.SetEscapeHTML(false)
 
 		if isJWE {
-			header, payload, signature, err = undoSignedJWE(reader, verify, secret)
+			orderedHeader, orderedPayload, signature, err = undoSignedJWE(reader, verify, secret)
 		} else if isJWE {
-			header, payload, signature, err = undoJWE(reader, secret)
+			orderedHeader, orderedPayload, signature, err = undoJWE(reader, secret)
 		} else {
-			header, payload, signature, err = undoJWS(reader, verify, secret)
+			orderedHeader, orderedPayload, signature, err = undoJWS(reader, verify, secret)
 		}
 
 		if err != nil {
 			return
 		}
 
-		if len(header) == 0 || len(payload) == 0 {
+		if len(orderedHeader.Keys()) == 0 || len(orderedPayload.Keys()) == 0 {
 			return
 		}
 
-		plainFlag := flags.Lookup("plain")
-		plain, err := strconv.ParseBool(plainFlag.Value.String())
+		outObj := orderedmap.New()
+		outObj.SetEscapeHTML(false)
+		outObj.Set("header", orderedHeader)
+		outObj.Set("payload", orderedPayload)
+		outObj.Set("signature", signature)
 
-		noColorFlag := flags.Lookup("no-color")
-		noColor, err := strconv.ParseBool(noColorFlag.Value.String())
-
-		outObj := make(map[string]interface{})
-		outObj["header"] = header
-		outObj["payload"] = payload
-		outObj["signature"] = signature
-
-		if !plain {
-			if noColor {
-				outBuf, err = prettyEncodeJSON(outObj)
-			} else {
-				outBuf, err = prettyEncodeJSONColored(outObj)
-			}
-		} else {
-			outBuf, err = json.Marshal(outObj)
-		}
+		outBuf, err = prettyEncodeJSON(outObj)
 		return
 	}
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
@@ -461,8 +503,6 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 			flags.String("secret", "", "secret key")
 			flags.String("key", "", "key file")
 			flags.Bool("decrypt", false, "decrypt JWE token")
-			flags.Bool("plain", false, "print unformatted token")
-			flags.Bool("no-color", false, "omit colors in formatted output")
 			flags.Parse(args)
 			return flags
 		}
@@ -474,14 +514,14 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		}
 		flags.Bool("list", false, "list supported algorithms")
 		flags.String("header", "", "token header")
-
-		flags.String("sign-alg", "HS256", "signature algorithm")
+		flags.String("sign-alg", "", "signature algorithm")
 		flags.String("sign-secret", "", "signature secret")
 		flags.String("sign-keyfile", "", "signature key file")
 		flags.String("enc-alg", "", "encryption algorithm")
 		flags.String("enc-secret", "", "encryption secret")
 		flags.String("enc-keyfile", "", "encryption key file")
 		flags.String("key-alg", "", "key management algorithm")
+		flags.Bool("r", false, "recreate the token, keep the given signature")
 		flags.Parse(args)
 		return flags
 	}
@@ -499,11 +539,6 @@ func prettyEncodeJSON(data interface{}) (outBuf []byte, err error) {
 		return
 	}
 	outBuf = outBufWriter.Bytes()
+	outBuf = bytes.TrimSuffix(outBuf, []byte("\n"))
 	return
-}
-
-func prettyEncodeJSONColored(data interface{}) (outBuf []byte, err error) {
-	f := colorjson.NewFormatter()
-	f.Indent = 4
-	return f.Marshal(data)
 }
