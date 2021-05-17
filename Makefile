@@ -8,6 +8,18 @@ else
 	CGO_ENABLED=0 go build $(ldflags) -o ./bin/deen ./cmd/deen
 endif
 
+cross:
+	# Linux
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(ldflags) -o ./bin/linux-amd64/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build $(ldflags) -o ./bin/linux-386/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build $(ldflags) -o ./bin/linux-arm/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(ldflags) -o ./bin/linux-arm64/deen ./cmd/deen
+	# Windows
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(ldflags) -o ./bin/windows-amd64/deen.exe ./cmd/deen
+	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(ldflags) -o ./bin/windows-386/deen.exe ./cmd/deen
+	# Darwin
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(ldflags) -o ./bin/darwin-amd64/deen ./cmd/deen
+
 stripped:
 ifeq ($(OS),Windows_NT)
 	CGO_ENABLED=0 go build $(ldflagsstripped) -o ./bin/deen.exe ./cmd/deen
@@ -15,12 +27,29 @@ else
 	CGO_ENABLED=0 go build $(ldflagsstripped) -o ./bin/deen ./cmd/deen
 endif
 
+cross-stripped:
+	# Linux
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(ldflagsstripped) -o ./bin/linux-amd64/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=linux GOARCH=386 go build $(ldflagsstripped) -o ./bin/linux-386/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build $(ldflagsstripped) -o ./bin/linux-arm/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(ldflagsstripped) -o ./bin/linux-arm64/deen ./cmd/deen
+	# Windows
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(ldflagsstripped) -o ./bin/windows-amd64/deen.exe ./cmd/deen
+	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(ldflagsstripped) -o ./bin/windows-386/deen.exe ./cmd/deen
+	# Darwin
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(ldflagsstripped) -o ./bin/darwin-amd64/deen ./cmd/deen
+
 gui:
 ifeq ($(OS),Windows_NT)
 	go build $(ldflagsstripped) --tags gui -o ./bin/deen.exe ./cmd/deen
 else
 	go build $(ldflagsstripped) --tags gui -o ./bin/deen ./cmd/deen
 endif
+
+fyne-cross:
+	fyne-cross linux $(ldflags) --tags gui --arch=* -output deen ./cmd/deen
+	fyne-cross windows $(ldflags) --tags gui --arch=* -output deen.exe ./cmd/deen
+	#fyne-cross darwin $(ldflags) --tags gui --arch=* -output deen-darwin ./cmd/deen
 
 web: 
 	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
@@ -33,7 +62,7 @@ run:
 
 clean:
 	rm -rf ./bin
-	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
+	rm -f extras/web/deen.wasm extras/web/wasm_exec.js
 
 test:
 	go test -timeout 20s -count=1 -cover ./...
