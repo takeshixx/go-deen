@@ -10,8 +10,9 @@ import (
 	"io"
 	"strings"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -21,7 +22,7 @@ type DeenEncoder struct {
 	Content     []byte // The actual content of the widget. Should never be changed, only by following encoder widgets.
 	ContentLen  *widget.Label
 	View        string // The current view (plain/hex)
-	Layout      *widget.Box
+	Layout      *fyne.Container
 	InputField  *DeenInputField
 	InputLen    *widget.Label
 	ViewButton  *widget.Select // Change the view of the encoder (plain/hex)
@@ -39,23 +40,23 @@ func NewDeenEncoderWidget(parent *DeenGUI) (de *DeenEncoder, err error) {
 	}
 	de.InputField = NewDeenInputField(de)
 	de.InputField.OnChanged = de.OnChangedWrapper
-	de.Layout = de.createLayout()
 	de.newButtons()
+	de.Layout = de.createLayout()
 	return
 }
 
-func (de *DeenEncoder) createLayout() (layout *widget.Box) {
-	layout = widget.NewVBox()
-	encoderWrapper := widget.NewScrollContainer(de.InputField)
+func (de *DeenEncoder) createLayout() (layout *fyne.Container) {
+	layout = container.NewVBox()
+	encoderWrapper := container.NewScroll(de.InputField)
 	encoderWrapper.SetMinSize(fyne.NewSize(0, 200))
-	layout.Append(encoderWrapper)
-	buttonsLayout := widget.NewHBox()
-	buttonsLayout.Append(de.ViewButton)
-	buttonsLayout.Append(de.CopyButton)
-	buttonsLayout.Append(de.ClearButton)
-	buttonsLayout.Append(de.ContentLen)
-	buttonsLayout.Append(de.InputLen)
-	layout.Append(buttonsLayout)
+	layout.Add(encoderWrapper)
+	buttonsLayout := container.NewHBox()
+	buttonsLayout.Add(de.ViewButton)
+	buttonsLayout.Add(de.CopyButton)
+	buttonsLayout.Add(de.ClearButton)
+	buttonsLayout.Add(de.ContentLen)
+	buttonsLayout.Add(de.InputLen)
+	layout.Add(buttonsLayout)
 	return
 }
 

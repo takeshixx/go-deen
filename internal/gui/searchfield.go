@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/dialog"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/closestmatch"
 	"github.com/takeshixx/deen/internal/plugins"
 )
@@ -17,7 +18,7 @@ import (
 type DeenSearchField struct {
 	widget.Entry
 	Parent          *DeenGUI
-	Layout          *widget.Box
+	Layout          *fyne.Container
 	ConfirmCallBack func(bool)
 	CM              *closestmatch.ClosestMatch
 	Dialog          dialog.Dialog
@@ -61,14 +62,14 @@ func NewDeenSearchField(parent *DeenGUI) (e *DeenSearchField) {
 	e = &DeenSearchField{
 		widget.Entry{},
 		parent,
-		widget.NewVBox(),
+		container.NewVBox(),
 		nil,
 		nil,
 		nil,
 		"",
 	}
 	e.SetPlaceHolder("Type plugin name")
-	e.Layout.Append(e)
+	e.Layout.Add(e)
 	// Create a list of plugins without dot prefix
 	var p []string
 	for _, x := range e.Parent.Plugins {

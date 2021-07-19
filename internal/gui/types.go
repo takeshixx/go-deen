@@ -6,13 +6,14 @@ import (
 	"io/ioutil"
 	"log"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/app"
-	"fyne.io/fyne/dialog"
-	"fyne.io/fyne/driver/desktop"
-	"fyne.io/fyne/layout"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"github.com/takeshixx/deen/internal/plugins"
 )
 
@@ -21,12 +22,12 @@ type DeenGUI struct {
 	App                  fyne.App
 	MainWindow           fyne.Window
 	MainLayout           *fyne.Container
-	PluginList           *widget.ScrollContainer
+	PluginList           *container.Scroll
 	Plugins              []string
-	EncoderWidgetsScroll *widget.ScrollContainer
-	EncoderWidgets       *widget.Box
+	EncoderWidgetsScroll *container.Scroll
+	EncoderWidgets       *fyne.Container
 	Encoders             []*DeenEncoder
-	HistoryList          *widget.Group
+	HistoryList          *widget.Card
 	History              []string
 	CurrentFocus         int // The index of the encoder widget in Encoders
 }
@@ -35,12 +36,12 @@ type DeenGUI struct {
 func NewDeenGUI() (dg *DeenGUI, err error) {
 	dg = &DeenGUI{
 		App: app.NewWithID("io.deen.app"),
-		PluginList: widget.NewScrollContainer(
-			widget.NewAccordionContainer(),
+		PluginList: container.NewScroll(
+			widget.NewAccordion(),
 		),
-		EncoderWidgetsScroll: widget.NewScrollContainer(widget.NewVBox()),
-		EncoderWidgets:       widget.NewVBox(),
-		HistoryList:          widget.NewGroup("History"),
+		EncoderWidgetsScroll: container.NewScroll(container.NewVBox()),
+		EncoderWidgets:       container.NewVBox(),
+		HistoryList:          widget.NewCard("History", "", nil),
 	}
 	dg.MainWindow = dg.App.NewWindow("deen")
 	dg.newMainLayout()
@@ -122,15 +123,15 @@ func (dg *DeenGUI) newMainMenu() {
 // Populate the DeenGUI.PluginList field
 func (dg *DeenGUI) loadPluginList() {
 	dg.Plugins = []string{}
-	pluginList := widget.NewAccordionContainer()
+	pluginList := widget.NewAccordion()
 	var pluginGroup *widget.AccordionItem
 	for _, c := range plugins.PluginCategories {
 		filteredPlugins := plugins.GetForCategory(c, false)
-		var groupList *widget.Box
-		groupList = widget.NewVBox()
+		var groupList *fyne.Container
+		groupList = container.NewVBox()
 		for _, p := range filteredPlugins {
 			pluginName := p
-			groupList.Append(widget.NewButton(p, func() {
+			groupList.Add(widget.NewButton(p, func() {
 				dg.RunPlugin(pluginName)
 			}))
 		}
@@ -143,7 +144,7 @@ func (dg *DeenGUI) loadPluginList() {
 		pluginGroup = widget.NewAccordionItem(c, groupList)
 		pluginList.Append(pluginGroup)
 	}
-	dg.PluginList = widget.NewScrollContainer(pluginList)
+	dg.PluginList = container.NewScroll(pluginList)
 	// Ensure that the scroll container is wide enough
 	dg.PluginList.SetMinSize(fyne.NewSize(pluginList.MinSize().Width, 0))
 	dg.PluginList.Refresh()
@@ -172,7 +173,7 @@ func (dg *DeenGUI) updateGUI() {
 	}
 
 	dg.updateEncoderWidgets()
-	dg.EncoderWidgetsScroll = widget.NewScrollContainer(dg.EncoderWidgets)
+	dg.EncoderWidgetsScroll = container.NewScroll(dg.EncoderWidgets)
 	dg.newMainLayout()
 
 	dg.MainWindow.SetContent(dg.MainLayout)
@@ -183,20 +184,22 @@ func (dg *DeenGUI) updateGUI() {
 }
 
 func (dg *DeenGUI) updateEncoderWidgets() {
-	dg.EncoderWidgets = widget.NewVBox()
-	dg.HistoryList = widget.NewGroup("History")
+	dg.EncoderWidgets = container.NewVBox()
+	dg.HistoryList = widget.NewCard("History", "", nil)
+	historyListBuilder := container.NewVBox()
 	var historyName string
 	for _, e := range dg.Encoders {
-		dg.EncoderWidgets.Append(e.createLayout())
+		dg.EncoderWidgets.Add(e.createLayout())
 		if e.Plugin != nil {
 			if e.Plugin.Unprocess {
 				historyName = "." + e.Plugin.Name
 			} else {
 				historyName = e.Plugin.Name
 			}
-			dg.HistoryList.Append(widget.NewLabel(historyName))
+			historyListBuilder.Add(widget.NewLabel(historyName))
 		}
 	}
+	dg.HistoryList.SetContent(historyListBuilder)
 }
 
 func (dg *DeenGUI) fileOpened(f fyne.URIReadCloser) {
