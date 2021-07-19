@@ -12,6 +12,7 @@ import (
 	"github.com/takeshixx/deen/pkg/compressions"
 	"github.com/takeshixx/deen/pkg/formatters"
 	"github.com/takeshixx/deen/pkg/hashs"
+	"github.com/takeshixx/deen/pkg/misc"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -54,11 +55,12 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginJSONFormatter,
 	formatters.NewPluginJwt,
 	formatters.NewPluginJQFormatter,
+	misc.NewPluginCertCloner,
 }
 
 // PluginCategories is a list of plugin categories that
 // should be available accross all modules.
-var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "utils"}
+var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "utils", "misc"}
 
 type pluginDescription struct {
 	Name    string
