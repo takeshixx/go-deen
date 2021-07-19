@@ -5,7 +5,7 @@ package gui
 import (
 	"log"
 
-	"fyne.io/fyne/dialog"
+	"fyne.io/fyne/v2/dialog"
 	"github.com/takeshixx/deen/internal/plugins"
 )
 

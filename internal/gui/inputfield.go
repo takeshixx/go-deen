@@ -3,8 +3,8 @@
 package gui
 
 import (
-	"fyne.io/fyne"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 )
 
 // DeenInputField is a subclass of widget.Entry with additional fields.

@@ -3,12 +3,15 @@ package formatters
 import (
 	"bufio"
 	"bytes"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -102,6 +105,45 @@ func getHeader(token *jwt.JSONWebToken, key string) (value string, err error) {
 	return
 }
 
+func loadPrivateKeyFile(path string) (interface{}, error) {
+	_, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return loadPrivateKey(data)
+}
+
+func loadPrivateKey(data []byte) (interface{}, error) {
+	input := data
+
+	block, _ := pem.Decode(data)
+	if block != nil {
+		input = block.Bytes
+	}
+
+	var priv interface{}
+	priv, err0 := x509.ParsePKCS1PrivateKey(input)
+	if err0 == nil {
+		return priv, nil
+	}
+
+	priv, err1 := x509.ParsePKCS8PrivateKey(input)
+	if err1 == nil {
+		return priv, nil
+	}
+
+	priv, err2 := x509.ParseECPrivateKey(input)
+	if err2 == nil {
+		return priv, nil
+	}
+
+	return nil, fmt.Errorf("Unable to load private key")
+}
+
 func encode(obj interface{}) (outStr string, err error) {
 	jsonEncoded, err := json.Marshal(obj)
 	if err != nil {
@@ -111,7 +153,7 @@ func encode(obj interface{}) (outStr string, err error) {
 	return
 }
 
-func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey []byte, encAlg string, encSecret []byte, encKey []byte, keyAlg string, recreate bool) (outBuf []byte, err error) {
+func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byte, signKey string, encAlg string, encSecret []byte, encKey []byte, keyAlg string, recreate bool) (outBuf []byte, err error) {
 	var tokenSignature []byte
 	var encodedPayload, encodedHeader string
 
@@ -222,12 +264,26 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 	var encrypter jose.Encrypter
 
 	if len(signSecret) > 0 || len(signKey) > 0 {
+		// We do want to sign
+		var privateKey interface{}
+		privateKey, err = loadPrivateKeyFile(signKey)
+		if err != nil {
+			return
+		}
 		key := jose.SigningKey{
 			Algorithm: jose.SignatureAlgorithm(signAlg),
-			Key:       signSecret,
+			Key:       privateKey,
+		}
+		var opts jose.SignerOptions
+		opts = jose.SignerOptions{EmbedJWK: false}
+		opts.ExtraHeaders = make(map[jose.HeaderKey]interface{})
+		// Copy attributes from given header into target header
+		for _, k := range tokenHeader.Keys() {
+			v, _ := tokenHeader.Get(k)
+			opts.WithHeader(jose.HeaderKey(k), v)
 		}
 		var sig jose.Signer
-		sig, err = jose.NewSigner(key, (&jose.SignerOptions{EmbedJWK: false}).WithType("JWT").WithContentType("JWT"))
+		sig, err = jose.NewSigner(key, (&opts).WithType("JWT").WithContentType("JWT"))
 		if err != nil {
 			return
 		}
@@ -316,7 +372,7 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload *ord
 		if tokenCty == "JWT" {
 			// Nested token: https://tools.ietf.org/html/draft-yusef-oauth-nested-jwt-03
 			err = errors.New("Nested tokens are currently not supported")
-			return
+			//return
 		}
 	}
 
@@ -420,7 +476,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 			os.Exit(1)
 		}
 
-		return doJWS(inBuf, header, signAlg, []byte(signSecret), []byte(signKey), encAlg, []byte(encSecret), []byte(encKey), keyAlg, recreate)
+		return doJWS(inBuf, header, signAlg, []byte(signSecret), signKey, encAlg, []byte(encSecret), []byte(encKey), keyAlg, recreate)
 	}
 	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var secret, headerBuf, payloadBuf []byte
