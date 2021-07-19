@@ -17,7 +17,8 @@ import (
 // should be used for all plugins that implement readers/writers.
 // This typically applies to plugins that do not have a fixed-size
 // output, e.g. codecs or compressions.
-func NewPluginExample() (p types.DeenPlugin) {
+func NewPluginExample() (p *types.DeenPlugin) {
+	p = types.NewPlugin()
 	p.Name = "example"
 	p.Aliases = []string{".example", "ex", ".ex"}
 	p.Category = "codecs"
