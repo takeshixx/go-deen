@@ -1,6 +1,7 @@
 package misc
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/pem"
@@ -11,6 +12,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"github.com/spacemonkeygo/openssl"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -51,24 +53,17 @@ func NewPluginCertCloner() (p *types.DeenPlugin) {
 		return hashSum, err
 	}
 	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		strFlag := flags.Lookup("cert")
-		strVal := strFlag.Value.String()
-		var inputCert string
-		if strVal != "" {
-			inputCert = strVal
-		} else {
-			return nil, errors.New("No certificate provided")
+		caFlag := flags.Lookup("ca")
+		caVal := caFlag.Value.String()
+		if caVal != "" {
+			fmt.Printf("Got CA cert: %s\n", caVal)
 		}
 
-		fmt.Printf("Got input cert: %s\n", inputCert)
+		inBuf := new(bytes.Buffer)
+		inBuf.ReadFrom(reader)
+		inputCert := inBuf.Bytes()
 
-		// Read bool option from flags with IsBoolFlag()
-		//boolVal := helpers.IsBoolFlag(flags, "testbool")
-		//if boolVal == true {
-		// Bool option has been set
-		//}
-
-		cert, err := parseCertificate(inputCert)
+		cert, err := openssl.LoadCertificateFromPEM(inputCert)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +83,7 @@ func NewPluginCertCloner() (p *types.DeenPlugin) {
 			flags.PrintDefaults()
 		}
 		// Adding additional flags:
-		flags.String("cert", "", "input certificate in PEM format")
+		flags.String("ca", "", "CA certificate and key in PEM format")
 
 		// Different options for processing and unprocessing
 		// can be added by checking:
