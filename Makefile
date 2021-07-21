@@ -8,6 +8,13 @@ else
 	CGO_ENABLED=0 go build $(ldflags) -o ./bin/deen ./cmd/deen
 endif
 
+build-cgo:
+ifeq ($(OS),Windows_NT)
+	go build $(ldflags) -o ./bin/deen.exe ./cmd/deen
+else
+	CGO_CFLAGS="-I$$(go env GOPATH)/pkg/mod/github.com/spacemonkeygo/openssl@v0.0.0-20181017203307-c2dcc5cca94a -I~/Code-Ext/op~nssl/include" CGO_LDFLAGS="-L/Users/nschiess/Code-Ext/openssl" go build $(ldflags) -o ./bin/deen ./cmd/deen
+endif
+
 cross:
 	# Linux
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(ldflags) -o ./bin/linux-amd64/deen ./cmd/deen
