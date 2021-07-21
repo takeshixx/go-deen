@@ -9,12 +9,25 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 
 	"github.com/pkg/errors"
 	"github.com/spacemonkeygo/openssl"
 	"github.com/takeshixx/deen/pkg/types"
 )
+
+// #include "shim.h"
+import "C"
+
+type Certificate struct {
+	openssl.Certificate
+}
+
+func (c *Certificate) getIssuerDate() (ret interface{}, err error) {
+	ret = C.X_X509_get0_notBefore(c.x)
+	return
+}
 
 func parseCertificate(path string) (cert *x509.Certificate, err error) {
 	data, err := ioutil.ReadFile(path)
@@ -68,6 +81,36 @@ func NewPluginCertCloner() (p *types.DeenPlugin) {
 			return nil, err
 		}
 		fmt.Printf("Parsed certificate: %v\n", cert)
+
+		serial := new(big.Int)
+		serial, ok := serial.SetString(cert.GetSerialNumberHex(), 16)
+		if !ok {
+			return nil, errors.New("Failed to parse certificate serial")
+		}
+		subjectName, err := cert.GetSubjectName()
+		if err != nil {
+			return nil, err
+		}
+		commonName, ok := subjectName.GetEntry(openssl.NID_commonName)
+		if !ok {
+			return nil, errors.New("Failed to get CN from certificate")
+		}
+		org, ok := subjectName.GetEntry(openssl.NID_organizationName)
+		if !ok {
+			return nil, errors.New("Failed to get org from certificate")
+		}
+		country, ok := subjectName.GetEntry(openssl.NID_countryName)
+		if !ok {
+			return nil, errors.New("Failed to get country from certificate")
+		}
+
+		certInfo := &openssl.CertificateInfo{
+			Serial:       serial,
+			CommonName:   commonName,
+			Organization: org,
+			Country:      country,
+		}
+		newCert := openssl.NewCertificate()
 
 		return nil, errors.New("Default error")
 	}
