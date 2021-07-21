@@ -15,6 +15,7 @@ require (
 	github.com/itchyny/timefmt-go v0.1.3 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/schollz/closestmatch v2.1.0+incompatible
+	github.com/spacemonkeygo/openssl v0.0.0-20181017203307-c2dcc5cca94a // indirect
 	github.com/srwiley/oksvg v0.0.0-20210519022825-9fc0c575d5fe // indirect
 	github.com/srwiley/rasterx v0.0.0-20210519020934-456a8d69b780 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
