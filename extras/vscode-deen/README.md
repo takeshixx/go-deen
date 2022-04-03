@@ -4,6 +4,12 @@ A simple deen frontend for Visual Studio Code.
 
 ## Building
 
+```bash
+make
+```
+
+## Manual Building
+
 Run Docker container with NodeJS:
 
 ```bash
@@ -26,6 +32,12 @@ vsce package
 ## Updating Dependencies
 
 To update depdendencies, run the following:
+
+```bash
+make update
+````
+
+Or manually:
 
 ```bash
 docker run --rm -it -v $(pwd):/app node bash
