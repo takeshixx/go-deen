@@ -22,3 +22,14 @@ Build the extension:
 cd /app
 vsce package
 ```
+
+## Updating Dependencies
+
+To update depdendencies, run the following:
+
+```bash
+docker run --rm -it -v $(pwd):/app node bash
+cd /app
+npm audit
+npm audit fix
+```
