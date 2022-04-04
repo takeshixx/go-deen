@@ -56,6 +56,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginJwt,
 	formatters.NewPluginJQFormatter,
 	misc.NewPluginCertCloner,
+	misc.NewPluginCertPrinter,
 }
 
 // PluginCategories is a list of plugin categories that
