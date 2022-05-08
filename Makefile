@@ -21,6 +21,7 @@ cross:
 	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(ldflags) -o ./bin/windows-386/deen.exe ./cmd/deen
 	# Darwin
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(ldflags) -o ./bin/darwin-amd64/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(ldflags) -o ./bin/darwin-arm64/deen ./cmd/deen
 
 .PHONY: stripped
 stripped:
@@ -42,6 +43,7 @@ cross-stripped:
 	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(ldflagsstripped) -o ./bin/windows-386/deen.exe ./cmd/deen
 	# Darwin
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(ldflagsstripped) -o ./bin/darwin-amd64/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(ldflagsstripped) -o ./bin/darwin-arm64/deen ./cmd/deen
 
 .PHONY: gui
 gui:
