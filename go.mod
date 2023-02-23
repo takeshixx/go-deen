@@ -21,11 +21,9 @@ require (
 	github.com/tdewolff/minify/v2 v2.9.16
 	github.com/tdewolff/parse/v2 v2.5.16 // indirect
 	github.com/ulikunitz/xz v0.5.10
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/image v0.0.0-20210504121937-7319ad40d33e // indirect
-	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023 // indirect
-	golang.org/x/sys v0.0.0-20210521090106-6ca3eb03dfc2 // indirect
-	golang.org/x/text v0.3.6
+	golang.org/x/text v0.3.8
 	gopkg.in/square/go-jose.v2 v2.5.1
 	lukechampine.com/blake3 v1.1.5
 )
