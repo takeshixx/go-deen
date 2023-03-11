@@ -12,9 +12,39 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
+
+func printHexDumpLevel(outBuf *bytes.Buffer, data []byte, level int) {
+	re := regexp.MustCompile("..")
+	hex := fmt.Sprintf("%x", data)
+	if len(hex)%2 == 1 {
+		hex = "0" + hex
+	}
+	formatted := strings.TrimRight(re.ReplaceAllString(hex, "$0:"), ":")
+	for j := level; j > 0; j-- {
+		fmt.Fprint(outBuf, "    ")
+	}
+
+	strLength := len(formatted)
+	var stop int
+	for i := 0; i < strLength; i += 45 {
+		stop = i + 45
+		if stop > strLength {
+			stop = strLength
+		}
+		fmt.Fprintf(outBuf, "%s\n", formatted[i:stop])
+		if i+45 > strLength {
+			break
+		}
+		for j := level; j > 0; j-- {
+			fmt.Fprint(outBuf, "    ")
+		}
+	}
+}
 
 // levelPrinter is a print wrapper that allows to
 // specify indentation levels.
@@ -32,7 +62,7 @@ func prettyPrintCert(cert *x509.Certificate, outBuf *bytes.Buffer) (err error) {
 	levelPrinter(outBuf, 1, "Data:")
 	levelPrinter(outBuf, 2, "Version: %d (%x)", cert.Version, cert.Version)
 	levelPrinter(outBuf, 2, "Serial Number:")
-	levelPrinter(outBuf, 3, "%s", cert.SerialNumber)
+	printHexDumpLevel(outBuf, cert.SerialNumber.Bytes(), 3)
 	levelPrinter(outBuf, 1, "Signature Algorithm: %s", cert.SignatureAlgorithm)
 	levelPrinter(outBuf, 2, "Issuer: %s", cert.Issuer)
 	levelPrinter(outBuf, 2, "Validity:")
@@ -48,7 +78,7 @@ func prettyPrintCert(cert *x509.Certificate, outBuf *bytes.Buffer) (err error) {
 		bitLen = privKey.N.BitLen()
 		levelPrinter(outBuf, 4, "Public-Key: (%d)", bitLen)
 		levelPrinter(outBuf, 4, "Modulus:")
-		levelPrinter(outBuf, 5, "%02X", cert.PublicKey.(*rsa.PublicKey).N)
+		printHexDumpLevel(outBuf, cert.PublicKey.(*rsa.PublicKey).N.Bytes(), 5)
 		levelPrinter(outBuf, 4, "Exponent: %d (%4x)", cert.PublicKey.(*rsa.PublicKey).E, cert.PublicKey.(*rsa.PublicKey).E)
 	case *ecdsa.PublicKey:
 		bitLen = privKey.Curve.Params().BitSize
@@ -71,7 +101,7 @@ func prettyPrintCert(cert *x509.Certificate, outBuf *bytes.Buffer) (err error) {
 	}
 
 	levelPrinter(outBuf, 1, "Signature Algorithm: %s", cert.SignatureAlgorithm)
-	levelPrinter(outBuf, 2, "%02X", cert.Signature)
+	printHexDumpLevel(outBuf, cert.Signature, 2)
 
 	return
 }
