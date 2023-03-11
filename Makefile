@@ -55,9 +55,9 @@ endif
 
 .PHONY: fyne-cross
 fyne-cross:
-	fyne-cross linux $(ldflags) --tags gui --arch=* -output deen ./cmd/deen
-	fyne-cross windows $(ldflags) --tags gui --arch=* -output deen.exe ./cmd/deen
-	#fyne-cross darwin $(ldflags) --tags gui --arch=* -output deen-darwin ./cmd/deen
+	fyne-cross linux $(ldflags) --tags gui --arch=* -output ./bin/linux-fyne/deen ./cmd/deen
+	fyne-cross windows $(ldflags) --tags gui --arch=* -output ./bin/windows-fyne/deen.exe ./cmd/deen
+	fyne-cross darwin $(ldflags) --tags gui --arch=* -output ./bin/darwin-fyne/deen ./cmd/deen
 
 .PHONY: web
 web: 
