@@ -11,8 +11,8 @@ import (
 )
 
 var lzwTestData = []byte("deenLZWLZWLzwlzwtest data aiaosdoji OOAJDonaoasdoi asi")
-var lzwCompressedData = "64ca9471c344cb158308f5dc61b3904e99397440900943270c883069c2bc9943e68d9a34209e3c09a284c81b371bc3747c1372659a80"
-var lzwCompressedDataFlags = "6465656e4c5a5786887a776c8b746573742064617461206169616f73646f6a69204f4f414a446f6e9b619d6fa1ab6981"
+var lzwCompressedData = "00c99429e38689962b0611eab9c366219d3273e8802013864e181061d284793387cc1b3569403c7912440991376e3686e9f826e4ca340101"
+var lzwCompressedDataFlags = "806465656e4c5a5786887a776c8b746573742064617461206169616f73646f6a69204f4f414a446f6e9b619d6fa1ab6981"
 
 func TestPluginLzwProcessDeenTaskFunc(t *testing.T) {
 	destWriter := new(bytes.Buffer)
