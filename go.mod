@@ -13,8 +13,8 @@ require (
 	github.com/schollz/closestmatch v2.1.0+incompatible
 	github.com/tdewolff/minify/v2 v2.12.4
 	github.com/ulikunitz/xz v0.5.11
-	golang.org/x/crypto v0.7.0
-	golang.org/x/text v0.8.0
+	golang.org/x/crypto v0.14.0
+	golang.org/x/text v0.13.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	lukechampine.com/blake3 v1.1.7
 )
@@ -50,8 +50,8 @@ require (
 	github.com/yuin/goldmark v1.5.4 // indirect
 	golang.org/x/image v0.6.0 // indirect
 	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c // indirect
-	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/js/dom v0.0.0-20221001195520-26252dedbe70 // indirect
 )
