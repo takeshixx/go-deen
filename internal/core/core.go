@@ -50,9 +50,10 @@ func RunCLI() {
 	var err error
 	cmd := flag.Arg(0)
 	if !plugins.CmdAvailable(cmd) {
-		fmt.Println("Inavlid cmd", cmd)
+    		fmt.Fprintln(os.Stderr, "Invalid cmd", cmd)
 		return
 	}
+	
 	plugin := plugins.GetForCmd(cmd)
 	if strings.HasPrefix(cmd, ".") {
 		plugin.Unprocess = true
