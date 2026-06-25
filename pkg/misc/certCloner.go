@@ -110,7 +110,7 @@ func NewPluginCertCloner() (p *types.DeenPlugin) {
 	p.Name = "certCloner"
 	p.Aliases = []string{"clone"}
 	p.Category = "misc"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		// Example processing with SHA1
 		var err error

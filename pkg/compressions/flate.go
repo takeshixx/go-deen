@@ -47,7 +47,7 @@ func NewPluginFlate() (p *types.DeenPlugin) {
 	p.Name = "flate"
 	p.Aliases = []string{".flate"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doFlate(task, flate.DefaultCompression)
 	}
@@ -76,7 +76,7 @@ func NewPluginFlate() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "Implements the DEFLATE compressed data format (RFC1951).\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			levelDescription := "compression level\n" +
 				"  No compression:\t" + strconv.Itoa(flate.NoCompression) + "\n" +
 				"  Best speed:\t\t" + strconv.Itoa(flate.BestSpeed) + "\n" +

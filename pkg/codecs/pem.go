@@ -51,7 +51,7 @@ func NewPluginPEM() (p *types.DeenPlugin) {
 	p.Name = "pem"
 	p.Aliases = []string{".pem"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		encodePEM(task, "MESSAGE", make(map[string]string))
 	}
@@ -104,7 +104,7 @@ func NewPluginPEM() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "Privacy Enhanced Mail (PEM) data encoding/decoding. (RFC 1421)\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.String("type", "MESSAGE", "data type")
 			flags.String("headers", "", "message headers in JSON format")
 			flags.Bool("cert", false, "create a PEM encoded certificate")

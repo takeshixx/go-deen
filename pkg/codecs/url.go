@@ -17,7 +17,7 @@ func NewPluginURL() (p *types.DeenPlugin) {
 	p.Name = "url"
 	p.Aliases = []string{".url", "urlencode", ".urlencode"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var outBuf []byte
 		var err error

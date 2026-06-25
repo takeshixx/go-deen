@@ -21,7 +21,7 @@ func NewPluginScrypt() (p *types.DeenPlugin) {
 	p.Name = "scrypt"
 	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var inBuf bytes.Buffer
 		_, err := io.Copy(&inBuf, reader)

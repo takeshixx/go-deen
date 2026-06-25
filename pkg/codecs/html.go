@@ -17,7 +17,7 @@ func NewPluginHTML() (p *types.DeenPlugin) {
 	p.Name = "html"
 	p.Aliases = []string{".html"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var outBuf []byte
 		var err error

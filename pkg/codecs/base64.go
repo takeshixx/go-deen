@@ -64,7 +64,7 @@ func NewPluginBase64() (p *types.DeenPlugin) {
 	p.Name = "base64"
 	p.Aliases = []string{".base64", "b64", ".b64"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processBase64(base64.StdEncoding, task)
 	}

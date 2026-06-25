@@ -15,5 +15,5 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	core.RunCLI()
+	os.Exit(core.RunCLI())
 }

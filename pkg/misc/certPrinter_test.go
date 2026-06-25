@@ -87,7 +87,7 @@ func TestNewPluginCertPrinter(t *testing.T) {
 	if p.Name != "certPrinter" {
 		t.Errorf("unexpected plugin name: %s", p.Name)
 	}
-	if p.Unprocess {
+	if p.Unprocess_ {
 		t.Error("certPrinter should not support unprocessing")
 	}
 }

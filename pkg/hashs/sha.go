@@ -17,7 +17,7 @@ func NewPluginSHA1() (p *types.DeenPlugin) {
 	p.Name = "sha1"
 	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
 		hasher := sha1.New()

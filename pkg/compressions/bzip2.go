@@ -37,7 +37,7 @@ func NewPluginBzip2() (p *types.DeenPlugin) {
 	p.Name = "bzip2"
 	p.Aliases = []string{".bzip2"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doBZip2Compress(task, bzip2.DefaultCompression)
 	}
@@ -77,7 +77,7 @@ func NewPluginBzip2() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "BZip2 compressed data format.\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.Int("level", bzip2.DefaultCompression, "compression level from 1 (best speed) to 9 (best compression)")
 		}
 		flags.Parse(args)

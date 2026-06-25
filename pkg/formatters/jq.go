@@ -84,7 +84,7 @@ func NewPluginJQFormatter() (p *types.DeenPlugin) {
 	p.Name = "jq"
 	p.Aliases = []string{}
 	p.Category = "formatters"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processJQ(task, "", false, true)
 	}

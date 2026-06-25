@@ -113,7 +113,7 @@ func NewPluginCertPrinter() (p *types.DeenPlugin) {
 	p.Name = "certPrinter"
 	p.Aliases = []string{"cert", "x509"}
 	p.Category = "misc"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		return p.ProcessStreamWithCliFlagsFunc(nil, reader)
 	}

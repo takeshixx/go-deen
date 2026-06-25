@@ -7,15 +7,34 @@ import (
 	"log"
 )
 
+// TransformFunc is the unified entry point for a plugin operation. It reads
+// input from r, writes the transformed result to w and returns any error.
+// Implementations must return (not continue) on the first error.
+type TransformFunc func(r io.Reader, w io.Writer, flags *flag.FlagSet) error
+
 // DeenPlugin is the base struct for
 // each plugin instance.
 type DeenPlugin struct {
-	Name                            string
-	Aliases                         []string
-	Category                        string
-	Unprocess                       bool
+	Name        string
+	Aliases     []string
+	Category    string
+	Description string
+
+	// RegisterFlags registers plugin-specific CLI flags. It may be nil.
+	RegisterFlags func(*flag.FlagSet)
+	// Process performs the forward operation (encode/compress/hash/format).
+	Process TransformFunc
+	// Unprocess performs the reverse operation (decode/decompress). A nil
+	// value means the plugin is one-way (e.g. hashes).
+	Unprocess TransformFunc
+
+	// Command is the command with which the plugin was called.
+	Command string
+
+	// --- Deprecated: legacy fields kept until all plugins are ported to
+	// the Process/Unprocess contract above. Do not use in new code. ---
+	Unprocess_                      bool // legacy direction flag (renamed to avoid clash)
 	CliHelp                         string
-	Command                         string // The command with which the plugin was called
 	AddDefaultCliFunc               func(*DeenPlugin, *flag.FlagSet, []string) *flag.FlagSet
 	ProcessDeenTaskFunc             func(*DeenTask)
 	UnprocessDeenTaskFunc           func(*DeenTask)

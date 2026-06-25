@@ -17,7 +17,7 @@ func NewPluginHex() (p *types.DeenPlugin) {
 	p.Name = "hex"
 	p.Aliases = []string{".hex", "asciihex", ".asciihex"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
 			defer task.Close()

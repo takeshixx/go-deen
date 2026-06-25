@@ -44,7 +44,7 @@ func NewPluginStrconv() (p *types.DeenPlugin) {
 	p.Name = "strconv"
 	p.Aliases = []string{".strconv", "str", ".str"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processStrconv(task, false, false)
 	}
@@ -87,7 +87,7 @@ func NewPluginStrconv() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "Quote/Unquote strings and apply/remove escape characters.\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.Bool("ctrl", false, "only escape control sequences")
 			flags.Bool("graph", false, "escape to graphs")
 		}

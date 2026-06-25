@@ -132,7 +132,7 @@ func (de *DeenEncoder) Process() (processed []byte, err error) {
 			var outWriter bytes.Buffer
 			task := types.NewDeenTask(&outWriter)
 			task.Reader = reader
-			if de.Plugin.Unprocess {
+			if de.Plugin.Unprocess_ {
 				de.Plugin.UnprocessDeenTaskFunc(task)
 			} else {
 				de.Plugin.ProcessDeenTaskFunc(task)
@@ -143,7 +143,7 @@ func (de *DeenEncoder) Process() (processed []byte, err error) {
 			}
 			processed = outWriter.Bytes()
 		} else {
-			if de.Plugin.Unprocess {
+			if de.Plugin.Unprocess_ {
 				processed, err = de.Plugin.UnprocessStreamFunc(reader)
 			} else {
 				processed, err = de.Plugin.ProcessStreamFunc(reader)

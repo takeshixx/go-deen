@@ -3,7 +3,6 @@ package plugins
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -60,8 +59,50 @@ var pluginConstructors = []func() *types.DeenPlugin{
 }
 
 // PluginCategories is a list of plugin categories that
-// should be available accross all modules.
-var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "utils", "misc"}
+// should be available accross all modules. The order
+// determines how plugins are grouped in listings.
+var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "misc"}
+
+// constructorByKey maps every plugin name and alias (with any leading "."
+// stripped) to the constructor of the owning plugin. It is built once at
+// package initialisation so command lookups are O(1) and do not reconstruct
+// the whole plugin set on every call.
+var constructorByKey = map[string]func() *types.DeenPlugin{}
+
+// metadata holds a single instance of every plugin, built once for listings.
+var metadata []*types.DeenPlugin
+
+func init() {
+	for _, constructor := range pluginConstructors {
+		p := constructor()
+		metadata = append(metadata, p)
+		constructorByKey[lookupKey(p.Name)] = constructor
+		for _, alias := range p.Aliases {
+			constructorByKey[lookupKey(alias)] = constructor
+		}
+	}
+}
+
+// lookupKey normalises a command or alias to its canonical lookup form by
+// dropping the leading "." that marks the unprocess (decode) direction.
+func lookupKey(cmd string) string {
+	return strings.TrimPrefix(cmd, ".")
+}
+
+// Resolve returns a fresh plugin instance for the given command along with the
+// requested direction. A command prefixed with "." requests the unprocess
+// (decode) direction. ok is false when no plugin matches.
+func Resolve(cmd string) (plugin *types.DeenPlugin, unprocess bool, ok bool) {
+	constructor, found := constructorByKey[lookupKey(cmd)]
+	if !found {
+		return nil, false, false
+	}
+	plugin = constructor()
+	unprocess = strings.HasPrefix(cmd, ".")
+	plugin.Command = lookupKey(cmd)
+	plugin.Unprocess_ = unprocess
+	return plugin, unprocess, true
+}
 
 type pluginDescription struct {
 	Name    string
@@ -71,41 +112,26 @@ type pluginDescription struct {
 // PrintAvailable prints a list of available plugins
 // and their aliases.
 func PrintAvailable(outputJSON bool) {
-	var pluginList []*types.DeenPlugin
-	for _, constructor := range pluginConstructors {
-		p := constructor()
-		pluginList = append(pluginList, p)
-	}
-	var jsonObj map[string][]pluginDescription
-	jsonObj = make(map[string][]pluginDescription)
+	jsonObj := make(map[string][]pluginDescription)
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
 	for _, category := range PluginCategories {
 		if !outputJSON {
 			fmt.Fprintf(w, "%s:\n", category)
 		}
-		for _, p := range pluginList {
+		for _, p := range metadata {
 			if p.Category != category {
 				continue
 			}
-			if len(p.Aliases) > 0 {
-				if outputJSON {
-					jsonObj[category] = append(jsonObj[category], pluginDescription{
-						Name:    p.Name,
-						Aliases: []string{},
-					})
-				} else {
-					fmt.Fprintf(w, " \t%s\t%s\n", p.Name, p.Aliases)
-				}
+			if outputJSON {
+				jsonObj[category] = append(jsonObj[category], pluginDescription{
+					Name:    p.Name,
+					Aliases: p.Aliases,
+				})
+			} else if len(p.Aliases) > 0 {
+				fmt.Fprintf(w, " \t%s\t%v\n", p.Name, p.Aliases)
 			} else {
-				if outputJSON {
-					jsonObj[category] = append(jsonObj[category], pluginDescription{
-						Name:    p.Name,
-						Aliases: []string{},
-					})
-				} else {
-					fmt.Fprintf(w, " \t%s\n", p.Name)
-				}
+				fmt.Fprintf(w, " \t%s\n", p.Name)
 			}
 		}
 		if !outputJSON {
@@ -115,7 +141,8 @@ func PrintAvailable(outputJSON bool) {
 	if outputJSON {
 		encoded, err := json.Marshal(jsonObj)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Fprintln(os.Stderr, "deen: failed to encode plugin list:", err)
+			return
 		}
 		fmt.Println(string(encoded))
 	} else {
@@ -123,64 +150,38 @@ func PrintAvailable(outputJSON bool) {
 	}
 }
 
-// CmdAvailable checks if the given cmd is the name or
-// or a alias of an available plugin.
+// CmdAvailable reports whether cmd is the name or alias of an available plugin.
 func CmdAvailable(cmd string) bool {
-	for _, constructor := range pluginConstructors {
-		p := constructor()
-		if cmd == p.Name {
-			return true
-		}
-		for _, alias := range p.Aliases {
-			if alias == cmd {
-				return true
-			}
-		}
-	}
-	return false
+	_, ok := constructorByKey[lookupKey(cmd)]
+	return ok
 }
 
-// GetForCmd returns the plugin object for a given cmd
-func GetForCmd(cmd string) (plugin *types.DeenPlugin) {
-	for _, constructor := range pluginConstructors {
-		p := constructor()
-		if p.Name == cmd {
-			plugin = p
-			break
-		} else {
-			for _, alias := range p.Aliases {
-				if alias == cmd {
-					plugin = p
-					break
-				}
-			}
-		}
+// GetForCmd returns a fresh plugin instance for a given cmd, or nil if none
+// matches. A "." prefix selects the unprocess direction.
+func GetForCmd(cmd string) *types.DeenPlugin {
+	plugin, _, ok := Resolve(cmd)
+	if !ok {
+		return nil
 	}
-	if plugin != nil && strings.HasPrefix(cmd, ".") {
-		plugin.Unprocess = true
-	}
-	// TODO: the function should return an error object
-	return
+	return plugin
 }
 
-// GetForCategory returns plugin names for a given category
+// GetForCategory returns plugin names for a given category. When aliases is
+// false only the plugin name (plus its "."-prefixed unprocess alias, if any)
+// is returned; when true every alias is included.
 func GetForCategory(category string, aliases bool) []string {
 	var r []string
-	for _, constructor := range pluginConstructors {
-		p := constructor()
-		if p.Category == category {
-			r = append(r, p.Name)
-			if aliases == false {
-				if len(p.Aliases) > 0 {
-					if p.Aliases[0] == "."+p.Name {
-						r = append(r, p.Aliases[0])
-					}
-				}
-			} else if aliases && len(p.Aliases) > 0 {
-				for _, alias := range p.Aliases {
-					r = append(r, alias)
-				}
+	for _, p := range metadata {
+		if p.Category != category {
+			continue
+		}
+		r = append(r, p.Name)
+		if !aliases {
+			if len(p.Aliases) > 0 && p.Aliases[0] == "."+p.Name {
+				r = append(r, p.Aliases[0])
 			}
+		} else {
+			r = append(r, p.Aliases...)
 		}
 	}
 	return r

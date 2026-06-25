@@ -34,7 +34,7 @@ func NewPluginZlib() (p *types.DeenPlugin) {
 	p.Name = "zlib"
 	p.Aliases = []string{".zlib"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doZlibCompress(task, zlib.DefaultCompression)
 	}
@@ -75,7 +75,7 @@ func NewPluginZlib() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "Implements reading and writing of zlib format compressed data (RFC1950).\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.Int("level", zlib.DefaultCompression, "compression level from 1 (best speed) to 9 (best compression)")
 		}
 		flags.Parse(args)

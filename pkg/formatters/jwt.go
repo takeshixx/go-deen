@@ -428,7 +428,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 	p.Name = "jwt"
 	p.Aliases = []string{".jwt"}
 	p.Category = "formatters"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var outBuf bytes.Buffer
 		var err error
@@ -559,7 +559,7 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 	}
 	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
 		flags.Init(p.Name, flag.ExitOnError)
-		if self.Unprocess {
+		if self.Unprocess_ {
 			// Decoding
 			flags.Usage = func() {
 				fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)

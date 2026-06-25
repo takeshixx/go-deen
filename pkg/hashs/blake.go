@@ -47,7 +47,7 @@ func NewPluginBLAKE2x() (p *types.DeenPlugin) {
 	p.Name = "blake2x"
 	p.Aliases = []string{"b2x"}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		return doBLAKE2x(&reader, nil, uint16(32))
 	}
@@ -119,7 +119,7 @@ func NewPluginBLAKE2s() (p *types.DeenPlugin) {
 	p.Name = "blake2s"
 	p.Aliases = []string{"b2s"}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		return doBLAKE2s(&reader, nil, 32)
 	}
@@ -182,7 +182,7 @@ func NewPluginBLAKE2b() (p *types.DeenPlugin) {
 	p.Name = "blake2b"
 	p.Aliases = []string{"b2b"}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		return doBLAKE2b(&reader, nil, 64)
 	}
@@ -250,7 +250,7 @@ func NewPluginBLAKE3() (p *types.DeenPlugin) {
 	p.Name = "blake3"
 	p.Aliases = []string{"b3"}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		return doBLAKE3(32, &reader, []byte{}, false, "")
 	}

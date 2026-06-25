@@ -18,7 +18,7 @@ func NewPluginBcrypt() (p *types.DeenPlugin) {
 	p.Name = "bcrypt"
 	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
 		var inBuf bytes.Buffer

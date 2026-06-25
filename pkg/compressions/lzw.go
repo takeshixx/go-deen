@@ -48,7 +48,7 @@ func NewPluginLzw() (p *types.DeenPlugin) {
 	p.Name = "lzw"
 	p.Aliases = []string{".lzw"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doLzwCompress(task, lzw.LSB, 8)
 	}

@@ -47,7 +47,7 @@ func NewPluginBrotli() (p *types.DeenPlugin) {
 	p.Name = "brotli"
 	p.Aliases = []string{".brotli", "br", ".br"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		options := &brotli.WriterOptions{
 			Quality: brotli.DefaultCompression,

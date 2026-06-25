@@ -191,7 +191,7 @@ func (dg *DeenGUI) updateEncoderWidgets() {
 	for _, e := range dg.Encoders {
 		dg.EncoderWidgets.Add(e.createLayout())
 		if e.Plugin != nil {
-			if e.Plugin.Unprocess {
+			if e.Plugin.Unprocess_ {
 				historyName = "." + e.Plugin.Name
 			} else {
 				historyName = e.Plugin.Name

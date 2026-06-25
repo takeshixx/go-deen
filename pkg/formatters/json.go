@@ -62,7 +62,7 @@ func NewPluginJSONFormatter() (p *types.DeenPlugin) {
 	p.Name = "json"
 	p.Aliases = []string{".json"}
 	p.Category = "formatters"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processJSONFormat(task)
 	}
@@ -101,7 +101,7 @@ func NewPluginJSONFormatter() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "JSON formatter plugin that processes JSON to a readable,\nprettified representation, and unprocesses beautified\nJSON to minified JSON.\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.Bool("no-color", false, "omit colors in output")
 		}
 		flags.Parse(args)

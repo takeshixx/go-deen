@@ -44,7 +44,7 @@ func NewPluginBase32() (p *types.DeenPlugin) {
 	p.Name = "base32"
 	p.Aliases = []string{".base32", "b32", ".b32"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		processBase32(base32.StdEncoding, task)
 	}
@@ -81,7 +81,7 @@ func NewPluginBase32() (p *types.DeenPlugin) {
 			flags.PrintDefaults()
 		}
 		flags.Bool("hex", false, "use \"Extended Hex Alphabet\" defined in RFC 4648")
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.Bool("no-pad", false, "disable padding")
 		}
 		flags.Parse(args)

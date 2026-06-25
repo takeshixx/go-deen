@@ -17,7 +17,7 @@ func NewPluginLZMA() (p *types.DeenPlugin) {
 	p.Name = "lzma"
 	p.Aliases = []string{".lzma"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
 			defer task.Close()
@@ -72,7 +72,7 @@ func NewPluginLZMA2() (p *types.DeenPlugin) {
 	p.Name = "lzma2"
 	p.Aliases = []string{".lzma2"}
 	p.Category = "compression"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
 			defer task.Close()

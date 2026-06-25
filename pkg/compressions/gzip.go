@@ -34,7 +34,7 @@ func NewPluginGzip() (p *types.DeenPlugin) {
 	p.Name = "gzip"
 	p.Aliases = []string{".gzip"}
 	p.Category = "compressions"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		doGzipCompress(task, gzip.DefaultCompression)
 	}
@@ -75,7 +75,7 @@ func NewPluginGzip() (p *types.DeenPlugin) {
 			fmt.Fprintf(os.Stderr, "Implements reading and writing of gzip format compressed files (RFC1952).\n\n")
 			flags.PrintDefaults()
 		}
-		if !self.Unprocess {
+		if !self.Unprocess_ {
 			flags.Int("level", gzip.DefaultCompression, "compression level from 1 (best speed) to 9 (best compression)")
 		}
 		flags.Parse(args)

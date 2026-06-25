@@ -22,7 +22,7 @@ func NewPluginMD4() (p *types.DeenPlugin) {
 	p.Name = "md4"
 	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
 			hasher := md4.New()
@@ -60,7 +60,7 @@ func NewPluginMD5() (p *types.DeenPlugin) {
 	p.Name = "md5"
 	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
 		hasher := md5.New()
@@ -91,7 +91,7 @@ func NewPluginRIPEMD160() (p *types.DeenPlugin) {
 	p.Name = "ripemd160"
 	p.Aliases = []string{"md160"}
 	p.Category = "hash"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
 		var err error
 		hasher := ripemd160.New()

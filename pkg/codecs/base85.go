@@ -19,7 +19,7 @@ func NewPluginBase85() (p *types.DeenPlugin) {
 		"ascii85", ".ascii85", "a85",
 		".a85"}
 	p.Category = "codecs"
-	p.Unprocess = false
+	p.Unprocess_ = false
 	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
 		go func() {
 			defer task.Close()
