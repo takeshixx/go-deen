@@ -3,89 +3,41 @@ package codecs
 import (
 	"encoding/base32"
 	"flag"
-	"fmt"
 	"io"
-	"os"
 
 	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func processBase32(encoding *base32.Encoding, task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		encoder := base32.NewEncoder(encoding, task.PipeWriter)
-		_, err := io.Copy(encoder, task.Reader)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		err = encoder.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
+func base32Encoding(flags *flag.FlagSet) *base32.Encoding {
+	enc := base32.StdEncoding
+	if helpers.IsBoolFlag(flags, "hex") {
+		enc = base32.HexEncoding
+	}
+	if helpers.IsBoolFlag(flags, "no-pad") {
+		enc = enc.WithPadding(base32.NoPadding)
+	}
+	return enc
 }
 
-func unprocessBas32(encoding *base32.Encoding, task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		decoder := base32.NewDecoder(encoding, task.Reader)
-		_, err := io.Copy(task.PipeWriter, decoder)
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
-}
-
-// NewPluginBase32 creates a new PluginBase32 object
-// Standard base32 encoding, as defined in RFC 4648
-func NewPluginBase32() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginBase32 creates a new base32 plugin (RFC 4648).
+func NewPluginBase32() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "base32"
 	p.Aliases = []string{".base32", "b32", ".b32"}
 	p.Category = "codecs"
-	p.Unprocess_ = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		processBase32(base32.StdEncoding, task)
-	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		unprocessBas32(base32.StdEncoding, task)
-	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		var enc *base32.Encoding
-		noPad := helpers.IsBoolFlag(flags, "no-pad")
-		if helpers.IsBoolFlag(flags, "hex") {
-			enc = base32.HexEncoding
-		} else {
-			enc = base32.StdEncoding
-		}
-		if noPad {
-			enc = enc.WithPadding(base32.NoPadding)
-		}
-		processBase32(enc, task)
-	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		var enc *base32.Encoding
-		if helpers.IsBoolFlag(flags, "hex") {
-			enc = base32.HexEncoding
-		} else {
-			enc = base32.StdEncoding
-		}
-		unprocessBas32(enc, task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Base32 encoding as specified by RFC 4648.\n\n")
-			flags.PrintDefaults()
-		}
+	p.Description = "Base32 encoding as specified by RFC 4648."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
 		flags.Bool("hex", false, "use \"Extended Hex Alphabet\" defined in RFC 4648")
-		if !self.Unprocess_ {
-			flags.Bool("no-pad", false, "disable padding")
-		}
-		flags.Parse(args)
-		return flags
+		flags.Bool("no-pad", false, "disable padding")
 	}
-	return
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		enc := base32Encoding(flags)
+		return encodeStream(r, w, func(w io.Writer) io.WriteCloser { return base32.NewEncoder(enc, w) })
+	}
+	p.Unprocess = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		enc := base32Encoding(flags)
+		return decodeTrimmed(r, w, func(r io.Reader) io.Reader { return base32.NewDecoder(enc, r) })
+	}
+	return p
 }

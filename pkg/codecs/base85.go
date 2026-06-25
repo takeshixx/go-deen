@@ -3,58 +3,23 @@ package codecs
 import (
 	"encoding/ascii85"
 	"flag"
-	"fmt"
 	"io"
-	"os"
 
-	"github.com/pkg/errors"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-// NewPluginBase85 creates a new PluginBase85 object
-func NewPluginBase85() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginBase85 creates a new ascii85 plugin.
+func NewPluginBase85() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "base85"
-	p.Aliases = []string{".base85", "b85", ".b85",
-		"ascii85", ".ascii85", "a85",
-		".a85"}
+	p.Aliases = []string{".base85", "b85", ".b85", "ascii85", ".ascii85", "a85", ".a85"}
 	p.Category = "codecs"
-	p.Unprocess_ = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			encoder := ascii85.NewEncoder(task.PipeWriter)
-			_, err := io.Copy(encoder, task.Reader)
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Copying into encoder in Base85 failed")
-			}
-			err = encoder.Close()
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Closing encoder in Base85 failed")
-			}
-		}()
+	p.Description = "Implements the ascii85 data encoding as used in the btoa tool and\nAdobe's PostScript and PDF document formats."
+	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return encodeStream(r, w, func(w io.Writer) io.WriteCloser { return ascii85.NewEncoder(w) })
 	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			wrappedReader := types.TrimReader{}
-			wrappedReader.Rd = task.Reader
-			decoder := ascii85.NewDecoder(wrappedReader)
-			_, err := io.Copy(task.PipeWriter, decoder)
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Copy in Base85 failed")
-			}
-		}()
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return decodeTrimmed(r, w, func(r io.Reader) io.Reader { return ascii85.NewDecoder(r) })
 	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Implements the ascii85 data encoding as used in\nthe btoa tool and Adobe's PostScript and PDF\ndocument formats.\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }

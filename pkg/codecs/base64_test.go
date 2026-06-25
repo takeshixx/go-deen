@@ -2,198 +2,28 @@ package codecs
 
 import (
 	"bytes"
-	"os"
-	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/takeshixx/deen/pkg/helpers"
-	"github.com/takeshixx/deen/pkg/types"
 )
 
-var b64InputData = "asd123<<<<>>>>deentestdata23xxxx"
+var b64InputData = []byte("asd123<<<<>>>>deentestdata23xxxx")
 var b64InputDataProcessed = []byte("YXNkMTIzPDw8PD4+Pj5kZWVudGVzdGRhdGEyM3h4eHg=")
 var b64InputDataProcessedURL = []byte("YXNkMTIzPDw8PD4-Pj5kZWVudGVzdGRhdGEyM3h4eHg=")
 
-func TestNewPluginBase64(t *testing.T) {
+func TestPluginBase64Process(t *testing.T) {
 	p := NewPluginBase64()
-	if reflect.TypeOf(p) != reflect.TypeOf(&types.DeenPlugin{}) {
-		t.Errorf("Invalid return type for NewPluginBase64: %s", reflect.TypeOf(p))
-	}
+	assertCodec(t, p, p.Process, b64InputData, b64InputDataProcessed)
+	assertCodec(t, p, p.Process, b64InputData, b64InputDataProcessedURL, "-url")
+	assertCodec(t, p, p.Process, b64InputData, bytes.ReplaceAll(b64InputDataProcessed, []byte("="), nil), "-raw")
+	assertCodec(t, p, p.Process, b64InputData, bytes.ReplaceAll(b64InputDataProcessedURL, []byte("="), nil), "-raw", "-url")
 }
 
-func TestPluginBase64ProcessDeenTaskFunc(t *testing.T) {
-	destWriter := new(bytes.Buffer)
-	task := types.NewDeenTask(destWriter)
-	task.Reader = strings.NewReader(b64InputData)
-	plugin := NewPluginBase64()
-	plugin.ProcessDeenTaskFunc(task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), b64InputDataProcessed); c != 0 {
-			t.Errorf("TestPluginBase64ProcessDeenTaskFunc data wrong: %s != %s", destWriter.Bytes(), b64InputDataProcessed)
-		}
-	}
-}
-
-func TestPluginBase64UnprocessDeenTaskFunc(t *testing.T) {
-	destWriter := new(bytes.Buffer)
-	task := types.NewDeenTask(destWriter)
-	task.Reader = bytes.NewReader(b64InputDataProcessed)
-	plugin := NewPluginBase64()
-	plugin.UnprocessDeenTaskFunc(task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), []byte(b64InputData)); c != 0 {
-			t.Errorf("TestPluginBase64UnprocessDeenTaskFunc data wrong: %s != %s", destWriter.Bytes(), b64InputData)
-		}
-	}
-}
-
-func TestPluginBase64ProcessDeenTaskWithFlags(t *testing.T) {
-	destWriter := new(bytes.Buffer)
-	task := types.NewDeenTask(destWriter)
-	task.Reader = strings.NewReader(b64InputData)
-	plugin := NewPluginBase64()
-	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{""})
-	plugin.ProcessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), b64InputDataProcessed); c != 0 {
-			t.Errorf("TestPluginBase64ProcessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), b64InputDataProcessed)
-		}
-	}
-
-	destWriter = new(bytes.Buffer)
-	task = types.NewDeenTask(destWriter)
-	task.Reader = strings.NewReader(b64InputData)
-	plugin = NewPluginBase64()
-	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-url"})
-	plugin.ProcessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), b64InputDataProcessedURL); c != 0 {
-			t.Errorf("TestPluginBase64ProcessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), b64InputDataProcessedURL)
-		}
-	}
-
-	destWriter = new(bytes.Buffer)
-	task = types.NewDeenTask(destWriter)
-	task.Reader = strings.NewReader(b64InputData)
-	plugin = NewPluginBase64()
-	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw"})
-	plugin.ProcessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), bytes.ReplaceAll(b64InputDataProcessed, []byte("="), []byte(""))); c != 0 {
-			t.Errorf("TestPluginBase64ProcessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), bytes.ReplaceAll(b64InputDataProcessed, []byte("="), []byte("")))
-		}
-	}
-
-	destWriter = new(bytes.Buffer)
-	task = types.NewDeenTask(destWriter)
-	task.Reader = strings.NewReader(b64InputData)
-	plugin = NewPluginBase64()
-	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw", "-url"})
-	plugin.ProcessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), bytes.ReplaceAll(b64InputDataProcessedURL, []byte("="), []byte(""))); c != 0 {
-			t.Errorf("TestPluginBase64ProcessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), bytes.ReplaceAll(b64InputDataProcessedURL, []byte("="), []byte("")))
-		}
-	}
-}
-
-func TestPluginBase64UnprocessDeenTaskWithFlags(t *testing.T) {
-	destWriter := new(bytes.Buffer)
-	task := types.NewDeenTask(destWriter)
-	task.Reader = bytes.NewReader(b64InputDataProcessed)
-	plugin := NewPluginBase64()
-	flags := helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{""})
-	plugin.UnprocessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), []byte(b64InputData)); c != 0 {
-			t.Errorf("TestPluginBase64UnprocessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), []byte(b64InputData))
-		}
-	}
-
-	destWriter = new(bytes.Buffer)
-	task = types.NewDeenTask(destWriter)
-	task.Reader = bytes.NewReader(b64InputDataProcessedURL)
-	plugin = NewPluginBase64()
-	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-url"})
-	plugin.UnprocessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), []byte(b64InputData)); c != 0 {
-			t.Errorf("TestPluginBase64UnprocessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), []byte(b64InputData))
-		}
-	}
-
-	destWriter = new(bytes.Buffer)
-	task = types.NewDeenTask(destWriter)
-	task.Reader = bytes.NewReader(bytes.ReplaceAll(b64InputDataProcessed, []byte("="), []byte("")))
-	plugin = NewPluginBase64()
-	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw"})
-	plugin.UnprocessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), []byte(b64InputData)); c != 0 {
-			t.Errorf("TestPluginBase64UnprocessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), []byte(b64InputData))
-		}
-	}
-
-	destWriter = new(bytes.Buffer)
-	task = types.NewDeenTask(destWriter)
-	task.Reader = bytes.NewReader(bytes.ReplaceAll(b64InputDataProcessedURL, []byte("="), []byte("")))
-	plugin = NewPluginBase64()
-	flags = helpers.DefaultFlagSet()
-	flags = plugin.AddDefaultCliFunc(plugin, flags, []string{"-raw", "-url"})
-	plugin.UnprocessDeenTaskWithFlags(flags, task)
-	select {
-	case err := <-task.ErrChan:
-		t.Error(err)
-	case <-task.DoneChan:
-		if c := bytes.Compare(destWriter.Bytes(), []byte(b64InputData)); c != 0 {
-			t.Errorf("TestPluginBase64UnprocessDeenTaskWithFlags data wrong: %s != %s", destWriter.Bytes(), []byte(b64InputData))
-		}
-	}
-}
-
-func TestPluginBase64Usage(t *testing.T) {
+func TestPluginBase64Unprocess(t *testing.T) {
 	p := NewPluginBase64()
-	flags := helpers.DefaultFlagSet()
-	flags = p.AddDefaultCliFunc(p, flags, []string{})
-	_, w, err := os.Pipe()
-	if err != nil {
-		t.Error(err)
-	}
-	os.Stderr = w
-	flags.Usage()
+	// Default decode auto-detects the alphabet.
+	assertCodec(t, p, p.Unprocess, b64InputDataProcessed, b64InputData)
+	assertCodec(t, p, p.Unprocess, b64InputDataProcessedURL, b64InputData)
+	assertCodec(t, p, p.Unprocess, bytes.ReplaceAll(b64InputDataProcessed, []byte("="), nil), b64InputData)
+	// Explicit flags.
+	assertCodec(t, p, p.Unprocess, b64InputDataProcessedURL, b64InputData, "-url")
+	assertCodec(t, p, p.Unprocess, b64InputDataProcessed, b64InputData, "-strict")
 }
