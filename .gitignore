@@ -12,10 +12,14 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
 
 bin/
 internal/oldgui/
 *.bak
 .scannerwork
 *.vsix
+
+# Editor and OS files
+.vscode/
+.DS_Store
