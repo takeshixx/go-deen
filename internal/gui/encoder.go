@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -29,6 +30,7 @@ type DeenEncoder struct {
 	CopyButton  *widget.Button // Copy the content of the encoder to the clipboard
 	ClearButton *widget.Button // Clear the contents of the encoder/Remove the encoder widget
 	Plugin      *types.DeenPlugin
+	Unprocess   bool // Whether the plugin runs in the decode direction
 }
 
 // NewDeenEncoderWidget initializes a new DeenEconder widget.
@@ -127,31 +129,24 @@ func (de *DeenEncoder) Process() (processed []byte, err error) {
 			return
 		}
 	}
-	if de.Plugin != nil {
-		if de.Plugin.ProcessDeenTaskFunc != nil {
-			var outWriter bytes.Buffer
-			task := types.NewDeenTask(&outWriter)
-			task.Reader = reader
-			if de.Plugin.Unprocess_ {
-				de.Plugin.UnprocessDeenTaskFunc(task)
-			} else {
-				de.Plugin.ProcessDeenTaskFunc(task)
-			}
-			select {
-			case err = <-task.ErrChan:
-			case <-task.DoneChan:
-			}
-			processed = outWriter.Bytes()
-		} else {
-			if de.Plugin.Unprocess_ {
-				processed, err = de.Plugin.UnprocessStreamFunc(reader)
-			} else {
-				processed, err = de.Plugin.ProcessStreamFunc(reader)
-			}
-		}
-	} else {
-		err = errors.New("Plugin not set")
+	if de.Plugin == nil {
+		return nil, errors.New("plugin not set")
 	}
+	transform := de.Plugin.Process
+	if de.Unprocess {
+		if de.Plugin.Unprocess == nil {
+			return nil, fmt.Errorf("%s does not support decoding", de.Plugin.Name)
+		}
+		transform = de.Plugin.Unprocess
+	}
+	fs := flag.NewFlagSet(de.Plugin.Name, flag.ContinueOnError)
+	if de.Plugin.RegisterFlags != nil {
+		de.Plugin.RegisterFlags(fs)
+	}
+	_ = fs.Parse(nil)
+	var out bytes.Buffer
+	err = transform(reader, &out, fs)
+	processed = out.Bytes()
 	return
 }
 

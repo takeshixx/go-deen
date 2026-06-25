@@ -11,13 +11,14 @@ import (
 
 // RunPlugin executes a given plugin
 func (dg *DeenGUI) RunPlugin(pluginCmd string) {
-	plugin := plugins.GetForCmd(pluginCmd)
-	if plugin == nil {
+	plugin, unprocess, ok := plugins.Resolve(pluginCmd)
+	if !ok {
 		return
 	}
 	log.Printf("[DEBUG] Found plugin: %s\n", plugin.Name)
 	ce := dg.CurrentEncoder()
 	ce.Plugin = plugin
+	ce.Unprocess = unprocess
 	dg.updateGUI()
 }
 
