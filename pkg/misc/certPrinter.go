@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"regexp"
 	"strings"
 
@@ -84,7 +83,7 @@ func prettyPrintCert(cert *x509.Certificate, outBuf *bytes.Buffer) (err error) {
 	case *ed25519.PublicKey:
 		bitLen = 32 * 8
 	default:
-		log.Fatal("unsupported private key")
+		return fmt.Errorf("unsupported public key type %T", cert.PublicKey)
 	}
 
 	levelPrinter(outBuf, 2, "X509v3 extensions:")
