@@ -1,28 +1,26 @@
 package misc
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
 	"crypto/x509"
 	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
 // readCertsAndKeyFromFile calls readCertFromBuffer() with
 // bytes read from a given file.
 func readCertsAndKeyFromFile(path string) (cert *x509.Certificate, key interface{}, err error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,50 +101,41 @@ func generateKeyPair(cert *x509.Certificate) (newPrivateKey, newPublicKey interf
 	return
 }
 
-// NewPluginCertCloner creates a new certificate cloner
-// plugin.
-func NewPluginCertCloner() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginCertCloner creates a new certificate cloner plugin.
+func NewPluginCertCloner() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "certCloner"
 	p.Aliases = []string{"clone"}
 	p.Category = "misc"
-	p.Unprocess_ = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		// Example processing with SHA1
-		var err error
-		hasher := sha1.New()
-		if _, err := io.Copy(hasher, reader); err != nil {
-			return nil, err
-		}
-		hashSum := hasher.Sum(nil)
-		return hashSum, err
+	p.Description = "x509 certificate cloner."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.String("ca-cert", "", "CA certificate and private key in PEM format")
 	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		caCertFlag := flags.Lookup("ca-cert")
-		caCertVal := caCertFlag.Value.String()
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		caCertVal := helpers.StringFlag(flags, "ca-cert")
 		if caCertVal != "" {
 			if _, err := os.Stat(caCertVal); err != nil {
-				return nil, err
+				return err
 			}
 		}
 
-		inBuf := new(bytes.Buffer)
-		inBuf.ReadFrom(reader)
-		inputCert := inBuf.Bytes()
+		inputCert, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
 
 		cert, _, err := readCertFromBuffer(inputCert)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		// Prepare keys for new certificate
+		// Prepare keys for the new certificate.
 		newPrivateKey, newPublicKey, err := generateKeyPair(cert)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		// Create the new certificate with all extensions
-		// and the new public key.
+		// Create the new certificate with all extensions and the new key.
 		newCert := cert
 		newCert.ExtraExtensions = newCert.Extensions
 		newCert.PublicKey = newPublicKey
@@ -157,53 +146,29 @@ func NewPluginCertCloner() (p *types.DeenPlugin) {
 		if caCertVal != "" {
 			issuerCert, issuerKey, err = readCertsAndKeyFromFile(caCertVal)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		} else {
-			// Clone the original cert and make sure
-			//	- extensions are copied
-			//	- Subject set to original certs Issuer
-			//  - RawIssuer set to original certs RawIssuer
+			// Self-sign: copy extensions and set subject to the original issuer.
 			issuerCert = cert
 			issuerCert.ExtraExtensions = cert.Extensions
 			issuerCert.Subject = cert.Issuer
 			issuerCert.RawSubject = cert.RawIssuer
-			// For self-signing, we use the new certs' private key
 			issuerKey = newPrivateKey
 		}
 
-		var outBytes, derBytes []byte
-		outBytesBuf := bytes.NewBuffer(outBytes)
-
-		// Create the certificate
-		derBytes, err = x509.CreateCertificate(rand.Reader, newCert, issuerCert, newPublicKey, issuerKey)
+		derBytes, err := x509.CreateCertificate(rand.Reader, newCert, issuerCert, newPublicKey, issuerKey)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		if err = pem.Encode(outBytesBuf, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-			return nil, err
+		if err = pem.Encode(w, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+			return err
 		}
-
-		if err = pem.Encode(outBytesBuf, &pem.Block{
+		return pem.Encode(w, &pem.Block{
 			Type:  "RSA PRIVATE KEY",
 			Bytes: x509.MarshalPKCS1PrivateKey(newPrivateKey.(*rsa.PrivateKey)),
-		}); err != nil {
-			return nil, err
-		}
-
-		return outBytesBuf.Bytes(), nil
+		})
 	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "x509 certificate cloner.\n\n")
-			flags.PrintDefaults()
-		}
-		flags.String("ca-cert", "", "CA certificate and private key in PEM format")
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }

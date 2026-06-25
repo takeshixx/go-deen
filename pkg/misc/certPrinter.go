@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"regexp"
 	"strings"
 
@@ -108,22 +107,18 @@ func prettyPrintCert(cert *x509.Certificate, outBuf *bytes.Buffer) (err error) {
 
 // NewPluginCertPrinter creates a x509 certificate pretty
 // printing plugin.
-func NewPluginCertPrinter() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+func NewPluginCertPrinter() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "certPrinter"
 	p.Aliases = []string{"cert", "x509"}
 	p.Category = "misc"
-	p.Unprocess_ = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		return p.ProcessStreamWithCliFlagsFunc(nil, reader)
-	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		inBuf := new(bytes.Buffer)
-		inBuf.ReadFrom(reader)
-		inputCert := inBuf.Bytes()
+	p.Description = "x509 certificate pretty printer."
+	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		inputCert, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
 		var cert *x509.Certificate
-		var err error
-
 		for {
 			block, rest := pem.Decode(inputCert)
 			if block == nil {
@@ -132,38 +127,26 @@ func NewPluginCertPrinter() (p *types.DeenPlugin) {
 			if block.Type == "CERTIFICATE" {
 				cert, err = x509.ParseCertificate(block.Bytes)
 				if err != nil {
-					return nil, err
+					return err
 				}
 				break
 			}
 			inputCert = rest
 		}
-
-		var outBytes []byte
-		outBytesBuf := bytes.NewBuffer(outBytes)
-
-		err = prettyPrintCert(cert, outBytesBuf)
-		if err != nil {
-			return nil, err
+		if cert == nil {
+			return fmt.Errorf("no certificate found in input")
 		}
 
-		// Print the full PEM encoded cert at the end
-		err = pem.Encode(outBytesBuf, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
-		if err != nil {
-			return nil, err
+		outBuf := new(bytes.Buffer)
+		if err = prettyPrintCert(cert, outBuf); err != nil {
+			return err
 		}
-
-		return outBytesBuf.Bytes(), nil
+		// Append the full PEM encoded cert.
+		if err = pem.Encode(outBuf, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}); err != nil {
+			return err
+		}
+		_, err = w.Write(outBuf.Bytes())
+		return err
 	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "x509 certificate pretty printer.\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }

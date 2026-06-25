@@ -75,11 +75,11 @@ d0lIKO2d1xozclOzgjXPYovJJIultzkMu34qQb9Sz/yilrbCgj8=
 func runCertPrinter(t *testing.T, cert string) string {
 	t.Helper()
 	p := NewPluginCertPrinter()
-	out, err := p.ProcessStreamFunc(strings.NewReader(cert))
-	if err != nil {
-		t.Fatalf("certPrinter ProcessStreamFunc failed: %s", err)
+	var out bytes.Buffer
+	if err := p.Process(strings.NewReader(cert), &out, nil); err != nil {
+		t.Fatalf("certPrinter Process failed: %s", err)
 	}
-	return string(out)
+	return out.String()
 }
 
 func TestNewPluginCertPrinter(t *testing.T) {
@@ -87,7 +87,7 @@ func TestNewPluginCertPrinter(t *testing.T) {
 	if p.Name != "certPrinter" {
 		t.Errorf("unexpected plugin name: %s", p.Name)
 	}
-	if p.Unprocess_ {
+	if p.Unprocess != nil {
 		t.Error("certPrinter should not support unprocessing")
 	}
 }
