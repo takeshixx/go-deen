@@ -1,6 +1,12 @@
 package misc
 
-CertRSA := `-----BEGIN CERTIFICATE-----
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
+
+var certRSA = `-----BEGIN CERTIFICATE-----
 MIIFYDCCBEigAwIBAgIQQAF3ITfU6UK47naqPGQKtzANBgkqhkiG9w0BAQsFADA/
 MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
 DkRTVCBSb290IENBIFgzMB4XDTIxMDEyMDE5MTQwM1oXDTI0MDkzMDE4MTQwM1ow
@@ -32,7 +38,7 @@ he8Y4IWS6wY7bCkjCWDcRQJMEhg76fsO3txE+FiYruq9RUWhiF1myv4Q6W+CyBFC
 Dfvp7OOGAN6dEOM4+qR9sdjoSYKEBpsr6GtPAQw4dy753ec5
 -----END CERTIFICATE-----`
 
-CertECDSA := `-----BEGIN CERTIFICATE-----
+var certECDSA = `-----BEGIN CERTIFICATE-----
 MIIFYjCCBEqgAwIBAgIQd70NbNs2+RrqIQ/E8FjTDTANBgkqhkiG9w0BAQsFADBX
 MQswCQYDVQQGEwJCRTEZMBcGA1UEChMQR2xvYmFsU2lnbiBudi1zYTEQMA4GA1UE
 CxMHUm9vdCBDQTEbMBkGA1UEAxMSR2xvYmFsU2lnbiBSb290IENBMB4XDTIwMDYx
@@ -63,3 +69,63 @@ WprKASOshIArAoyZl+tJaox118fessmXn1hIVw41oeQa1v1vg4Fv74zPl6/AhSrw
 +qduBmpvvYuR7hZL6Dupszfnw0Skfths18dG9ZKb59UhvmaSGZRVbNQpsg3BZlvi
 d0lIKO2d1xozclOzgjXPYovJJIultzkMu34qQb9Sz/yilrbCgj8=
 -----END CERTIFICATE-----`
+
+// runCertPrinter feeds a PEM encoded certificate through the certPrinter
+// plugin and returns the rendered output.
+func runCertPrinter(t *testing.T, cert string) string {
+	t.Helper()
+	p := NewPluginCertPrinter()
+	out, err := p.ProcessStreamFunc(strings.NewReader(cert))
+	if err != nil {
+		t.Fatalf("certPrinter ProcessStreamFunc failed: %s", err)
+	}
+	return string(out)
+}
+
+func TestNewPluginCertPrinter(t *testing.T) {
+	p := NewPluginCertPrinter()
+	if p.Name != "certPrinter" {
+		t.Errorf("unexpected plugin name: %s", p.Name)
+	}
+	if p.Unprocess {
+		t.Error("certPrinter should not support unprocessing")
+	}
+}
+
+func TestCertPrinterRSA(t *testing.T) {
+	out := runCertPrinter(t, certRSA)
+	for _, want := range []string{
+		"Certificate:",
+		"Signature Algorithm: SHA256-RSA",
+		"Public Key Algorithm: RSA",
+		"Modulus:",
+		"-----BEGIN CERTIFICATE-----",
+		"-----END CERTIFICATE-----",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("certPrinter output missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestCertPrinterECDSA(t *testing.T) {
+	// Despite the fixture name, GTS Root R1 is RSA; the test simply
+	// exercises a second, distinct certificate through the printer.
+	out := runCertPrinter(t, certECDSA)
+	if !strings.Contains(out, "Certificate:") {
+		t.Errorf("certPrinter output missing header\n%s", out)
+	}
+	if !strings.Contains(out, "GTS Root R1") {
+		t.Errorf("certPrinter output missing subject\n%s", out)
+	}
+}
+
+func TestCertPrinterEmbeddedInChain(t *testing.T) {
+	// The plugin should locate the first CERTIFICATE block even when
+	// preceded by unrelated PEM content.
+	input := "garbage header\n" + certRSA
+	out := runCertPrinter(t, input)
+	if !bytes.Contains([]byte(out), []byte("Certificate:")) {
+		t.Errorf("certPrinter failed to parse cert with leading noise\n%s", out)
+	}
+}
