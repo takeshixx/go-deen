@@ -5,14 +5,50 @@ import (
 	"strconv"
 )
 
-// IsBoolFlag returns the boolean value of a FlagSet flag.
-func IsBoolFlag(flags *flag.FlagSet, name string) (cur bool) {
-	curFlag := flags.Lookup(name)
-	cur, err := strconv.ParseBool(curFlag.Value.String())
-	if err != nil {
-		cur = false
+// IsBoolFlag returns the boolean value of a FlagSet flag. It returns false if
+// the flag is not present or does not hold a boolean.
+func IsBoolFlag(flags *flag.FlagSet, name string) bool {
+	if flags == nil {
+		return false
 	}
-	return
+	f := flags.Lookup(name)
+	if f == nil {
+		return false
+	}
+	cur, err := strconv.ParseBool(f.Value.String())
+	if err != nil {
+		return false
+	}
+	return cur
+}
+
+// IntFlag returns the integer value of a FlagSet flag, or def if the flag is
+// absent or not a valid integer.
+func IntFlag(flags *flag.FlagSet, name string, def int) int {
+	if flags == nil {
+		return def
+	}
+	f := flags.Lookup(name)
+	if f == nil {
+		return def
+	}
+	v, err := strconv.Atoi(f.Value.String())
+	if err != nil {
+		return def
+	}
+	return v
+}
+
+// StringFlag returns the string value of a FlagSet flag, or "" if absent.
+func StringFlag(flags *flag.FlagSet, name string) string {
+	if flags == nil {
+		return ""
+	}
+	f := flags.Lookup(name)
+	if f == nil {
+		return ""
+	}
+	return f.Value.String()
 }
 
 // DefaultFlagSet creates a default FlagSet with

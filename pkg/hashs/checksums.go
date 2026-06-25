@@ -1,41 +1,48 @@
 package hashs
 
 import (
+	"hash"
 	"hash/adler32"
 	"hash/crc32"
 	"hash/crc64"
+
+	"github.com/takeshixx/deen/pkg/types"
 )
 
-func CalculateAdler32(data []byte) (checksum uint32) {
-	checksum = adler32.Checksum(data)
-	return
+// NewPluginAdler32 creates a plugin
+func NewPluginAdler32() *types.DeenPlugin {
+	return hashPlugin("adler32",
+		"Adler-32 checksum as defined in RFC 1950.",
+		nil, func() hash.Hash { return adler32.New() })
 }
 
-func CalculateCrc32IEEE(data []byte) (checksum uint32) {
-	checksum = crc32.ChecksumIEEE(data)
-	return
+// NewPluginCRC32 creates a plugin computing the IEEE CRC-32 checksum.
+func NewPluginCRC32() *types.DeenPlugin {
+	return hashPlugin("crc32",
+		"CRC-32 checksum using the IEEE polynomial (used by zlib, gzip, PNG).",
+		nil, func() hash.Hash { return crc32.NewIEEE() })
 }
 
-func CalculateCrc32Castagnoli(data []byte) (checksum uint32) {
+// NewPluginCRC32C creates a plugin computing the Castagnoli CRC-32 checksum.
+func NewPluginCRC32C() *types.DeenPlugin {
 	tab := crc32.MakeTable(crc32.Castagnoli)
-	checksum = crc32.Checksum(data, tab)
-	return
+	return hashPlugin("crc32c",
+		"CRC-32 checksum using the Castagnoli polynomial.",
+		nil, func() hash.Hash { return crc32.New(tab) })
 }
 
-func CalculateCrc32Koopman(data []byte) (checksum uint32) {
-	tab := crc32.MakeTable(crc32.Koopman)
-	checksum = crc32.Checksum(data, tab)
-	return
-}
-
-func CalculateCrc64ISO(data []byte) (checksum uint64) {
+// NewPluginCRC64ISO creates a plugin computing the ISO CRC-64 checksum.
+func NewPluginCRC64ISO() *types.DeenPlugin {
 	tab := crc64.MakeTable(crc64.ISO)
-	checksum = crc64.Checksum(data, tab)
-	return
+	return hashPlugin("crc64",
+		"CRC-64 checksum using the ISO polynomial.",
+		[]string{"crc64-iso"}, func() hash.Hash { return crc64.New(tab) })
 }
 
-func CalculateCrc64ECMA(data []byte) (checksum uint64) {
+// NewPluginCRC64ECMA creates a plugin computing the ECMA CRC-64 checksum.
+func NewPluginCRC64ECMA() *types.DeenPlugin {
 	tab := crc64.MakeTable(crc64.ECMA)
-	checksum = crc64.Checksum(data, tab)
-	return
+	return hashPlugin("crc64-ecma",
+		"CRC-64 checksum using the ECMA polynomial.",
+		nil, func() hash.Hash { return crc64.New(tab) })
 }
