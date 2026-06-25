@@ -54,18 +54,11 @@ func RunCLI() int {
 		fmt.Fprintf(os.Stderr, "deen: invalid command: %q (use -l to list plugins)\n", cmd)
 		return 2
 	}
-
-	// New unified contract.
-	if plugin.Process != nil {
-		return runUnified(plugin, unprocess, cmd)
-	}
-
-	// Legacy contract (plugins not yet ported to Process/Unprocess).
-	return runLegacy(plugin, unprocess, cmd)
+	return runPlugin(plugin, unprocess, cmd)
 }
 
-// runUnified drives a plugin implementing the Process/Unprocess contract.
-func runUnified(plugin *types.DeenPlugin, unprocess bool, cmd string) int {
+// runPlugin drives a plugin implementing the Process/Unprocess contract.
+func runPlugin(plugin *types.DeenPlugin, unprocess bool, cmd string) int {
 	transform := plugin.Process
 	if unprocess {
 		if plugin.Unprocess == nil {
@@ -139,114 +132,4 @@ func usageFor(fs *flag.FlagSet, plugin *types.DeenPlugin) func() {
 		}
 		fs.PrintDefaults()
 	}
-}
-
-// runLegacy drives plugins still using the deprecated DeenTask/stream funcs.
-// TODO: remove once every plugin implements the Process/Unprocess contract.
-func runLegacy(plugin *types.DeenPlugin, unprocess bool, cmd string) int {
-	plugin.Unprocess_ = unprocess
-
-	var pluginParser *flag.FlagSet
-	if plugin.AddDefaultCliFunc != nil {
-		pluginParser = helpers.DefaultFlagSet()
-		pluginParser = plugin.AddDefaultCliFunc(plugin, pluginParser, helpers.RemoveBeforeSubcommand(os.Args, cmd))
-	}
-
-	noNewLine := false
-	if pluginParser != nil && pluginParser.Lookup("n") != nil && helpers.IsBoolFlag(pluginParser, "n") {
-		noNewLine = true
-	}
-
-	task := types.NewDeenTask(os.Stdout)
-	task.Command = plugin.Command
-
-	// Decide where we read from: a file, data from argv or stdin.
-	if *filePtr != "" {
-		mainFile, err := os.Open(*filePtr)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "deen: failed to open file:", err)
-			return 1
-		}
-		defer mainFile.Close()
-		task.Reader = mainFile
-	} else if pluginParser != nil {
-		pluginFilePtr := pluginParser.Lookup("file")
-		if pluginFilePtr != nil && pluginFilePtr.Value.String() != "" {
-			pluginFile, err := os.Open(pluginFilePtr.Value.String())
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "deen: failed to open file:", err)
-				return 1
-			}
-			defer pluginFile.Close()
-			task.Reader = pluginFile
-		} else if pluginParser.NArg() > 0 {
-			task.Reader = strings.NewReader(strings.Join(pluginParser.Args(), " "))
-		} else {
-			task.Reader = os.Stdin
-		}
-	} else {
-		if flag.NArg() > 1 {
-			task.Reader = strings.NewReader(strings.Join(flag.Args()[1:], " "))
-		} else {
-			task.Reader = os.Stdin
-		}
-	}
-
-	if plugin.ProcessDeenTaskFunc != nil {
-		if plugin.ProcessDeenTaskWithFlags != nil || plugin.UnprocessDeenTaskWithFlags != nil {
-			if unprocess {
-				plugin.UnprocessDeenTaskWithFlags(pluginParser, task)
-			} else {
-				plugin.ProcessDeenTaskWithFlags(pluginParser, task)
-			}
-		} else {
-			if unprocess {
-				plugin.UnprocessDeenTaskFunc(task)
-			} else {
-				plugin.ProcessDeenTaskFunc(task)
-			}
-		}
-
-		select {
-		case err := <-task.ErrChan:
-			fmt.Fprintf(os.Stderr, "deen: %s: %s\n", plugin.Name, err)
-			return 1
-		case <-task.DoneChan:
-		}
-
-		if !noNewLine {
-			if _, err := io.WriteString(os.Stdout, "\n"); err != nil {
-				fmt.Fprintln(os.Stderr, "deen:", err)
-				return 1
-			}
-		}
-		return 0
-	}
-
-	// Default stream implementation.
-	var processedData []byte
-	var err error
-	if plugin.ProcessStreamWithCliFlagsFunc != nil || plugin.UnprocessStreamWithCliFlagsFunc != nil {
-		if unprocess {
-			processedData, err = plugin.UnprocessStreamWithCliFlagsFunc(pluginParser, task.Reader)
-		} else {
-			processedData, err = plugin.ProcessStreamWithCliFlagsFunc(pluginParser, task.Reader)
-		}
-	} else {
-		if unprocess {
-			processedData, err = plugin.UnprocessStreamFunc(task.Reader)
-		} else {
-			processedData, err = plugin.ProcessStreamFunc(task.Reader)
-		}
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "deen: %s: %s\n", plugin.Name, err)
-		return 1
-	}
-
-	os.Stdout.Write(processedData)
-	if !noNewLine {
-		io.WriteString(os.Stdout, "\n")
-	}
-	return 0
 }

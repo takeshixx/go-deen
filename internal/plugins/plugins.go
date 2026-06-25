@@ -105,7 +105,6 @@ func Resolve(cmd string) (plugin *types.DeenPlugin, unprocess bool, ok bool) {
 	plugin = constructor()
 	unprocess = strings.HasPrefix(cmd, ".")
 	plugin.Command = lookupKey(cmd)
-	plugin.Unprocess_ = unprocess
 	return plugin, unprocess, true
 }
 

@@ -11,7 +11,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 
@@ -340,15 +339,6 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 	return
 }
 
-func printSerializedToken(token string) (outBuf []byte, err error) {
-	var raw map[string]interface{}
-	if err := json.Unmarshal([]byte(token), &raw); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%v\n", raw)
-	return
-}
-
 func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload *orderedmap.OrderedMap, signature string, err error) {
 	inBuf := new(bytes.Buffer)
 	inBuf.ReadFrom(reader)
@@ -397,17 +387,6 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload *ord
 			return
 		}
 	}
-	return
-}
-
-func undoJWE(reader io.Reader, secret []byte) (header, payload *orderedmap.OrderedMap, signature string, err error) {
-	inBuf := new(bytes.Buffer)
-	inBuf.ReadFrom(reader)
-	//var token *jwt.JSONWebToken
-	//token, err = jwt.ParseEncrypted(inBuf.String())
-	//if err != nil {
-	//return
-	//}
 	return
 }
 
