@@ -11,16 +11,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 
+	jose "github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/iancoleman/orderedmap"
 	"github.com/takeshixx/deen/pkg/types"
-	"gopkg.in/square/go-jose.v2"
-	"gopkg.in/square/go-jose.v2/jwt"
 )
 
 var keyManagementAlgs = map[jose.KeyAlgorithm]string{
@@ -74,6 +73,18 @@ var compressionAlgs = map[jose.CompressionAlgorithm]string{
 	jose.DEFLATE: "DEFLATE (RFC 1951)",
 }
 
+// allowedSignatureAlgorithms returns every signature algorithm deen knows
+// about. go-jose v4 requires callers of ParseSigned to explicitly allow-list
+// the algorithms they expect; deen is a decoding tool that must accept any
+// valid token, so we permit all supported algorithms.
+func allowedSignatureAlgorithms() []jose.SignatureAlgorithm {
+	algs := make([]jose.SignatureAlgorithm, 0, len(signatureAlgs))
+	for alg := range signatureAlgs {
+		algs = append(algs, alg)
+	}
+	return algs
+}
+
 func listAlgs() string {
 	out := "Key management algorithms:\n"
 	for k, v := range keyManagementAlgs {
@@ -110,7 +121,7 @@ func loadPrivateKeyFile(path string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -308,19 +319,19 @@ func doJWS(reader *bufio.Reader, header string, signAlg string, signSecret []byt
 
 	var processedToken string
 	if signer != nil && encrypter == nil {
-		processedToken, err = jwt.Signed(signer).Claims(tokenPayload).CompactSerialize()
+		processedToken, err = jwt.Signed(signer).Claims(tokenPayload).Serialize()
 		if err != nil {
 			return
 		}
 	}
 	if signer != nil && encrypter != nil {
-		processedToken, err = jwt.SignedAndEncrypted(signer, encrypter).Claims(tokenPayload).CompactSerialize()
+		processedToken, err = jwt.SignedAndEncrypted(signer, encrypter).Claims(tokenPayload).Serialize()
 		if err != nil {
 			return
 		}
 	}
 	if signer == nil && encrypter != nil {
-		processedToken, err = jwt.Encrypted(encrypter).Claims(tokenPayload).CompactSerialize()
+		processedToken, err = jwt.Encrypted(encrypter).Claims(tokenPayload).Serialize()
 		if err != nil {
 			return
 		}
@@ -361,7 +372,7 @@ func undoJWS(reader io.Reader, verify bool, secret []byte) (header, payload *ord
 		signature = strings.TrimSpace(parts[2])
 	}
 
-	token, err := jwt.ParseSigned(inBuf.String())
+	token, err := jwt.ParseSigned(inBuf.String(), allowedSignatureAlgorithms())
 	if err != nil {
 		return
 	}

@@ -7,6 +7,7 @@ require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/andybalholm/brotli v1.2.1
 	github.com/dsnet/compress v0.0.1
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/iancoleman/orderedmap v0.3.0
 	github.com/itchyny/gojq v0.12.19
 	github.com/pkg/errors v0.9.1
@@ -15,7 +16,6 @@ require (
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.53.0
 	golang.org/x/text v0.38.0
-	gopkg.in/square/go-jose.v2 v2.6.0
 	lukechampine.com/blake3 v1.4.1
 )
 
