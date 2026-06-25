@@ -8,6 +8,8 @@ jobs:
   build:
     name: Make release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
 
     - name: Set up Go 1.x
@@ -18,33 +20,50 @@ jobs:
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v4
+      with:
+        # Full history and tags are required for `git describe --tags`,
+        # which derives the release version.
+        fetch-depth: 0
 
     - name: Get dependencies
       run: go mod download
 
-    - name: Build
-      run: |
-        make build-all
-        chmod +x bin/deen*
+    - name: Build release binaries
+      run: make cross-stripped
 
-    - name: Get current version
+    - name: Package binaries
+      run: |
+        mkdir -p release
+        for d in bin/*/; do
+          plat=$(basename "$d")
+          if [ -f "${d}deen.exe" ]; then
+            cp "${d}deen.exe" "release/deen-${plat}.exe"
+          elif [ -f "${d}deen" ]; then
+            cp "${d}deen" "release/deen-${plat}"
+          fi
+        done
+        chmod +x release/deen-* || true
+        ls -la release
+
+    - name: Get release info
       id: get_info
       run: |
-        version=$(bin/deen-linux-x86_64 -version)
-        echo ::set-output name=DEEN_VERSION::${version}
-        commit=$(git log -1 --pretty=%B)
-        echo ::set-output name=DEEN_LOG::${commit}
+        version=$(bin/linux-amd64/deen -version)
+        echo "DEEN_VERSION=${version}" >> "$GITHUB_OUTPUT"
+        {
+          echo "DEEN_LOG<<EOF"
+          git log -1 --pretty=%B
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.get_info.outputs.DEEN_VERSION }}
-        release_name: Release ${{ steps.get_info.outputs.DEEN_VERSION }}
+        name: Release ${{ steps.get_info.outputs.DEEN_VERSION }}
         body: ${{ steps.get_info.outputs.DEEN_LOG }}
         draft: false
         prerelease: true
-        files: >
-          bin/deen/*
+        files: release/*
