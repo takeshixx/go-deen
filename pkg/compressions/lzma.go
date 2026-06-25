@@ -2,121 +2,49 @@ package compressions
 
 import (
 	"flag"
-	"fmt"
 	"io"
-	"os"
 
 	"github.com/ulikunitz/xz/lzma"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-// NewPluginLZMA creates a new PluginLZMA object
-func NewPluginLZMA() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginLZMA creates a new LZMA plugin.
+func NewPluginLZMA() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "lzma"
 	p.Aliases = []string{".lzma"}
 	p.Category = "compressions"
-	p.Unprocess_ = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			compressor, err := lzma.NewWriter(task.PipeWriter)
-			if err != nil {
-				task.ErrChan <- err
-			}
-			if _, err := io.Copy(compressor, task.Reader); err != nil {
-				task.ErrChan <- err
-			}
-			err = compressor.Close()
-			if err != nil {
-				task.ErrChan <- err
-			}
-		}()
+	p.Description = "Decoding and encoding of LZMA streams."
+	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return compressStream(r, w, func(w io.Writer) (io.WriteCloser, error) {
+			return lzma.NewWriter(w)
+		})
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.ProcessDeenTaskFunc(task)
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return decompressStream(r, w, func(r io.Reader) (io.Reader, error) {
+			return lzma.NewReader(r)
+		})
 	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			decompressor, err := lzma.NewReader(task.Reader)
-			if err != nil {
-				task.ErrChan <- err
-			}
-			_, err = io.Copy(task.PipeWriter, decompressor)
-			if err != nil {
-				task.ErrChan <- err
-			}
-		}()
-	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.UnprocessDeenTaskFunc(task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Decoding and encoding of LZMA streams.\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }
 
-// NewPluginLZMA2 creates a new PluginLZMA2 object
-func NewPluginLZMA2() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginLZMA2 creates a new LZMA2 plugin.
+func NewPluginLZMA2() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "lzma2"
 	p.Aliases = []string{".lzma2"}
-	p.Category = "compression"
-	p.Unprocess_ = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			compressor, err := lzma.NewWriter2(task.PipeWriter)
-			if err != nil {
-				task.ErrChan <- err
-			}
-			if _, err := io.Copy(compressor, task.Reader); err != nil {
-				task.ErrChan <- err
-			}
-			err = compressor.Close()
-			if err != nil {
-				task.ErrChan <- err
-			}
-		}()
+	p.Category = "compressions"
+	p.Description = "Decoding and encoding of LZMA2 streams."
+	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return compressStream(r, w, func(w io.Writer) (io.WriteCloser, error) {
+			return lzma.NewWriter2(w)
+		})
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.ProcessDeenTaskFunc(task)
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return decompressStream(r, w, func(r io.Reader) (io.Reader, error) {
+			return lzma.NewReader2(r)
+		})
 	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			decompressor, err := lzma.NewReader2(task.Reader)
-			if err != nil {
-				task.ErrChan <- err
-			}
-			_, err = io.Copy(task.PipeWriter, decompressor)
-			if err != nil {
-				task.ErrChan <- err
-			}
-		}()
-	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.UnprocessDeenTaskFunc(task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Decoding and encoding of LZMA2 streams.\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }
