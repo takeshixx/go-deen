@@ -63,7 +63,7 @@ fyne-cross:
 web: 
 	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
 	GOOS=js GOARCH=wasm go build $(ldflagsstripped) -o extras/web/deen.wasm ./cmd/deen
-	cp $$(go env GOROOT)/misc/wasm/wasm_exec.js extras/web/wasm_exec.js
+	cp $$(go env GOROOT)/lib/wasm/wasm_exec.js extras/web/wasm_exec.js
 	http_server -no-auth -root extras/web -port 9090
 
 .PHONY: run
