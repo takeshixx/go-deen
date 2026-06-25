@@ -1,4 +1,4 @@
-// +build !gui
+//go:build !gui
 
 package main
 
