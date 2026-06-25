@@ -13,12 +13,12 @@ import (
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/iancoleman/orderedmap"
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
@@ -422,163 +422,15 @@ func undoSignedJWE(reader io.Reader, verify bool, secret []byte) (header, payloa
 	return
 }
 
-// NewPluginJwt creates a new PluginJwt object
-func NewPluginJwt() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginJwt creates a new JWT (RFC 7519) plugin.
+func NewPluginJwt() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "jwt"
 	p.Aliases = []string{".jwt"}
 	p.Category = "formatters"
-	p.Unprocess_ = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var outBuf bytes.Buffer
-		var err error
-
-		return outBuf.Bytes(), err
-	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) (outBuf []byte, err error) {
-		listFlag := flags.Lookup("list")
-		if listCmd, err := strconv.ParseBool(listFlag.Value.String()); listCmd && err == nil {
-			// List supported algoritms
-			out := []byte(listAlgs())
-			return out, err
-		}
-
-		var signAlg, signSecret, signKey, encAlg, encSecret, encKey, keyAlg, header string
-		var recreate bool
-
-		if signAlgFlag := flags.Lookup("sign-alg"); signAlgFlag != nil {
-			signAlg = signAlgFlag.Value.String()
-		}
-		if signSecretFlag := flags.Lookup("sign-secret"); signSecretFlag != nil {
-			signSecret = signSecretFlag.Value.String()
-		}
-		if signKeyFlag := flags.Lookup("sign-keyfile"); signKeyFlag != nil {
-			signKey = signKeyFlag.Value.String()
-		}
-		if encAlgFlag := flags.Lookup("enc-alg"); encAlgFlag != nil {
-			encAlg = encAlgFlag.Value.String()
-		}
-		if encSecretFlag := flags.Lookup("enc-secret"); encSecretFlag != nil {
-			encSecret = encSecretFlag.Value.String()
-		}
-		if encKeyFlag := flags.Lookup("enc-keyfile"); encKeyFlag != nil {
-			encKey = encKeyFlag.Value.String()
-		}
-		if keyAlgFlag := flags.Lookup("key-alg"); keyAlgFlag != nil {
-			keyAlg = keyAlgFlag.Value.String()
-		}
-		if headerFlag := flags.Lookup("header"); headerFlag != nil {
-			header = headerFlag.Value.String()
-		}
-
-		if recreateFlag := flags.Lookup("r"); recreateFlag != nil {
-			recreate = false
-			recreate, err = strconv.ParseBool(recreateFlag.Value.String())
-			if err != nil {
-				return
-			}
-		}
-
-		inBuf := bufio.NewReader(reader)
-
-		// In case there is no input, print the help page
-		if inBuf.Size() < 1 {
-			flags.Usage()
-			os.Exit(1)
-		}
-
-		return doJWS(inBuf, header, signAlg, []byte(signSecret), signKey, encAlg, []byte(encSecret), []byte(encKey), keyAlg, recreate)
-	}
-	p.UnprocessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var secret, headerBuf, payloadBuf []byte
-		var err error
-		header, payload, signature, err := undoJWS(reader, false, secret)
-		if err != nil {
-			return nil, err
-		}
-		headerBuf, err = json.Marshal(header)
-		if err != nil {
-			return nil, err
-		}
-		payloadBuf, err = json.Marshal(payload)
-		if err != nil {
-			return nil, err
-		}
-		outStr := fmt.Sprintf("%s %s %s", string(headerBuf), string(payloadBuf), signature)
-		outBuf := []byte(outStr)
-		return outBuf, nil
-
-		//return undoJWS(reader, false, secret)
-	}
-	p.UnprocessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) (outBuf []byte, err error) {
-		verifyFlag := flags.Lookup("verify")
-		verify, err := strconv.ParseBool(verifyFlag.Value.String())
-		if err != nil {
-			return
-		}
-
-		jweFlag := flags.Lookup("decrypt")
-		isJWE, err := strconv.ParseBool(jweFlag.Value.String())
-		if err != nil {
-			return
-		}
-
-		secretFlag := flags.Lookup("secret")
-		secret := []byte(secretFlag.Value.String())
-
-		var signature string
-		orderedHeader := orderedmap.New()
-		orderedHeader.SetEscapeHTML(false)
-		orderedPayload := orderedmap.New()
-		orderedPayload.SetEscapeHTML(false)
-
-		if isJWE {
-			orderedHeader, orderedPayload, signature, err = undoSignedJWE(reader, verify, secret)
-		} else if isJWE {
-			orderedHeader, orderedPayload, signature, err = undoJWE(reader, secret)
-		} else {
-			orderedHeader, orderedPayload, signature, err = undoJWS(reader, verify, secret)
-		}
-
-		if err != nil {
-			return
-		}
-
-		if len(orderedHeader.Keys()) == 0 || len(orderedPayload.Keys()) == 0 {
-			return
-		}
-
-		outObj := orderedmap.New()
-		outObj.SetEscapeHTML(false)
-		outObj.Set("header", orderedHeader)
-		outObj.Set("payload", orderedPayload)
-		outObj.Set("signature", signature)
-
-		outBuf, err = prettyEncodeJSON(outObj)
-		return
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		if self.Unprocess_ {
-			// Decoding
-			flags.Usage = func() {
-				fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-				fmt.Fprintf(os.Stderr, "Decode JSON Web Tokens (JWT) (RFC7519).\n\n")
-				flags.PrintDefaults()
-			}
-			flags.Bool("verify", false, "verify signature")
-			flags.String("secret", "", "secret key")
-			flags.String("key", "", "key file")
-			flags.Bool("decrypt", false, "decrypt JWE token")
-			flags.Parse(args)
-			return flags
-		}
-		// Encoding
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Encode JSON Web Tokens (JWT) (RFC7519).\n\n")
-			flags.PrintDefaults()
-		}
+	p.Description = "Encode and decode JSON Web Tokens (JWT) (RFC 7519)."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		// Encoding flags.
 		flags.Bool("list", false, "list supported algorithms")
 		flags.String("header", "", "token header")
 		flags.String("sign-alg", "", "signature algorithm")
@@ -589,10 +441,70 @@ func NewPluginJwt() (p *types.DeenPlugin) {
 		flags.String("enc-keyfile", "", "encryption key file")
 		flags.String("key-alg", "", "key management algorithm")
 		flags.Bool("r", false, "recreate the token, keep the given signature")
-		flags.Parse(args)
-		return flags
+		// Decoding flags.
+		flags.Bool("verify", false, "verify signature")
+		flags.String("secret", "", "secret key")
+		flags.String("key", "", "key file")
+		flags.Bool("decrypt", false, "decrypt JWE token")
 	}
-	return
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		if helpers.IsBoolFlag(flags, "list") {
+			_, err := io.WriteString(w, listAlgs())
+			return err
+		}
+		out, err := doJWS(
+			bufio.NewReader(r),
+			helpers.StringFlag(flags, "header"),
+			helpers.StringFlag(flags, "sign-alg"),
+			[]byte(helpers.StringFlag(flags, "sign-secret")),
+			helpers.StringFlag(flags, "sign-keyfile"),
+			helpers.StringFlag(flags, "enc-alg"),
+			[]byte(helpers.StringFlag(flags, "enc-secret")),
+			[]byte(helpers.StringFlag(flags, "enc-keyfile")),
+			helpers.StringFlag(flags, "key-alg"),
+			helpers.IsBoolFlag(flags, "r"),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(out)
+		return err
+	}
+	p.Unprocess = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		verify := helpers.IsBoolFlag(flags, "verify")
+		secret := []byte(helpers.StringFlag(flags, "secret"))
+
+		var (
+			header, payload *orderedmap.OrderedMap
+			signature       string
+			err             error
+		)
+		if helpers.IsBoolFlag(flags, "decrypt") {
+			header, payload, signature, err = undoSignedJWE(r, verify, secret)
+		} else {
+			header, payload, signature, err = undoJWS(r, verify, secret)
+		}
+		if err != nil {
+			return err
+		}
+		if header == nil || payload == nil || len(header.Keys()) == 0 || len(payload.Keys()) == 0 {
+			return nil
+		}
+
+		outObj := orderedmap.New()
+		outObj.SetEscapeHTML(false)
+		outObj.Set("header", header)
+		outObj.Set("payload", payload)
+		outObj.Set("signature", signature)
+
+		out, err := prettyEncodeJSON(outObj)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(out)
+		return err
+	}
+	return p
 }
 
 // Helper functions

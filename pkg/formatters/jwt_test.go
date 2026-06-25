@@ -30,15 +30,15 @@ func TestListAlgs(t *testing.T) {
 // an explicit allow-list of signature algorithms).
 func TestDecodeToken(t *testing.T) {
 	p := NewPluginJwt()
-	out, err := p.UnprocessStreamFunc(strings.NewReader(sampleHS256Token))
+	out, err := tryFormat(p.Unprocess, p.RegisterFlags, []byte(sampleHS256Token))
 	if err != nil {
 		t.Fatalf("jwt decode failed: %s", err)
 	}
 	got := string(out)
 	for _, want := range []string{
-		`"alg":"HS256"`,
-		`"sub":"1234567890"`,
-		`"name":"John Doe"`,
+		`"alg": "HS256"`,
+		`"sub": "1234567890"`,
+		`"name": "John Doe"`,
 		"SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
 	} {
 		if !strings.Contains(got, want) {

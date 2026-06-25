@@ -1,111 +1,51 @@
 package formatters
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"flag"
-	"fmt"
 	"io"
-	"os"
 	"regexp"
-	"strconv"
 
 	"github.com/TylerBrock/colorjson"
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 	"github.com/tdewolff/minify/v2"
 	minijson "github.com/tdewolff/minify/v2/json"
 )
 
-func processJSONFormatColored(task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		data := make(map[string](interface{}))
-		decoder := json.NewDecoder(task.Reader)
-		decoder.Decode(&data)
-
-		f := colorjson.NewFormatter()
-		f.Indent = 4
-		outBuf, err := f.Marshal(data)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		writeBuf := bytes.NewReader(outBuf)
-		_, err = io.Copy(task.PipeWriter, writeBuf)
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
-}
-
-func processJSONFormat(task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		data := make(map[string](interface{}))
-		decoder := json.NewDecoder(task.Reader)
-		err := decoder.Decode(&data)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		encoder := json.NewEncoder(task.PipeWriter)
-		encoder.SetIndent("", "    ")
-		err = encoder.Encode(data)
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
-}
-
-// NewPluginJSONFormatter creates a new PluginJSONFormatter object
-func NewPluginJSONFormatter() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginJSONFormatter creates a new JSON formatter plugin.
+func NewPluginJSONFormatter() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "json"
 	p.Aliases = []string{".json"}
 	p.Category = "formatters"
-	p.Unprocess_ = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		processJSONFormat(task)
+	p.Description = "Prettify JSON when processing and minify it when unprocessing."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.Bool("no-color", false, "omit colors in output")
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		noColorFlag := flags.Lookup("no-color")
-		noColor, err := strconv.ParseBool(noColorFlag.Value.String())
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		var data interface{}
+		if err := json.NewDecoder(r).Decode(&data); err != nil {
+			return err
+		}
+		if helpers.IsBoolFlag(flags, "no-color") {
+			enc := json.NewEncoder(w)
+			enc.SetIndent("", "    ")
+			return enc.Encode(data)
+		}
+		f := colorjson.NewFormatter()
+		f.Indent = 4
+		out, err := f.Marshal(data)
 		if err != nil {
-			err = errors.New("Failed to parse --no-color option")
+			return err
 		}
-		if noColor {
-			processJSONFormat(task)
-			return
-		}
-		processJSONFormatColored(task)
+		_, err = w.Write(out)
+		return err
 	}
-
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			minifier := minify.New()
-			minifier.AddFuncRegexp(regexp.MustCompile("[/+]json$"), minijson.Minify)
-			err := minifier.Minify("text/json", task.PipeWriter, task.Reader)
-			if err != nil {
-				task.ErrChan <- err
-			}
-		}()
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		m := minify.New()
+		m.AddFuncRegexp(regexp.MustCompile("[/+]json$"), minijson.Minify)
+		return m.Minify("text/json", w, r)
 	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.UnprocessDeenTaskFunc(task)
-	}
-
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "JSON formatter plugin that processes JSON to a readable,\nprettified representation, and unprocesses beautified\nJSON to minified JSON.\n\n")
-			flags.PrintDefaults()
-		}
-		if !self.Unprocess_ {
-			flags.Bool("no-color", false, "omit colors in output")
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }
