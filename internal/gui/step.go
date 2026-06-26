@@ -5,8 +5,10 @@ package gui
 import (
 	"encoding/hex"
 	"fmt"
+	"image/color"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -14,6 +16,21 @@ import (
 	"github.com/takeshixx/deen/internal/pipeline"
 	"github.com/takeshixx/deen/internal/plugins"
 )
+
+// stepPalette gives each step a distinct accent colour (cycled).
+var stepPalette = []color.NRGBA{
+	{0x42, 0x85, 0xf4, 0xff}, // blue
+	{0x0f, 0x9d, 0x58, 0xff}, // green
+	{0xf4, 0xb4, 0x00, 0xff}, // amber
+	{0xdb, 0x44, 0x37, 0xff}, // red
+	{0xab, 0x47, 0xbc, 0xff}, // purple
+	{0x00, 0xac, 0xc1, 0xff}, // cyan
+}
+
+func accent(i int) color.NRGBA { return stepPalette[i%len(stepPalette)] }
+
+// tint returns the accent at low opacity, for card backgrounds.
+func tint(c color.NRGBA) color.NRGBA { return color.NRGBA{R: c.R, G: c.G, B: c.B, A: 0x22} }
 
 // multilineEntry returns a word-wrapping multi-line entry with a readable
 // minimum height.
@@ -27,7 +44,7 @@ func multilineEntry(rows int) *widget.Entry {
 // categorySelectors builds one dropdown per plugin category (codecs, hashs, …),
 // each listing the plugins in that category. Selecting a plugin in any dropdown
 // calls onPick and clears the others. When current is non-empty its dropdown is
-// pre-selected.
+// pre-selected (highlighting which plugin/category is in use).
 func (dg *DeenGUI) categorySelectors(current string, onPick func(name string)) *fyne.Container {
 	cats := plugins.PluginCategories
 	selects := make([]*widget.Select, len(cats))
@@ -93,8 +110,12 @@ type stepCard struct {
 	index      int
 	pluginName string
 	hexView    bool
+	collapsed  bool
 
 	decode    *widget.Check
+	summary   *canvas.Text
+	collapse  *widget.Button
+	detail    *fyne.Container
 	options   *fyne.Container
 	body      *widget.Entry
 	status    *widget.Label
@@ -104,6 +125,7 @@ type stepCard struct {
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	step := dg.pipe.Steps()[i]
 	c := &stepCard{gui: dg, index: i, pluginName: step.Plugin}
+	col := accent(i)
 
 	c.decode = widget.NewCheck("decode", nil)
 	c.decode.SetChecked(step.Unprocess)
@@ -114,7 +136,9 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		}
 		dg.pipe.SetPlugin(c.index, c.pluginName, c.decode.Checked)
 		c.rebuildOptions()
+		c.updateSummary()
 		dg.refreshFrom(c.index)
+		dg.updateHistory()
 	}
 	selectors := dg.categorySelectors(step.Plugin, func(name string) {
 		c.pluginName = name
@@ -126,12 +150,22 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		c.hexView = b
 		c.refresh()
 	})
+
+	// Title row: collapse toggle, coloured title, active-plugin summary, remove.
+	c.summary = canvas.NewText("", col)
+	c.summary.TextStyle = fyne.TextStyle{Bold: true}
+	title := canvas.NewText(fmt.Sprintf("Step %d", i+1), col)
+	title.TextStyle = fyne.TextStyle{Bold: true}
+	c.collapse = widget.NewButtonWithIcon("", theme.MenuDropDownIcon(), c.toggleCollapse)
+	c.collapse.Importance = widget.LowImportance
 	remove := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		dg.pipe.RemoveStep(c.index)
 		dg.rebuild()
 	})
-	controls := container.NewBorder(nil, nil, container.NewHBox(c.decode, hexToggle), remove)
+	titleRow := container.NewBorder(nil, nil,
+		container.NewHBox(c.collapse, title, c.summary), remove)
 
+	// Detail: selectors, toggles, options, output, errors.
 	c.options = container.NewVBox()
 	c.body = multilineEntry(6)
 	c.body.OnChanged = func(s string) {
@@ -144,13 +178,48 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.status = widget.NewLabel("")
 	c.status.Importance = widget.DangerImportance
 	c.status.Hide()
+	c.detail = container.NewVBox(selectors, container.NewHBox(c.decode, hexToggle), c.options, c.body, c.status)
 
-	cardBody := container.NewVBox(selectors, controls, c.options, c.body, c.status)
-	c.container = widget.NewCard(fmt.Sprintf("Step %d", i+1), "", cardBody)
+	bg := canvas.NewRectangle(tint(col))
+	bg.StrokeColor = col
+	bg.StrokeWidth = 2
+	bg.CornerRadius = 6
+	inner := container.NewVBox(titleRow, c.detail)
+	c.container = container.NewStack(bg, container.NewPadded(inner))
 
 	c.rebuildOptions()
+	c.updateSummary()
 	c.refresh()
 	return c
+}
+
+// toggleCollapse hides or shows the step's detail section.
+func (c *stepCard) toggleCollapse() {
+	c.collapsed = !c.collapsed
+	if c.collapsed {
+		c.detail.Hide()
+		c.collapse.SetIcon(theme.NavigateNextIcon())
+	} else {
+		c.detail.Show()
+		c.collapse.SetIcon(theme.MenuDropDownIcon())
+	}
+}
+
+// updateSummary refreshes the "category / plugin · direction" highlight.
+func (c *stepCard) updateSummary() {
+	name := c.pluginName
+	if name == "" {
+		c.summary.Text = "  (no transform)"
+		c.summary.Refresh()
+		return
+	}
+	dir := "encode"
+	if c.decode.Checked {
+		dir = "decode"
+	}
+	cat := plugins.CategoryOf(name)
+	c.summary.Text = fmt.Sprintf("  %s / %s · %s", cat, name, dir)
+	c.summary.Refresh()
 }
 
 // rebuildOptions repopulates the per-plugin option widgets (as a form).

@@ -5,11 +5,13 @@
 package gui
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
@@ -31,6 +33,7 @@ type DeenGUI struct {
 	sourceEntry *widget.Entry
 	stepsBox    *fyne.Container // holds the source card, step cards and add-slot
 	cards       []*stepCard     // parallel to pipe.Steps()
+	history     *fyne.Container // side panel listing the chain
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
 	updating bool
@@ -47,7 +50,12 @@ func NewDeenGUI() (*DeenGUI, error) {
 	dg.window.SetMaster()
 
 	dg.stepsBox = container.NewVBox()
-	content := container.NewBorder(dg.toolbar(), nil, nil, nil, container.NewVScroll(dg.stepsBox))
+	dg.history = container.NewVBox()
+	chain := container.NewVScroll(dg.stepsBox)
+	historyPanel := widget.NewCard("History", "", container.NewVScroll(dg.history))
+	split := container.NewHSplit(chain, historyPanel)
+	split.SetOffset(0.78)
+	content := container.NewBorder(dg.toolbar(), nil, nil, nil, split)
 	dg.window.SetContent(content)
 	dg.window.SetMainMenu(dg.mainMenu())
 	dg.window.Resize(fyne.NewSize(900, 640))
@@ -116,6 +124,26 @@ func (dg *DeenGUI) rebuild() {
 	}
 	dg.stepsBox.Add(dg.newAddSlot())
 	dg.stepsBox.Refresh()
+	dg.updateHistory()
+}
+
+// updateHistory redraws the side panel listing the chain of steps.
+func (dg *DeenGUI) updateHistory() {
+	dg.history.RemoveAll()
+	dg.history.Add(widget.NewLabelWithStyle("Input", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	for i, s := range dg.pipe.Steps() {
+		name := s.Plugin
+		if name == "" {
+			name = "(none)"
+		}
+		dir := "encode"
+		if s.Unprocess {
+			dir = "decode"
+		}
+		line := canvas.NewText(fmt.Sprintf("%d. %s (%s)", i+1, name, dir), accent(i))
+		dg.history.Add(line)
+	}
+	dg.history.Refresh()
 }
 
 // refreshFrom updates the displayed output of every card from index `from`
