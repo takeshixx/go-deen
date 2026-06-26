@@ -6,6 +6,7 @@ package gui
 
 import (
 	"io"
+	"net/url"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -14,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/takeshixx/deen/internal/core"
 	"github.com/takeshixx/deen/internal/pipeline"
 	"github.com/takeshixx/deen/internal/plugins"
 )
@@ -76,10 +78,28 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Light", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantLight})),
 		fyne.NewMenuItem("Dark", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantDark})),
 	)
-	help := fyne.NewMenu("Help", fyne.NewMenuItem("About", func() {
-		dialog.ShowInformation("About", "deen — chain data encodings, decodings, hashes and formatters.", dg.window)
-	}))
+	help := fyne.NewMenu("Help", fyne.NewMenuItem("About", dg.showAbout))
 	return fyne.NewMainMenu(themeMenu, help)
+}
+
+// showAbout displays version and project information.
+func (dg *DeenGUI) showAbout() {
+	version := core.Version()
+	if b := core.Branch(); b != "" {
+		version += " (" + b + ")"
+	}
+	docsURL, _ := url.Parse("https://deen.adversec.com")
+	repoURL, _ := url.Parse("https://github.com/takeshixx/go-deen")
+
+	title := widget.NewLabelWithStyle("deen", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	content := container.NewVBox(
+		title,
+		widget.NewLabel("Version: "+version),
+		widget.NewLabel("Chain data encodings, decodings, hashes and formatters."),
+		container.NewHBox(widget.NewLabel("Documentation:"), widget.NewHyperlink("deen.adversec.com", docsURL)),
+		container.NewHBox(widget.NewLabel("Source:"), widget.NewHyperlink("github.com/takeshixx/go-deen", repoURL)),
+	)
+	dialog.ShowCustom("About deen", "Close", content, dg.window)
 }
 
 // rebuild recreates the whole card stack. Called on structural changes

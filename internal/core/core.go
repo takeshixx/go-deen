@@ -15,6 +15,18 @@ import (
 
 var version string
 var branch string
+
+// Version returns the build version (set via -ldflags), or "dev" if unset.
+func Version() string {
+	if version == "" {
+		return "dev"
+	}
+	return version
+}
+
+// Branch returns the build branch (set via -ldflags), or "" if unset.
+func Branch() string { return branch }
+
 var printPluginsPtr *bool
 var printPluginsJSONPtr *bool
 var versionPtr *bool

@@ -199,6 +199,28 @@ func Names() []string {
 	return names
 }
 
+// InCategory returns the plugin names belonging to a category, in registry
+// order.
+func InCategory(category string) []string {
+	var names []string
+	for _, p := range metadata {
+		if p.Category == category {
+			names = append(names, p.Name)
+		}
+	}
+	return names
+}
+
+// CategoryOf returns the category of the named plugin, or "" if unknown.
+func CategoryOf(name string) string {
+	for _, p := range metadata {
+		if p.Name == name {
+			return p.Category
+		}
+	}
+	return ""
+}
+
 // GetForCategory returns plugin names for a given category. When aliases is
 // false only the plugin name (plus its "."-prefixed unprocess alias, if any)
 // is returned; when true every alias is included.
