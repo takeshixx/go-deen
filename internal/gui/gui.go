@@ -1,110 +1,154 @@
 //go:build gui
 
+// Package gui implements the deen desktop interface: a Burp Decoder-style
+// chain of plugin transforms backed by the pure internal/pipeline model.
 package gui
 
 import (
-	"errors"
-	"log"
+	"io"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/takeshixx/deen/internal/pipeline"
+	"github.com/takeshixx/deen/internal/plugins"
 )
 
-// CurrentEncoder returns the currently focussed encoder widget.
-func (dg *DeenGUI) CurrentEncoder() (ce *DeenEncoder) {
-	if dg.CurrentFocus > len(dg.Encoders)-1 {
-		// Invalid state, use last one
-		ce = dg.Encoders[len(dg.Encoders)-1]
-	} else {
-		ce = dg.Encoders[dg.CurrentFocus]
-	}
-	return
+// DeenGUI is the top-level GUI state.
+type DeenGUI struct {
+	app    fyne.App
+	window fyne.Window
+
+	pipe        *pipeline.Pipeline
+	pluginNames []string
+
+	sourceEntry *widget.Entry
+	stepsBox    *fyne.Container // holds the source card, step cards and add-slot
+	cards       []*stepCard     // parallel to pipe.Steps()
+
+	// updating guards programmatic SetText so it does not re-enter OnChanged.
+	updating bool
 }
 
-// AddEncoder creates and adds a new DeenEncoder instance to the Encoders list.
-func (dg *DeenGUI) AddEncoder() (enc *DeenEncoder, err error) {
-	enc, err = NewDeenEncoderWidget(dg)
-	if err != nil {
-		return
+// NewDeenGUI builds the GUI.
+func NewDeenGUI() (*DeenGUI, error) {
+	dg := &DeenGUI{
+		app:         app.NewWithID("io.deen.app"),
+		pipe:        pipeline.New(),
+		pluginNames: plugins.Names(),
 	}
-	dg.Encoders = append(dg.Encoders, enc)
-	return
+	dg.window = dg.app.NewWindow("deen")
+	dg.window.SetMaster()
+
+	dg.stepsBox = container.NewVBox()
+	content := container.NewBorder(dg.toolbar(), nil, nil, nil, container.NewVScroll(dg.stepsBox))
+	dg.window.SetContent(content)
+	dg.window.SetMainMenu(dg.mainMenu())
+	dg.window.Resize(fyne.NewSize(900, 640))
+
+	dg.rebuild()
+	return dg, nil
 }
 
-// RemoveEncoder removes a given DeenEncoder from the Encoders list.
-func (dg *DeenGUI) RemoveEncoder(enc *DeenEncoder) {
-	if enc == dg.Encoders[0] {
-		// We cannot remove the root widget, just clearing content and plugin
-		enc.ClearContent()
-		dg.Encoders[0].Plugin = nil
-		// And remove all following widgets.
-		dg.Encoders = []*DeenEncoder{dg.Encoders[0]}
-	} else {
-		// If enc is not the root widget, we have a previous widget
-		previous, err := dg.PreviousEncoder(enc)
+// Run shows the window and blocks until it closes.
+func (dg *DeenGUI) Run() { dg.window.ShowAndRun() }
+
+// toolbar builds the top action bar.
+func (dg *DeenGUI) toolbar() *widget.Toolbar {
+	return widget.NewToolbar(
+		widget.NewToolbarAction(theme.FolderOpenIcon(), dg.openFile),
+		widget.NewToolbarAction(theme.DocumentSaveIcon(), dg.saveResult),
+		widget.NewToolbarAction(theme.ContentCopyIcon(), dg.copyResult),
+		widget.NewToolbarSeparator(),
+		widget.NewToolbarAction(theme.ContentClearIcon(), dg.clear),
+	)
+}
+
+// mainMenu builds the window menu (theme switching).
+func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
+	setTheme := func(t fyne.Theme) func() { return func() { dg.app.Settings().SetTheme(t) } }
+	themeMenu := fyne.NewMenu("Theme",
+		fyne.NewMenuItem("System", setTheme(theme.DefaultTheme())),
+		fyne.NewMenuItem("Light", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantLight})),
+		fyne.NewMenuItem("Dark", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantDark})),
+	)
+	help := fyne.NewMenu("Help", fyne.NewMenuItem("About", func() {
+		dialog.ShowInformation("About", "deen — chain data encodings, decodings, hashes and formatters.", dg.window)
+	}))
+	return fyne.NewMainMenu(themeMenu, help)
+}
+
+// rebuild recreates the whole card stack. Called on structural changes
+// (adding/removing steps). Content-only changes use refreshFrom instead.
+func (dg *DeenGUI) rebuild() {
+	dg.stepsBox.RemoveAll()
+	dg.cards = dg.cards[:0]
+
+	dg.stepsBox.Add(dg.newSourceCard())
+	for i := range dg.pipe.Steps() {
+		c := dg.newStepCard(i)
+		dg.cards = append(dg.cards, c)
+		dg.stepsBox.Add(c.container)
+	}
+	dg.stepsBox.Add(dg.newAddSlot())
+	dg.stepsBox.Refresh()
+}
+
+// refreshFrom updates the displayed output of every card from index `from`
+// downward without recreating widgets.
+func (dg *DeenGUI) refreshFrom(from int) {
+	for i := from; i < len(dg.cards); i++ {
+		dg.cards[i].refresh()
+	}
+}
+
+// setText updates an entry programmatically without triggering its OnChanged.
+func (dg *DeenGUI) setText(e *widget.Entry, s string) {
+	dg.updating = true
+	e.SetText(s)
+	dg.updating = false
+}
+
+// --- toolbar actions ---
+
+func (dg *DeenGUI) openFile() {
+	dialog.ShowFileOpen(func(rc fyne.URIReadCloser, err error) {
+		if err != nil || rc == nil {
+			return
+		}
+		defer rc.Close()
+		data, err := io.ReadAll(rc)
 		if err != nil {
-			log.Printf("[WARN] PreviousEncoder() failed: %v\n", err)
-		}
-		if enc == dg.Encoders[len(dg.Encoders)-1] {
-			// Remove the last encoder
-			dg.Encoders = dg.Encoders[:len(dg.Encoders)-1]
-			// And clear the plugin of the previous encoder
-			previous.Plugin = nil
-		} else {
-			for i, e := range dg.Encoders {
-				if e == enc {
-					dg.Encoders = append(dg.Encoders[:i], dg.Encoders[i+1:]...)
-					// Transfer plugin to previous widget
-					dg.Encoders[i-1].Plugin = e.Plugin
-					break
-				}
-			}
-		}
-	}
-	dg.updateGUI()
-}
-
-// SetEncoderFocus sets focus of the encoder widget on index.
-func (dg *DeenGUI) SetEncoderFocus(index int) {
-	// Make sure we do not reference an invalid index
-	if index < 0 || len(dg.Encoders)-1 < index {
-		return
-	}
-	// Set focus on referenced encoder widget
-	dg.MainWindow.Canvas().Focus(dg.Encoders[index].InputField)
-	// Set the cursor to the end of the input field
-	dg.Encoders[index].InputField.CursorColumn = len(dg.Encoders[index].InputField.Text)
-	// Refresh the widget to make the changes take effect
-	dg.Encoders[index].InputField.Refresh()
-	// Update the global CurrentFocus
-	dg.CurrentFocus = index
-}
-
-// NextEncoder returns the next encoder instances from Encoders.
-func (dg *DeenGUI) NextEncoder(pe *DeenEncoder) (ne *DeenEncoder, err error) {
-	for i, e := range dg.Encoders {
-		if e == pe {
-			if len(dg.Encoders)-1 < i+1 {
-				// There is no no next widget, create a new one.
-				//ne, err = dg.AddEncoder()
-				err = errors.New("No next encoder found")
-				return
-			}
-			ne = dg.Encoders[i+1]
+			dialog.ShowError(err, dg.window)
 			return
 		}
-	}
-	return
+		dg.pipe.SetSource(data)
+		dg.setText(dg.sourceEntry, string(data))
+		dg.refreshFrom(0)
+	}, dg.window)
 }
 
-// PreviousEncoder returns the previous encoder instances from Encoders.
-func (dg *DeenGUI) PreviousEncoder(ne *DeenEncoder) (pe *DeenEncoder, err error) {
-	if ne == dg.Encoders[0] {
-		err = errors.New("Root widget has no previous encoders")
-		return
-	}
-	for i, e := range dg.Encoders {
-		if e == ne {
-			pe = dg.Encoders[i-1]
+func (dg *DeenGUI) saveResult() {
+	dialog.ShowFileSave(func(wc fyne.URIWriteCloser, err error) {
+		if err != nil || wc == nil {
 			return
 		}
-	}
-	return
+		defer wc.Close()
+		if _, err := wc.Write(dg.pipe.Result()); err != nil {
+			dialog.ShowError(err, dg.window)
+		}
+	}, dg.window)
+}
+
+func (dg *DeenGUI) copyResult() {
+	dg.window.Clipboard().SetContent(string(dg.pipe.Result()))
+}
+
+func (dg *DeenGUI) clear() {
+	dg.pipe = pipeline.New()
+	dg.rebuild()
 }
