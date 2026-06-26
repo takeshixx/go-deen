@@ -1,9 +1,9 @@
-// +build gui
+//go:build gui
 
 package gui
 
 import (
-	"io/ioutil"
+	"io"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -76,7 +76,7 @@ func (dg *DeenGUI) Run() {
 }
 
 func (dg *DeenGUI) newMainLayout() {
-	dg.MainLayout = fyne.NewContainerWithLayout(
+	dg.MainLayout = container.New(
 		layout.NewBorderLayout(nil, nil, dg.PluginList, dg.HistoryList),
 		dg.PluginList,           // left
 		dg.HistoryList,          // right
@@ -191,7 +191,7 @@ func (dg *DeenGUI) updateEncoderWidgets() {
 	for _, e := range dg.Encoders {
 		dg.EncoderWidgets.Add(e.createLayout())
 		if e.Plugin != nil {
-			if e.Plugin.Unprocess {
+			if e.Unprocess {
 				historyName = "." + e.Plugin.Name
 			} else {
 				historyName = e.Plugin.Name
@@ -203,7 +203,7 @@ func (dg *DeenGUI) updateEncoderWidgets() {
 }
 
 func (dg *DeenGUI) fileOpened(f fyne.URIReadCloser) {
-	input, err := ioutil.ReadAll(f)
+	input, err := io.ReadAll(f)
 	if err != nil {
 		dialog.ShowError(err, dg.MainWindow)
 	}

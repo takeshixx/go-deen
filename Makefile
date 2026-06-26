@@ -21,6 +21,7 @@ cross:
 	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(ldflags) -o ./bin/windows-386/deen.exe ./cmd/deen
 	# Darwin
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(ldflags) -o ./bin/darwin-amd64/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(ldflags) -o ./bin/darwin-arm64/deen ./cmd/deen
 
 .PHONY: stripped
 stripped:
@@ -42,6 +43,7 @@ cross-stripped:
 	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build $(ldflagsstripped) -o ./bin/windows-386/deen.exe ./cmd/deen
 	# Darwin
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(ldflagsstripped) -o ./bin/darwin-amd64/deen ./cmd/deen
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(ldflagsstripped) -o ./bin/darwin-arm64/deen ./cmd/deen
 
 .PHONY: gui
 gui:
@@ -53,15 +55,15 @@ endif
 
 .PHONY: fyne-cross
 fyne-cross:
-	fyne-cross linux $(ldflags) --tags gui --arch=* -output deen ./cmd/deen
-	fyne-cross windows $(ldflags) --tags gui --arch=* -output deen.exe ./cmd/deen
-	#fyne-cross darwin $(ldflags) --tags gui --arch=* -output deen-darwin ./cmd/deen
+	fyne-cross linux $(ldflags) --tags gui --arch=* -output ./bin/linux-fyne/deen ./cmd/deen
+	fyne-cross windows $(ldflags) --tags gui --arch=* -output ./bin/windows-fyne/deen.exe ./cmd/deen
+	fyne-cross darwin $(ldflags) --tags gui --arch=* -output ./bin/darwin-fyne/deen ./cmd/deen
 
 .PHONY: web
 web: 
 	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
 	GOOS=js GOARCH=wasm go build $(ldflagsstripped) -o extras/web/deen.wasm ./cmd/deen
-	cp $$(go env GOROOT)/misc/wasm/wasm_exec.js extras/web/wasm_exec.js
+	cp $$(go env GOROOT)/lib/wasm/wasm_exec.js extras/web/wasm_exec.js
 	http_server -no-auth -root extras/web -port 9090
 
 .PHONY: run

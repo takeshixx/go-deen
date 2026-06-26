@@ -3,135 +3,38 @@ package hashs
 import (
 	"crypto/sha256"
 	"crypto/sha512"
-	"encoding/hex"
-	"flag"
-	"fmt"
-	"io"
-	"os"
 
 	"github.com/takeshixx/deen/pkg/types"
 )
 
+const sha2Description = "SHA2 is a set of cryptographic hash functions designed by the\nUnited States National Security Agency (NSA)."
+
 // NewPluginSHA224 creates a plugin
-func NewPluginSHA224() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
-	p.Name = "sha224"
-	p.Aliases = []string{}
-	p.Category = "hashs"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var err error
-		hasher := sha256.New224()
-		if _, err := io.Copy(hasher, reader); err != nil {
-			return *new([]byte), err
-		}
-		hashSum := hasher.Sum(nil)
-		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
-		_ = hex.Encode(outBuf, hashSum[:])
-		return outBuf, err
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+func NewPluginSHA224() *types.DeenPlugin {
+	return hashPlugin("sha224", sha2Description, nil, sha256.New224)
 }
 
 // NewPluginSHA256 creates a plugin
-func NewPluginSHA256() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
-	p.Name = "sha256"
-	p.Aliases = []string{}
-	p.Category = "hashs"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var err error
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, reader); err != nil {
-			return *new([]byte), err
-		}
-		hashSum := hasher.Sum(nil)
-		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
-		_ = hex.Encode(outBuf, hashSum[:])
-		return outBuf, err
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+func NewPluginSHA256() *types.DeenPlugin {
+	return hashPlugin("sha256", sha2Description, nil, sha256.New)
 }
 
 // NewPluginSHA384 creates a plugin
-func NewPluginSHA384() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
-	p.Name = "sha384"
-	p.Aliases = []string{}
-	p.Category = "hashs"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var err error
-		hasher := sha512.New384()
-		if _, err := io.Copy(hasher, reader); err != nil {
-			return *new([]byte), err
-		}
-		hashSum := hasher.Sum(nil)
-		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
-		_ = hex.Encode(outBuf, hashSum[:])
-		return outBuf, err
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+func NewPluginSHA384() *types.DeenPlugin {
+	return hashPlugin("sha384", sha2Description, nil, sha512.New384)
 }
 
 // NewPluginSHA512 creates a plugin
-func NewPluginSHA512() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
-	p.Name = "sha512"
-	p.Aliases = []string{}
-	p.Category = "hashs"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var err error
-		hasher := sha512.New()
-		if _, err := io.Copy(hasher, reader); err != nil {
-			return *new([]byte), err
-		}
-		hashSum := hasher.Sum(nil)
-		outBuf := make([]byte, hex.EncodedLen(len(hashSum[:])))
-		_ = hex.Encode(outBuf, hashSum[:])
-		return outBuf, err
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s: \n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "SHA2 is a set of cryptographic hash functions designed\nby the United States National Security Agency (NSA).\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+func NewPluginSHA512() *types.DeenPlugin {
+	return hashPlugin("sha512", sha2Description, nil, sha512.New)
+}
+
+// NewPluginSHA512_224 creates a plugin
+func NewPluginSHA512_224() *types.DeenPlugin {
+	return hashPlugin("sha512-224", sha2Description, nil, sha512.New512_224)
+}
+
+// NewPluginSHA512_256 creates a plugin
+func NewPluginSHA512_256() *types.DeenPlugin {
+	return hashPlugin("sha512-256", sha2Description, nil, sha512.New512_256)
 }

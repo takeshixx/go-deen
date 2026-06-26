@@ -3,89 +3,32 @@ package compressions
 import (
 	"compress/flate"
 	"flag"
-	"fmt"
 	"io"
-	"os"
-	"strconv"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func doFlate(task *types.DeenTask, level int) {
-	go func() {
-		defer task.Close()
-		compressor, err := flate.NewWriter(task.PipeWriter, level)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		if _, err := io.Copy(compressor, task.Reader); err != nil {
-			task.ErrChan <- err
-		}
-		err = compressor.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
-}
-
-func doDeflate(task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		wrappedReader := types.TrimReader{}
-		wrappedReader.Rd = task.Reader
-		decompressor := flate.NewReader(wrappedReader)
-		_, err := io.Copy(task.PipeWriter, decompressor)
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
-}
-
-// NewPluginFlate creates a new PluginDeflate object
-func NewPluginFlate() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginFlate creates a new DEFLATE plugin (RFC 1951).
+func NewPluginFlate() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "flate"
 	p.Aliases = []string{".flate"}
 	p.Category = "compressions"
-	p.Unprocess = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		doFlate(task, flate.DefaultCompression)
+	p.Description = "Implements the DEFLATE compressed data format (RFC1951)."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.Int("level", flate.DefaultCompression, "compression level (-1 default, 0 none, 1 best speed, 9 best compression)")
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		compressionLevel := flate.DefaultCompression
-		level := flags.Lookup("level")
-		cliLevel, err := strconv.Atoi(level.Value.String())
-		if err != nil {
-			task.ErrChan <- err
-		}
-		if cliLevel >= -1 || cliLevel < 10 {
-			compressionLevel = cliLevel
-		}
-		doFlate(task, compressionLevel)
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		level := helpers.IntFlag(flags, "level", flate.DefaultCompression)
+		return compressStream(r, w, func(w io.Writer) (io.WriteCloser, error) {
+			return flate.NewWriter(w, level)
+		})
 	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		doDeflate(task)
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return decompressStream(r, w, func(r io.Reader) (io.Reader, error) {
+			return flate.NewReader(r), nil
+		})
 	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.UnprocessDeenTaskFunc(task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Implements the DEFLATE compressed data format (RFC1951).\n\n")
-			flags.PrintDefaults()
-		}
-		if !self.Unprocess {
-			levelDescription := "compression level\n" +
-				"  No compression:\t" + strconv.Itoa(flate.NoCompression) + "\n" +
-				"  Best speed:\t\t" + strconv.Itoa(flate.BestSpeed) + "\n" +
-				"  Best compression:\t" + strconv.Itoa(flate.BestCompression) + "\n" +
-				"  Default compression:\t" + strconv.Itoa(flate.DefaultCompression) + "\n "
-			flags.Int("level", flate.DefaultCompression, levelDescription)
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }

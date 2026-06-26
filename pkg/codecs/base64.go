@@ -1,96 +1,78 @@
 package codecs
 
 import (
+	"bytes"
 	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
-	"os"
 
-	"github.com/pkg/errors"
 	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func processBase64(encoding *base64.Encoding, task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		encoder := base64.NewEncoder(encoding, task.PipeWriter)
-		_, err := io.Copy(encoder, task.Reader)
-		if err != nil {
-			task.ErrChan <- errors.Wrap(err, "Copying into encoder in processBase64 failed")
-		}
-		err = encoder.Close()
-		if err != nil {
-			task.ErrChan <- errors.Wrap(err, "Closing encoder in processBase64 failed")
-		}
-	}()
-}
-
-func unprocessBase64(encoding *base64.Encoding, task *types.DeenTask) {
-	go func() {
-		defer task.Close()
-		decoder := base64.NewDecoder(encoding, task.Reader)
-		_, err := io.Copy(task.PipeWriter, decoder)
-		if err != nil {
-			task.ErrChan <- errors.Wrap(err, "Copy in unprocessBase64 failed")
-		}
-	}()
-}
-
-func parseBase64Encoding(flags *flag.FlagSet) (enc *base64.Encoding) {
-	raw := helpers.IsBoolFlag(flags, "raw")
+// base64Encoding selects the encoding for the forward direction based on flags.
+func base64Encoding(flags *flag.FlagSet) *base64.Encoding {
 	url := helpers.IsBoolFlag(flags, "url")
-	strict := helpers.IsBoolFlag(flags, "strict")
-	if strict {
-		enc = base64.StdEncoding
-	} else {
-		if url && raw {
-			enc = base64.RawURLEncoding
-		} else if url {
-			enc = base64.URLEncoding
-		} else if raw {
-			enc = base64.RawStdEncoding
-		} else {
-			enc = base64.StdEncoding
-		}
+	raw := helpers.IsBoolFlag(flags, "raw")
+	switch {
+	case url && raw:
+		return base64.RawURLEncoding
+	case url:
+		return base64.URLEncoding
+	case raw:
+		return base64.RawStdEncoding
+	default:
+		return base64.StdEncoding
 	}
-	return
 }
 
-// NewPluginBase64 creates a new PluginBase64 object
-func NewPluginBase64() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginBase64 creates a new base64 plugin (RFC 4648).
+func NewPluginBase64() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "base64"
 	p.Aliases = []string{".base64", "b64", ".b64"}
 	p.Category = "codecs"
-	p.Unprocess = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		processBase64(base64.StdEncoding, task)
+	p.Description = "Base64 encoding as defined in RFC 4648. By default decoding\nattempts the standard, raw, URL and raw-URL alphabets in turn."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.Bool("strict", false, "only use standard Base64 (no alternate alphabets when decoding)")
+		flags.Bool("raw", false, "unpadded Base64 encoding (RFC 4648 section 3.2)")
+		flags.Bool("url", false, "URL-safe Base64 alphabet")
 	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		unprocessBase64(base64.StdEncoding, task)
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		enc := base64Encoding(flags)
+		return encodeStream(r, w, func(w io.Writer) io.WriteCloser { return base64.NewEncoder(enc, w) })
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		enc := parseBase64Encoding(flags)
-		processBase64(enc, task)
-	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		enc := parseBase64Encoding(flags)
-		unprocessBase64(enc, task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Base64 encoding defined in RFC 4648. By default, decoding\ntries to decode raw URL and default Base64 data.\n\n")
-			flags.PrintDefaults()
+	p.Unprocess = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return err
 		}
-		flags.Bool("strict", false, "use strict Base64 decoding mode (don't try different encodings)")
-		flags.Bool("raw", false, "unpadded Base64 encoding (as defined in RFC 4648 section 3.2)")
-		flags.Bool("url", false, "use alternate, URL-safe Base64 encoding")
-		flags.Parse(args)
-		return flags
+		data = bytes.TrimSpace(data)
+
+		var candidates []*base64.Encoding
+		switch {
+		case helpers.IsBoolFlag(flags, "strict"):
+			candidates = []*base64.Encoding{base64.StdEncoding}
+		case helpers.IsBoolFlag(flags, "url") || helpers.IsBoolFlag(flags, "raw"):
+			candidates = []*base64.Encoding{base64Encoding(flags)}
+		default:
+			candidates = []*base64.Encoding{
+				base64.StdEncoding, base64.RawStdEncoding,
+				base64.URLEncoding, base64.RawURLEncoding,
+			}
+		}
+
+		var lastErr error
+		for _, enc := range candidates {
+			if decoded, derr := enc.DecodeString(string(data)); derr == nil {
+				_, err = w.Write(decoded)
+				return err
+			} else {
+				lastErr = derr
+			}
+		}
+		return fmt.Errorf("could not decode Base64 input: %w", lastErr)
 	}
-	return
+	return p
 }

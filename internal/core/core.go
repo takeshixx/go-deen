@@ -1,10 +1,10 @@
 package core
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 
@@ -15,27 +15,30 @@ import (
 
 var version string
 var branch string
-var noNewLinePtr *bool
 var printPluginsPtr *bool
 var printPluginsJSONPtr *bool
 var versionPtr *bool
 var filePtr *string
+var newlinePtr *bool
 
+// ParseFlags parses the global (pre-subcommand) flags and handles the
+// informational ones (-l, -lj, -version) that exit immediately.
 func ParseFlags() {
-	noNewLinePtr = flag.Bool("n", false, "do not output the trailing newline")
 	printPluginsPtr = flag.Bool("l", false, "list available plugins")
 	printPluginsJSONPtr = flag.Bool("lj", false, "list available plugins in JSON format")
 	versionPtr = flag.Bool("version", false, "print version")
-	filePtr = flag.String("file", "", "read from file")
+	filePtr = flag.String("file", "", "read input from file")
+	newlinePtr = flag.Bool("N", false, "append a trailing newline to the output")
 	flag.Parse()
 
-	if *printPluginsPtr {
+	switch {
+	case *printPluginsPtr:
 		plugins.PrintAvailable(false)
 		os.Exit(0)
-	} else if *printPluginsJSONPtr {
+	case *printPluginsJSONPtr:
 		plugins.PrintAvailable(true)
 		os.Exit(0)
-	} else if *versionPtr {
+	case *versionPtr:
 		fmt.Print(version)
 		if branch != "" {
 			fmt.Printf("-%s", branch)
@@ -45,131 +48,92 @@ func ParseFlags() {
 	}
 }
 
-func RunCLI() {
-	var processedData []byte
-	var err error
+// RunCLI dispatches the requested plugin and returns a process exit code.
+func RunCLI() int {
 	cmd := flag.Arg(0)
-	if !plugins.CmdAvailable(cmd) {
-    		fmt.Fprintln(os.Stderr, "Invalid cmd", cmd)
-		return
+	plugin, unprocess, ok := plugins.Resolve(cmd)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "deen: invalid command: %q (use -l to list plugins)\n", cmd)
+		return 2
 	}
-	
-	plugin := plugins.GetForCmd(cmd)
-	if strings.HasPrefix(cmd, ".") {
-		plugin.Unprocess = true
-	}
-	plugin.Command = strings.TrimPrefix(cmd, ".")
-	var pluginParser *flag.FlagSet
-	if plugin.AddDefaultCliFunc != nil {
-		pluginParser = helpers.DefaultFlagSet()
-		pluginParser = plugin.AddDefaultCliFunc(plugin, pluginParser, helpers.RemoveBeforeSubcommand(os.Args, cmd))
-	}
+	return runPlugin(plugin, unprocess, cmd)
+}
 
-	if pluginParser != nil && pluginParser.Lookup("n") != nil && helpers.IsBoolFlag(pluginParser, "n") {
-		tb := true
-		noNewLinePtr = &tb
+// runPlugin drives a plugin implementing the Process/Unprocess contract.
+func runPlugin(plugin *types.DeenPlugin, unprocess bool, cmd string) int {
+	transform := plugin.Process
+	if unprocess {
+		if plugin.Unprocess == nil {
+			fmt.Fprintf(os.Stderr, "deen: %q does not support decoding\n", plugin.Name)
+			return 2
+		}
+		transform = plugin.Unprocess
 	}
 
-	// Create a new task
-	task := types.NewDeenTask(os.Stdout)
-	task.Command = strings.TrimPrefix(cmd, ".")
-
-	// Decide where we read from. Its either from a file,
-	// data from argv or stdin.
-	if *filePtr != "" {
-		mainFile, err := os.Open(*filePtr)
-		if err != nil {
-			log.Fatalf("Failed to open file: %v", err)
-		}
-		task.Reader = mainFile
-	} else if pluginParser != nil {
-		pluginFilePtr := pluginParser.Lookup("file")
-		if pluginFilePtr != nil && pluginFilePtr.Value.String() != "" {
-			pluginFile, err := os.Open(pluginFilePtr.Value.String())
-			if err != nil {
-				log.Fatalf("Failed to open file: %v", err)
-			}
-			task.Reader = pluginFile
-		} else if pluginParser.NArg() > 0 {
-			inputData := strings.Join(pluginParser.Args(), " ")
-			task.Reader = strings.NewReader(inputData)
-		} else {
-			task.Reader = os.Stdin
-		}
-	} else {
-		if flag.NArg() > 1 {
-			inputData := strings.Join(flag.Args()[1:], " ")
-			task.Reader = strings.NewReader(inputData)
-		} else {
-			task.Reader = os.Stdin
-		}
+	fs := flag.NewFlagSet(plugin.Name, flag.ExitOnError)
+	fs.Usage = usageFor(fs, plugin)
+	newline := fs.Bool("N", false, "append a trailing newline to the output")
+	fileFlag := fs.String("file", "", "read input from file")
+	if plugin.RegisterFlags != nil {
+		plugin.RegisterFlags(fs)
 	}
+	fs.Parse(helpers.RemoveBeforeSubcommand(os.Args, cmd))
 
-	// TODO: this check will be removed as soon as the old
-	// steam stubs have been ported to the new task-based
-	// stubs.
-	if plugin.ProcessDeenTaskFunc != nil {
-		// PipeChanFunc prototype
-		if plugin.ProcessDeenTaskWithFlags != nil || plugin.UnprocessDeenTaskWithFlags != nil {
-			if plugin.Unprocess {
-				plugin.UnprocessDeenTaskWithFlags(pluginParser, task)
-			} else {
-				plugin.ProcessDeenTaskWithFlags(pluginParser, task)
-			}
-		} else if plugin.ProcessDeenTaskFunc != nil || plugin.UnprocessDeenTaskFunc != nil {
-			if plugin.Unprocess {
-				plugin.UnprocessDeenTaskFunc(task)
-			} else {
-				plugin.ProcessDeenTaskFunc(task)
-			}
-		}
-
-		select {
-		case err := <-task.ErrChan:
-			log.Fatalf("An error occured during plugin processing: %v\n", err)
-
-		case <-task.DoneChan:
-			//fmt.Fprintln(os.Stderr, "Plugin processing finished")
-		}
-
-		if !*noNewLinePtr {
-			_, err = io.WriteString(os.Stdout, "\n")
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-
-		return
-	}
-
-	// Default stream implementation (will be removed soon?)
-	inputReader := task.Reader
-
-	if plugin.ProcessStreamWithCliFlagsFunc != nil || plugin.UnprocessStreamWithCliFlagsFunc != nil {
-		// Process plugins that actually use additional CLI flags
-		if plugin.Unprocess {
-			processedData, err = plugin.UnprocessStreamWithCliFlagsFunc(pluginParser, inputReader)
-		} else {
-			processedData, err = plugin.ProcessStreamWithCliFlagsFunc(pluginParser, inputReader)
-		}
-	} else {
-		// Process plugins without additional CLI options
-		if plugin.Unprocess {
-			processedData, err = plugin.UnprocessStreamFunc(inputReader)
-		} else {
-			processedData, err = plugin.ProcessStreamFunc(inputReader)
-		}
-	}
+	reader, cleanup, err := selectInput(*fileFlag, fs.Args())
 	if err != nil {
-		// TODO: better handle plugin errors?
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, "deen:", err)
+		return 1
 	}
+	defer cleanup()
 
-	// Convert []byte to string
-	outputData := fmt.Sprintf("%s", processedData)
-	if *noNewLinePtr {
-		fmt.Print(outputData)
-	} else {
-		fmt.Println(outputData)
+	out := bufio.NewWriter(os.Stdout)
+	if err := transform(reader, out, fs); err != nil {
+		fmt.Fprintf(os.Stderr, "deen: %s: %s\n", plugin.Name, err)
+		return 1
+	}
+	// The newline may be requested either globally (before the plugin name)
+	// or as a per-plugin flag (after it).
+	if *newline || *newlinePtr {
+		if _, err := out.WriteString("\n"); err != nil {
+			fmt.Fprintln(os.Stderr, "deen:", err)
+			return 1
+		}
+	}
+	if err := out.Flush(); err != nil {
+		fmt.Fprintln(os.Stderr, "deen:", err)
+		return 1
+	}
+	return 0
+}
+
+// selectInput decides where input is read from: an explicit file (the global
+// -file flag or a plugin-level -file flag), the remaining CLI arguments, or
+// stdin. The returned cleanup closes the file when one was opened.
+func selectInput(pluginFile string, args []string) (io.Reader, func(), error) {
+	noop := func() {}
+	path := *filePtr
+	if path == "" {
+		path = pluginFile
+	}
+	if path != "" {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, noop, fmt.Errorf("failed to open file: %w", err)
+		}
+		return f, func() { f.Close() }, nil
+	}
+	if len(args) > 0 {
+		return strings.NewReader(strings.Join(args, " ")), noop, nil
+	}
+	return os.Stdin, noop, nil
+}
+
+func usageFor(fs *flag.FlagSet, plugin *types.DeenPlugin) func() {
+	return func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", plugin.Name)
+		if plugin.Description != "" {
+			fmt.Fprintf(os.Stderr, "%s\n\n", plugin.Description)
+		}
+		fs.PrintDefaults()
 	}
 }

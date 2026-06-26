@@ -1,37 +1,46 @@
 package examples
 
-import "testing"
+import (
+	"bytes"
+	"flag"
+	"testing"
 
-func TestPluginExampleProcessDeenTaskFunc(t *testing.T) {
+	"github.com/takeshixx/deen/pkg/types"
+)
 
+func run(t *testing.T, fn types.TransformFunc, rf func(*flag.FlagSet), input []byte, args ...string) []byte {
+	t.Helper()
+	fs := flag.NewFlagSet("example", flag.ContinueOnError)
+	if rf != nil {
+		rf(fs)
+	}
+	if err := fs.Parse(args); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := fn(bytes.NewReader(input), &buf, fs); err != nil {
+		t.Fatalf("transform failed: %s", err)
+	}
+	return buf.Bytes()
 }
 
-func TestPluginExampleProcessDeenTaskWithFlags(t *testing.T) {
-
+func TestPluginExampleRoundTrip(t *testing.T) {
+	p := NewPluginExample()
+	input := []byte("deen example plugin")
+	encoded := run(t, p.Process, p.RegisterFlags, input)
+	decoded := run(t, p.Unprocess, p.RegisterFlags, encoded)
+	if !bytes.Equal(decoded, input) {
+		t.Errorf("round-trip mismatch: got %q, want %q", decoded, input)
+	}
 }
 
-func TestPlguinExampleUnprocessDeenTaskFunc(t *testing.T) {
-
-}
-
-func TestPluginExampleUnprocessDeenTaskWithFlags(t *testing.T) {
-
-}
-
-func TestPluginExampleAddDefaultCliFunc(t *testing.T) {
-
-}
-
-// StreamExample test cases
-
-func TestPluginStreamExampleProcessStreamFunc(t *testing.T) {
-
-}
-
-func TestPluginStreamExampleProcessStreamWithCliFlagsFunc(t *testing.T) {
-
-}
-
-func TestPluginStreamExampleAddDefaultCliFunc(t *testing.T) {
-
+func TestPluginStreamExample(t *testing.T) {
+	p := NewPluginStreamExample()
+	if p.Unprocess != nil {
+		t.Error("one-way plugin should not define Unprocess")
+	}
+	got := run(t, p.Process, p.RegisterFlags, []byte("deenshatest"))
+	if string(got) != "c324da7d32853ffaeb6577f624753c7f0f2842c0" {
+		t.Errorf("unexpected SHA1: %s", got)
+	}
 }

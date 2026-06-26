@@ -1,87 +1,38 @@
 package compressions
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"strconv"
 
 	"github.com/dsnet/compress/bzip2"
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func doBZip2Compress(task *types.DeenTask, level int) {
-	go func() {
-		defer task.Close()
-		config := &bzip2.WriterConfig{Level: level}
-		compressor, err := bzip2.NewWriter(task.PipeWriter, config)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		_, err = io.Copy(compressor, task.Reader)
-		if err != nil {
-			task.ErrChan <- err
-		}
-		err = compressor.Close()
-		if err != nil {
-			task.ErrChan <- err
-		}
-	}()
-}
-
-// NewPluginBzip2 creates a new zlib plugin
-func NewPluginBzip2() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginBzip2 creates a new bzip2 plugin.
+func NewPluginBzip2() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "bzip2"
 	p.Aliases = []string{".bzip2"}
 	p.Category = "compressions"
-	p.Unprocess = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		doBZip2Compress(task, bzip2.DefaultCompression)
+	p.Description = "BZip2 compressed data format."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.Int("level", bzip2.DefaultCompression, "compression level from 1 (best speed) to 9 (best compression)")
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		levelFlag := flags.Lookup("level")
-		level, err := strconv.Atoi(levelFlag.Value.String())
-		if err != nil {
-			task.ErrChan <- err
-		}
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		level := helpers.IntFlag(flags, "level", bzip2.DefaultCompression)
 		if level < bzip2.BestSpeed || level > bzip2.BestCompression {
-			task.ErrChan <- errors.New("Invalid level")
+			return fmt.Errorf("invalid level %d (must be %d-%d)", level, bzip2.BestSpeed, bzip2.BestCompression)
 		}
-		doBZip2Compress(task, level)
+		return compressStream(r, w, func(w io.Writer) (io.WriteCloser, error) {
+			return bzip2.NewWriter(w, &bzip2.WriterConfig{Level: level})
+		})
 	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			wrappedReader := types.TrimReader{}
-			wrappedReader.Rd = task.Reader
-			decompressor, err := bzip2.NewReader(wrappedReader, nil)
-			if err != nil {
-				task.ErrChan <- err
-			}
-			_, err = io.Copy(task.PipeWriter, decompressor)
-			if err != nil {
-				task.ErrChan <- err
-			}
-		}()
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		return decompressStream(r, w, func(r io.Reader) (io.Reader, error) {
+			return bzip2.NewReader(r, nil)
+		})
 	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.UnprocessDeenTaskFunc(task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "BZip2 compressed data format.\n\n")
-			flags.PrintDefaults()
-		}
-		if !self.Unprocess {
-			flags.Int("level", bzip2.DefaultCompression, "compression level from 1 (best speed) to 9 (best compression)")
-		}
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }

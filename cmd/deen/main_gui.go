@@ -1,10 +1,11 @@
-// +build gui
+//go:build gui
 
 package main
 
 import (
 	"flag"
 	"log"
+	"os"
 
 	"github.com/takeshixx/deen/internal/core"
 	"github.com/takeshixx/deen/internal/gui"
@@ -13,7 +14,7 @@ import (
 func main() {
 	core.ParseFlags()
 	if flag.NArg() > 0 {
-		core.RunCLI()
+		os.Exit(core.RunCLI())
 	} else {
 		// Spawn the GUI
 		dg, err := gui.NewDeenGUI()

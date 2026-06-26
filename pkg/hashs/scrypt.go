@@ -1,99 +1,52 @@
 package hashs
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"flag"
-	"fmt"
 	"io"
-	"os"
-	"strconv"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/scrypt"
 )
 
 // NewPluginScrypt creates a new plugin
-func NewPluginScrypt() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+func NewPluginScrypt() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "scrypt"
-	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var inBuf bytes.Buffer
-		_, err := io.Copy(&inBuf, reader)
-		if err != nil {
-			return nil, err
-		}
-		tempBuf, err := scrypt.Key(inBuf.Bytes(), nil, 1<<15, 8, 1, 32)
-		if err != nil {
-			return nil, err
-		}
-		outBuf := []byte(base64.StdEncoding.EncodeToString(tempBuf))
-		return outBuf, err
-	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		costFlag := flags.Lookup("cost")
-		cost, err := strconv.Atoi(costFlag.Value.String())
-		if err != nil {
-			cost = bcrypt.DefaultCost
-		}
-
-		lenFlag := flags.Lookup("len")
-		length, err := strconv.Atoi(lenFlag.Value.String())
-		if err != nil {
-			return nil, err
-		}
-
-		rFlag := flags.Lookup("r")
-		rParam, err := strconv.Atoi(rFlag.Value.String())
-		if err != nil {
-			return nil, err
-		}
-
-		pFlag := flags.Lookup("p")
-		pParam, err := strconv.Atoi(pFlag.Value.String())
-		if err != nil {
-			return nil, err
-		}
-
-		saltFlag := flags.Lookup("salt")
-		salt, err := hex.DecodeString(saltFlag.Value.String())
-		if err != nil {
-			return nil, err
-		}
-
-		var inBuf bytes.Buffer
-		var outBuf []byte
-		_, err = io.Copy(&inBuf, reader)
-		if err != nil {
-			return nil, err
-		}
-
-		tempBuf, err := scrypt.Key(inBuf.Bytes(), salt, cost, rParam, pParam, length)
-		if err != nil {
-			return nil, err
-		}
-		outBuf = []byte(base64.StdEncoding.EncodeToString(tempBuf))
-		return outBuf, err
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "scrypt key derivation function as defined in Colin Percival's\npaper \"Stronger Key Derivation via Sequential Memory-Hard\nFunctions\".\n\n")
-			flags.PrintDefaults()
-		}
+	p.Description = "scrypt key derivation function as defined in Colin Percival's paper\n\"Stronger Key Derivation via Sequential Memory-Hard Functions\"."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
 		flags.String("salt", "", "hex encoded string used as salt")
 		flags.Int("len", 32, "output key length")
 		flags.Int("cost", 1<<15, "calculation cost")
 		flags.Int("r", 8, "parallelization parameter")
 		flags.Int("p", 1, "blocksize parameter")
-		flags.Parse(args)
-		return flags
 	}
-	return
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		cost := helpers.IntFlag(flags, "cost", 1<<15)
+		length := helpers.IntFlag(flags, "len", 32)
+		rParam := helpers.IntFlag(flags, "r", 8)
+		pParam := helpers.IntFlag(flags, "p", 1)
+		var salt []byte
+		if s := helpers.StringFlag(flags, "salt"); s != "" {
+			decoded, err := hex.DecodeString(s)
+			if err != nil {
+				return err
+			}
+			salt = decoded
+		}
+		input, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		key, err := scrypt.Key(input, salt, cost, rParam, pParam, length)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, base64.StdEncoding.EncodeToString(key))
+		return err
+	}
+	return p
 }

@@ -1,58 +1,35 @@
 package hashs
 
 import (
-	"bytes"
 	"flag"
-	"fmt"
 	"io"
-	"os"
-	"strconv"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // NewPluginBcrypt creates a plugin
-func NewPluginBcrypt() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+func NewPluginBcrypt() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "bcrypt"
-	p.Aliases = []string{}
 	p.Category = "hashs"
-	p.Unprocess = false
-	p.ProcessStreamFunc = func(reader io.Reader) ([]byte, error) {
-		var err error
-		var inBuf bytes.Buffer
-		_, err = io.Copy(&inBuf, reader)
-		if err != nil {
-			return *new([]byte), err
-		}
-		outBuf, err := bcrypt.GenerateFromPassword(inBuf.Bytes(), bcrypt.DefaultCost)
-		return outBuf, err
+	p.Description = "bcrypt password hashing."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.Int("cost", bcrypt.DefaultCost, "calculation cost")
 	}
-	p.ProcessStreamWithCliFlagsFunc = func(flags *flag.FlagSet, reader io.Reader) ([]byte, error) {
-		costFlag := flags.Lookup("cost")
-		cost, err := strconv.Atoi(costFlag.Value.String())
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		cost := helpers.IntFlag(flags, "cost", bcrypt.DefaultCost)
+		input, err := io.ReadAll(r)
 		if err != nil {
-			cost = bcrypt.DefaultCost
+			return err
 		}
-		var inBuf bytes.Buffer
-		_, err = io.Copy(&inBuf, reader)
+		out, err := bcrypt.GenerateFromPassword(input, cost)
 		if err != nil {
-			return *new([]byte), err
+			return err
 		}
-		outBuf, err := bcrypt.GenerateFromPassword(inBuf.Bytes(), cost)
-		return outBuf, err
+		_, err = w.Write(out)
+		return err
 	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "bcrypt password hashing.\n\n")
-			flags.PrintDefaults()
-		}
-		flags.Int("cost", 10, "calculation cost")
-		flags.Parse(args)
-		return flags
-	}
-	return
+	return p
 }

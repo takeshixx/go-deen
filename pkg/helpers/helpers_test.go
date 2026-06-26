@@ -24,10 +24,24 @@ func TestIsBoolFlag(t *testing.T) {
 	}
 }
 
-func TestDefaultFlagSet(t *testing.T) {
-	flags := DefaultFlagSet()
-	if flags.Lookup("file") == nil {
-		t.Error("Could not find file option in FlagSet")
+func TestIntFlag(t *testing.T) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	flags.Int("level", 5, "level")
+	flags.Parse([]string{"-level", "9"})
+	if got := IntFlag(flags, "level", 1); got != 9 {
+		t.Errorf("IntFlag = %d, want 9", got)
+	}
+	if got := IntFlag(flags, "missing", 7); got != 7 {
+		t.Errorf("IntFlag default = %d, want 7", got)
+	}
+}
+
+func TestStringFlag(t *testing.T) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	flags.String("key", "", "key")
+	flags.Parse([]string{"-key", "value"})
+	if got := StringFlag(flags, "key"); got != "value" {
+		t.Errorf("StringFlag = %q, want value", got)
 	}
 }
 

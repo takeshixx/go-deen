@@ -2,97 +2,55 @@ package codecs
 
 import (
 	"flag"
-	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-func processStrconv(t *types.DeenTask, ctrlOnly, graph bool) {
-	go func() {
-		defer t.Close()
-		str, err := ioutil.ReadAll(t.Reader)
-		if err != nil {
-			t.ErrChan <- errors.Wrap(err, "Failed to read input data")
-		}
-		var quotedStr string
-		if ctrlOnly {
-			quotedStr = strconv.Quote(string(str))
-		} else if graph {
-			quotedStr = strconv.QuoteToGraphic(string(str))
-		} else {
-			quotedStr = strconv.QuoteToASCII(string(str))
-		}
-		quotedStr = strings.TrimPrefix(quotedStr, "\"")
-		quotedStr = strings.TrimSuffix(quotedStr, "\"")
-		strReader := strings.NewReader(quotedStr)
-		_, err = io.Copy(t.PipeWriter, strReader)
-		if err != nil {
-			t.ErrChan <- errors.Wrap(err, "Copying into encoder in strconv failed")
-		}
-	}()
-}
-
-// NewPluginStrconv creates a new PluginStrconv object
-func NewPluginStrconv() (p *types.DeenPlugin) {
-	p = types.NewPlugin()
+// NewPluginStrconv creates a new strconv quoting plugin.
+func NewPluginStrconv() *types.DeenPlugin {
+	p := types.NewPlugin()
 	p.Name = "strconv"
 	p.Aliases = []string{".strconv", "str", ".str"}
 	p.Category = "codecs"
-	p.Unprocess = false
-	p.ProcessDeenTaskFunc = func(task *types.DeenTask) {
-		processStrconv(task, false, false)
+	p.Description = "Quote/Unquote strings and apply/remove escape characters."
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.Bool("ctrl", false, "only escape control sequences")
+		flags.Bool("graph", false, "escape to graphs")
 	}
-	p.ProcessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		ctrlOnlyPtr := flags.Lookup("ctrl")
-		ctflOnly := false
-		ctflOnly, _ = strconv.ParseBool(ctrlOnlyPtr.Value.String())
-		graphPtr := flags.Lookup("graph")
-		graph := false
-		graph, _ = strconv.ParseBool(graphPtr.Value.String())
-		processStrconv(task, ctflOnly, graph)
-	}
-	p.UnprocessDeenTaskFunc = func(task *types.DeenTask) {
-		go func() {
-			defer task.Close()
-			str, err := ioutil.ReadAll(task.Reader)
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Failed to read input data")
-			}
-			strStr := string(str)
-			strStr = fmt.Sprintf("\"%s\"", strStr)
-			unquotedStr, err := strconv.Unquote(strStr)
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Failed to unquote input data")
-			}
-			strReader := strings.NewReader(unquotedStr)
-			_, err = io.Copy(task.PipeWriter, strReader)
-			if err != nil {
-				task.ErrChan <- errors.Wrap(err, "Copy in Hex failed")
-			}
-		}()
-	}
-	p.UnprocessDeenTaskWithFlags = func(flags *flag.FlagSet, task *types.DeenTask) {
-		p.UnprocessDeenTaskFunc(task)
-	}
-	p.AddDefaultCliFunc = func(self *types.DeenPlugin, flags *flag.FlagSet, args []string) *flag.FlagSet {
-		flags.Init(p.Name, flag.ExitOnError)
-		flags.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage of %s:\n\n", p.Name)
-			fmt.Fprintf(os.Stderr, "Quote/Unquote strings and apply/remove escape characters.\n\n")
-			flags.PrintDefaults()
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return err
 		}
-		if !self.Unprocess {
-			flags.Bool("ctrl", false, "only escape control sequences")
-			flags.Bool("graph", false, "escape to graphs")
+		var quoted string
+		switch {
+		case helpers.IsBoolFlag(flags, "ctrl"):
+			quoted = strconv.Quote(string(data))
+		case helpers.IsBoolFlag(flags, "graph"):
+			quoted = strconv.QuoteToGraphic(string(data))
+		default:
+			quoted = strconv.QuoteToASCII(string(data))
 		}
-		flags.Parse(args)
-		return flags
+		quoted = strings.TrimPrefix(quoted, "\"")
+		quoted = strings.TrimSuffix(quoted, "\"")
+		_, err = io.WriteString(w, quoted)
+		return err
 	}
-	return
+	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		unquoted, err := strconv.Unquote("\"" + string(data) + "\"")
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, unquoted)
+		return err
+	}
+	return p
 }
