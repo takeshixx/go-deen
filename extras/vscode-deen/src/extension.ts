@@ -22,7 +22,7 @@ function runDeenPlugin(plugin: string, content: string): void {
     vscode.ViewColumn.One,
     {}
   );
-  const cmd = child.exec("godeen "+plugin+" "+content, (err, stdout) => {
+  child.exec("godeen "+plugin+" "+content, (err, stdout) => {
     if (err) {
       throw err;
     }
@@ -97,5 +97,4 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
 export function deactivate(): void {}
