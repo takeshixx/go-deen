@@ -24,33 +24,53 @@ func multilineEntry(rows int) *widget.Entry {
 	return e
 }
 
-// pluginPicker builds a category dropdown plus a plugin dropdown for that
-// category. Selecting a plugin calls onPick. When current is non-empty its
-// category and name are pre-selected without firing onPick.
-func (dg *DeenGUI) pluginPicker(current string, onPick func(name string)) (*widget.Select, *widget.Select) {
-	catSel := widget.NewSelect(plugins.PluginCategories, nil)
-	catSel.PlaceHolder = "category"
-	plugSel := widget.NewSelect(nil, nil)
-	plugSel.PlaceHolder = "plugin"
-
-	if current != "" {
-		cat := plugins.CategoryOf(current)
-		catSel.Selected = cat
-		plugSel.Options = plugins.InCategory(cat)
-		plugSel.Selected = current
+// categorySelectors builds one dropdown per plugin category (codecs, hashs, …),
+// each listing the plugins in that category. Selecting a plugin in any dropdown
+// calls onPick and clears the others. When current is non-empty its dropdown is
+// pre-selected.
+func (dg *DeenGUI) categorySelectors(current string, onPick func(name string)) *fyne.Container {
+	cats := plugins.PluginCategories
+	selects := make([]*widget.Select, len(cats))
+	for i, cat := range cats {
+		s := widget.NewSelect(plugins.InCategory(cat), nil)
+		s.PlaceHolder = cat
+		selects[i] = s
 	}
 
-	catSel.OnChanged = func(cat string) {
-		plugSel.Options = plugins.InCategory(cat)
-		plugSel.ClearSelected()
-		plugSel.Refresh()
+	clearOthers := func(except *widget.Select) {
+		for _, s := range selects {
+			if s != except && s.Selected != "" {
+				s.Selected = ""
+				s.Refresh()
+			}
+		}
 	}
-	plugSel.OnChanged = func(name string) {
-		if name != "" {
+	for _, s := range selects {
+		s := s
+		s.OnChanged = func(name string) {
+			if name == "" {
+				return
+			}
+			clearOthers(s)
 			onPick(name)
 		}
 	}
-	return catSel, plugSel
+
+	if current != "" {
+		cat := plugins.CategoryOf(current)
+		for i, c := range cats {
+			if c == cat {
+				selects[i].Selected = current // set directly so OnChanged does not fire
+				selects[i].Refresh()
+			}
+		}
+	}
+
+	objs := make([]fyne.CanvasObject, len(selects))
+	for i, s := range selects {
+		objs[i] = s
+	}
+	return container.NewGridWithColumns(len(selects), objs...)
 }
 
 // newSourceCard builds the editable source-input card at the top of the chain.
@@ -69,11 +89,11 @@ func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 
 // stepCard is the view for a single pipeline step.
 type stepCard struct {
-	gui     *DeenGUI
-	index   int
-	hexView bool
+	gui        *DeenGUI
+	index      int
+	pluginName string
+	hexView    bool
 
-	plugSel   *widget.Select
 	decode    *widget.Check
 	options   *fyne.Container
 	body      *widget.Entry
@@ -83,22 +103,23 @@ type stepCard struct {
 
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	step := dg.pipe.Steps()[i]
-	c := &stepCard{gui: dg, index: i}
+	c := &stepCard{gui: dg, index: i, pluginName: step.Plugin}
 
 	c.decode = widget.NewCheck("decode", nil)
 	c.decode.SetChecked(step.Unprocess)
 
 	apply := func() {
-		name := c.plugSel.Selected
-		if name == "" {
+		if c.pluginName == "" {
 			return
 		}
-		dg.pipe.SetPlugin(c.index, name, c.decode.Checked)
+		dg.pipe.SetPlugin(c.index, c.pluginName, c.decode.Checked)
 		c.rebuildOptions()
 		dg.refreshFrom(c.index)
 	}
-	catSel, plugSel := dg.pluginPicker(step.Plugin, func(string) { apply() })
-	c.plugSel = plugSel
+	selectors := dg.categorySelectors(step.Plugin, func(name string) {
+		c.pluginName = name
+		apply()
+	})
 	c.decode.OnChanged = func(bool) { apply() }
 
 	hexToggle := widget.NewCheck("hex", func(b bool) {
@@ -109,11 +130,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		dg.pipe.RemoveStep(c.index)
 		dg.rebuild()
 	})
-
-	header := container.NewBorder(nil, nil,
-		container.NewHBox(catSel, c.plugSel, c.decode),
-		container.NewHBox(hexToggle, remove),
-	)
+	controls := container.NewBorder(nil, nil, container.NewHBox(c.decode, hexToggle), remove)
 
 	c.options = container.NewVBox()
 	c.body = multilineEntry(6)
@@ -128,7 +145,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.status.Importance = widget.DangerImportance
 	c.status.Hide()
 
-	cardBody := container.NewVBox(header, c.options, c.body, c.status)
+	cardBody := container.NewVBox(selectors, controls, c.options, c.body, c.status)
 	c.container = widget.NewCard(fmt.Sprintf("Step %d", i+1), "", cardBody)
 
 	c.rebuildOptions()
@@ -136,8 +153,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	return c
 }
 
-// rebuildOptions repopulates the per-plugin option widgets (as a form) for this
-// step.
+// rebuildOptions repopulates the per-plugin option widgets (as a form).
 func (c *stepCard) rebuildOptions() {
 	c.options.RemoveAll()
 	step := c.gui.pipe.Steps()[c.index]
@@ -196,12 +212,11 @@ func (c *stepCard) refresh() {
 	}
 }
 
-// newAddSlot builds the trailing category/plugin pickers that append a step.
+// newAddSlot builds the trailing per-category dropdowns that append a step.
 func (dg *DeenGUI) newAddSlot() fyne.CanvasObject {
-	catSel, plugSel := dg.pluginPicker("", func(name string) {
+	selectors := dg.categorySelectors("", func(name string) {
 		dg.pipe.AddStep(name, false)
 		dg.rebuild()
 	})
-	return widget.NewCard("Add transform", "",
-		container.NewHBox(catSel, plugSel))
+	return widget.NewCard("Add transform", "", selectors)
 }
