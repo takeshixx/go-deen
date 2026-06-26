@@ -52,7 +52,7 @@ func NewPluginUnicode() *types.DeenPlugin {
 	p.Name = "unicode"
 	p.Aliases = []string{".unicode", "utf8", ".utf8", "utf16", ".utf16", "utf32", ".utf32", "euckr", ".euckr"}
 	p.Category = "codecs"
-	p.Description = "Encode/decode data between UTF-8 and UTF-16, UTF-32 or EUC-KR.\nThe target encoding is selected by the command alias (e.g. utf16)."
+	p.Description = "Encode/decode data between UTF-8 and UTF-16, UTF-32 or EUC-KR.\nThe target encoding is selected by the command alias (e.g. utf16).\nThis is a text transcoder: invalid sequences are replaced, so it is\nnot byte-preserving for arbitrary binary input."
 	p.RegisterFlags = func(flags *flag.FlagSet) {
 		flags.String("bom", "ignore", "BOM mode (use, ignore, expect)")
 		flags.Bool("big", false, "use big endian (default: little)")
