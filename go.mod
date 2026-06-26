@@ -10,7 +10,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/iancoleman/orderedmap v0.3.0
 	github.com/itchyny/gojq v0.12.19
-	github.com/pkg/errors v0.9.1
+	github.com/klauspost/compress v1.18.6
 	github.com/schollz/closestmatch v2.1.0+incompatible
 	github.com/tdewolff/minify/v2 v2.24.13
 	github.com/ulikunitz/xz v0.5.15

@@ -67,6 +67,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	compressions.NewPluginZlib,
 	compressions.NewPluginBzip2,
 	compressions.NewPluginBrotli,
+	compressions.NewPluginZstd,
 	formatters.NewPluginJSONFormatter,
 	formatters.NewPluginJwt,
 	formatters.NewPluginJQFormatter,
