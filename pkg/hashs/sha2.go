@@ -28,3 +28,13 @@ func NewPluginSHA384() *types.DeenPlugin {
 func NewPluginSHA512() *types.DeenPlugin {
 	return hashPlugin("sha512", sha2Description, nil, sha512.New)
 }
+
+// NewPluginSHA512_224 creates a plugin
+func NewPluginSHA512_224() *types.DeenPlugin {
+	return hashPlugin("sha512-224", sha2Description, nil, sha512.New512_224)
+}
+
+// NewPluginSHA512_256 creates a plugin
+func NewPluginSHA512_256() *types.DeenPlugin {
+	return hashPlugin("sha512-256", sha2Description, nil, sha512.New512_256)
+}
