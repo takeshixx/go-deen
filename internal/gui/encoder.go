@@ -116,7 +116,7 @@ func (de *DeenEncoder) ClearContent() {
 // Process processes the given data string and returns the processed bytes.
 func (de *DeenEncoder) Process() (processed []byte, err error) {
 	var reader io.Reader
-	if len(de.Content) > 1 {
+	if len(de.Content) > 0 {
 		reader = bytes.NewReader(de.Content)
 	} else {
 		if len(de.InputField.Text) > 0 {
