@@ -185,6 +185,20 @@ func GetForCmd(cmd string) *types.DeenPlugin {
 	return plugin
 }
 
+// Names returns every plugin name, ordered by category. Useful for building
+// listings and UIs.
+func Names() []string {
+	var names []string
+	for _, c := range PluginCategories {
+		for _, p := range metadata {
+			if p.Category == c {
+				names = append(names, p.Name)
+			}
+		}
+	}
+	return names
+}
+
 // GetForCategory returns plugin names for a given category. When aliases is
 // false only the plugin name (plus its "."-prefixed unprocess alias, if any)
 // is returned; when true every alias is included.

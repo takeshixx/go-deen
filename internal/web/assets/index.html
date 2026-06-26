@@ -1,6 +1,17 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 	<head>
 		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1"/>
+		<title>deen</title>
+		<style>
+			body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 60rem; }
+			.deen h1 { margin: 0 0 1rem; }
+			.controls { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.75rem; }
+			.controls label { display: flex; align-items: center; gap: 0.25rem; }
+			.io { width: 100%; min-height: 8rem; box-sizing: border-box; font-family: ui-monospace, monospace; padding: 0.5rem; }
+			pre.io { white-space: pre-wrap; word-break: break-all; background: #f4f4f4; }
+		</style>
 		<script src="wasm_exec.js"></script>
 		<script>
 			const go = new Go();
