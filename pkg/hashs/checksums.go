@@ -31,6 +31,14 @@ func NewPluginCRC32C() *types.DeenPlugin {
 		nil, func() hash.Hash { return crc32.New(tab) })
 }
 
+// NewPluginCRC32Koopman creates a plugin computing the Koopman CRC-32 checksum.
+func NewPluginCRC32Koopman() *types.DeenPlugin {
+	tab := crc32.MakeTable(crc32.Koopman)
+	return hashPlugin("crc32k",
+		"CRC-32 checksum using the Koopman polynomial.",
+		nil, func() hash.Hash { return crc32.New(tab) })
+}
+
 // NewPluginCRC64ISO creates a plugin computing the ISO CRC-64 checksum.
 func NewPluginCRC64ISO() *types.DeenPlugin {
 	tab := crc64.MakeTable(crc64.ISO)

@@ -6,6 +6,7 @@ require (
 	fyne.io/fyne/v2 v2.7.4
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/andybalholm/brotli v1.2.1
+	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/dsnet/compress v0.0.1
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/iancoleman/orderedmap v0.3.0
