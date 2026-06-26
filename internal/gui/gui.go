@@ -34,6 +34,8 @@ type DeenGUI struct {
 	stepsBox    *fyne.Container // holds the source card, step cards and add-slot
 	cards       []*stepCard     // parallel to pipe.Steps()
 	history     *fyne.Container // side panel listing the chain
+	split       *container.Split
+	historyOpen bool
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
 	updating bool
@@ -53,9 +55,10 @@ func NewDeenGUI() (*DeenGUI, error) {
 	dg.history = container.NewVBox()
 	chain := container.NewVScroll(dg.stepsBox)
 	historyPanel := widget.NewCard("History", "", container.NewVScroll(dg.history))
-	split := container.NewHSplit(chain, historyPanel)
-	split.SetOffset(0.78)
-	content := container.NewBorder(dg.toolbar(), nil, nil, nil, split)
+	dg.split = container.NewHSplit(chain, historyPanel)
+	dg.split.SetOffset(0.78)
+	dg.historyOpen = true
+	content := container.NewBorder(dg.toolbar(), nil, nil, nil, dg.split)
 	dg.window.SetContent(content)
 	dg.window.SetMainMenu(dg.mainMenu())
 	dg.window.Resize(fyne.NewSize(900, 640))
@@ -75,7 +78,20 @@ func (dg *DeenGUI) toolbar() *widget.Toolbar {
 		widget.NewToolbarAction(theme.ContentCopyIcon(), dg.copyResult),
 		widget.NewToolbarSeparator(),
 		widget.NewToolbarAction(theme.ContentClearIcon(), dg.clear),
+		widget.NewToolbarSpacer(),
+		widget.NewToolbarAction(theme.ListIcon(), dg.toggleHistory),
+		widget.NewToolbarAction(theme.HelpIcon(), dg.showHelp),
 	)
+}
+
+// toggleHistory collapses or expands the history side panel.
+func (dg *DeenGUI) toggleHistory() {
+	dg.historyOpen = !dg.historyOpen
+	if dg.historyOpen {
+		dg.split.SetOffset(0.78)
+	} else {
+		dg.split.SetOffset(1.0)
+	}
 }
 
 // mainMenu builds the window menu (theme switching).
@@ -86,8 +102,45 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Light", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantLight})),
 		fyne.NewMenuItem("Dark", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantDark})),
 	)
-	help := fyne.NewMenu("Help", fyne.NewMenuItem("About", dg.showAbout))
+	help := fyne.NewMenu("Help",
+		fyne.NewMenuItem("How to use", dg.showHelp),
+		fyne.NewMenuItem("About", dg.showAbout),
+	)
 	return fyne.NewMainMenu(themeMenu, help)
+}
+
+// showHelp displays a usage/info page describing the GUI.
+func (dg *DeenGUI) showHelp() {
+	md := `## Using deen
+
+deen applies a **chain of transforms** to your input — like Burp Suite's
+Decoder. The result of each step feeds into the next.
+
+### Steps
+- Type or open data into the **Input** card at the top.
+- Use the **Add transform** card to append a step: each plugin category
+  (codecs, compressions, hashs, formatters, misc) has its own dropdown.
+- Tick **decode** to run a step in reverse (e.g. base64 decode). One-way
+  plugins like hashes cannot be decoded.
+- Plugin options (e.g. base64 ` + "`-url`" + `, gzip ` + "`-level`" + `) appear as fields
+  under each step.
+- **hex** shows a step's output as a hex dump (read-only).
+- Editing any step's output recomputes everything below it.
+- Use the disclosure arrow to **collapse/expand** a step, the trash icon
+  to remove it.
+
+### Toolbar
+- Open a file, save the final result, copy the result, or clear the chain.
+- Toggle the **History** side panel, which lists the whole chain.
+
+### Menu
+- **Theme**: follow the system theme or force light/dark.`
+
+	rich := widget.NewRichTextFromMarkdown(md)
+	rich.Wrapping = fyne.TextWrapWord
+	scroll := container.NewVScroll(rich)
+	scroll.SetMinSize(fyne.NewSize(520, 420))
+	dialog.ShowCustom("How to use deen", "Close", scroll, dg.window)
 }
 
 // showAbout displays version and project information.
