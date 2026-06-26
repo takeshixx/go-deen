@@ -1,0 +1,34 @@
+# systemd unit for running the built-in `deen serve` behind a reverse proxy.
+# Build a self-contained binary first: `make web` produces a -tags webembed
+# binary that embeds the web assets. Install it to /usr/local/bin/deen.
+#
+# This binds to localhost only; terminate TLS and add headers at the proxy
+# (see nginx.conf / Caddyfile), or pass --tls-cert/--tls-key to serve directly.
+
+[Unit]
+Description=deen web interface
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/deen serve --host 127.0.0.1 --port 9090
+Restart=on-failure
+
+# Hardening.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

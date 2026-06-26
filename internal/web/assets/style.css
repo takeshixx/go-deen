@@ -1,0 +1,27 @@
+:root { color-scheme: light dark; }
+body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+h1 { margin: 0 0 1rem; }
+h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+.app { display: flex; gap: 1.5rem; align-items: flex-start; }
+.main { flex: 1; min-width: 0; }
+.side { width: 14rem; flex: none; }
+
+.card { border: 1px solid rgba(127,127,127,0.3); border-radius: 6px;
+	padding: 0.6rem 0.8rem; margin-bottom: 0.8rem; }
+.card-title, .title { font-weight: 600; }
+.card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.summary { opacity: 0.8; font-size: 0.85rem; }
+.spacer { flex: 1; }
+.icon { border: none; background: transparent; cursor: pointer; font-size: 1rem; padding: 0 0.3rem; }
+
+.selectors { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
+.selectors select { padding: 0.2rem; }
+.toggles { display: flex; gap: 1rem; margin-bottom: 0.5rem; }
+.options { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.5rem; }
+.options input[type=text] { padding: 0.2rem; }
+
+textarea.io { width: 100%; min-height: 7rem; box-sizing: border-box;
+	font-family: ui-monospace, monospace; padding: 0.4rem; resize: vertical; }
+.error { color: #db4437; font-family: ui-monospace, monospace; margin-top: 0.3rem; }
+
+.history .hist { padding: 0.15rem 0; font-family: ui-monospace, monospace; font-size: 0.85rem; }

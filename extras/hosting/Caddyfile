@@ -1,0 +1,21 @@
+# Sample Caddy config for hosting the deen web interface.
+# Caddy provides automatic HTTPS (Let's Encrypt), correct wasm MIME and
+# compression out of the box. Build assets with `make web-assets` and copy
+# index.html, main.js, style.css, wasm_exec.js and deen.wasm into the root.
+
+deen.example.com {
+	root * /var/www/deen
+	encode gzip zstd
+
+	header {
+		Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		-Server
+	}
+
+	file_server
+}
