@@ -51,6 +51,9 @@ func ParseFlags() {
 // RunCLI dispatches the requested plugin and returns a process exit code.
 func RunCLI() int {
 	cmd := flag.Arg(0)
+	if cmd == "serve" {
+		return runServe()
+	}
 	plugin, unprocess, ok := plugins.Resolve(cmd)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "deen: invalid command: %q (use -l to list plugins)\n", cmd)

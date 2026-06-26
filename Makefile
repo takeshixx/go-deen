@@ -59,12 +59,16 @@ fyne-cross:
 	fyne-cross windows $(ldflags) --tags gui --arch=* -output ./bin/windows-fyne/deen.exe ./cmd/deen
 	fyne-cross darwin $(ldflags) --tags gui --arch=* -output ./bin/darwin-fyne/deen ./cmd/deen
 
+.PHONY: web-assets
+web-assets:
+	GOOS=js GOARCH=wasm go build $(ldflagsstripped) -o internal/web/assets/deen.wasm ./cmd/deen
+	cp $$(go env GOROOT)/lib/wasm/wasm_exec.js internal/web/assets/wasm_exec.js
+
+# Build the wasm interface, embed it into a self-contained binary and serve it.
 .PHONY: web
-web: 
-	rm extras/web/deen.wasm extras/web/wasm_exec.js || true
-	GOOS=js GOARCH=wasm go build $(ldflagsstripped) -o extras/web/deen.wasm ./cmd/deen
-	cp $$(go env GOROOT)/lib/wasm/wasm_exec.js extras/web/wasm_exec.js
-	http_server -no-auth -root extras/web -port 9090
+web: web-assets
+	go build $(ldflagsstripped) --tags webembed -o ./bin/deen ./cmd/deen
+	./bin/deen serve --port 9090
 
 .PHONY: run
 run:
@@ -73,6 +77,7 @@ run:
 .PHONY: clean
 clean:
 	rm -rf ./bin
+	rm -f internal/web/assets/deen.wasm internal/web/assets/wasm_exec.js
 	rm -f extras/web/deen.wasm extras/web/wasm_exec.js
 
 .PHONY: test

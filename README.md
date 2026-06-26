@@ -82,12 +82,24 @@ sudo apt install xorg-dev    # Debian/Ubuntu
 
 ## WebAssembly
 
-The experimental web interface lives on the `web` branch. Build and serve it
-with:
+deen compiles to WebAssembly and serves the browser interface itself — no
+external web server needed. `make web` builds the wasm, embeds it into a
+self-contained binary and serves it on `http://127.0.0.1:9090`:
 
 ```bash
 make web
 ```
+
+To do it by hand, build with the `webembed` tag and run `serve`:
+
+```bash
+go build -tags webembed -o deen ./cmd/deen
+deen serve --port 9090
+```
+
+`deen serve` can also serve any directory (`--root`) and supports TLS
+(`--tls-cert`/`--tls-key`), HTTP basic auth (`--auth-user`/`--auth-pass`) and
+request logging (`--log`). The experimental UI itself lives on the `web` branch.
 
 ## Writing plugins
 
