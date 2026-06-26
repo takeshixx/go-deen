@@ -1,101 +1,99 @@
 # deen ![Build & Test](https://github.com/takeshixx/go-deen/workflows/Build%20&%20Test/badge.svg?branch=master)
 
-`deen` is a generic data encoding/decoding application. It provides several interfaces including a CLI, a GUI implemented with [fyne](https://github.com/fyne-io/fyne) and a (experimental) web interface built with [Vecty](https://github.com/hexops/vecty) that runes in [WebAssembly](https://de.wikipedia.org/wiki/WebAssembly). Additional interfaces and ways to interact and include `deen` in different workflows include a [Visual Studio Code extension](https://github.com/takeshixx/go-deen/tree/master/extras/vscode-deen). This project aims to be compatible with most common environments, including Linux, Windows and macOS. The resulting binary is static and should therefore run on all supported platforms without any additional dependencies.
+`deen` is a tool for encoding, decoding, hashing, compressing and formatting
+data. It ships as a single static binary with no runtime dependencies and runs
+on Linux, Windows and macOS. The same plugins are exposed through several
+interfaces: a command-line interface, a desktop GUI built with
+[Fyne](https://github.com/fyne-io/fyne), a
+[WebAssembly](https://webassembly.org) web interface, and a
+[Visual Studio Code extension](extras/vscode-deen).
 
-`go-deen` is a Go reimplementation of the old `deen` versions that were initially implemented with Python and PyQt5.
+It is a Go reimplementation of the original Python/PyQt5
+[deen](https://github.com/takeshixx/deen).
 
-It should be noted that this code is still highly experimental. However, the majority of core plugins is already implemented and functional.
+## Plugins
 
-### TODO
+`deen` provides 60+ plugins across five categories. List them at runtime with
+`deen -l` (or `deen -lj` for JSON).
 
-Current and future features and TODOs are tracked in various [repository projects](https://github.com/takeshixx/go-deen/projects).
+| Category | Plugins |
+| --- | --- |
+| **codecs** | base32, base64, base85, hex, url, html, unicode, strconv, pem, quoted-printable, rot13 |
+| **compressions** | flate, gzip, zlib, bzip2, lzma, lzma2, lzw, brotli, zstd |
+| **hashs** | sha1, sha2 (224/256/384/512, 512/224, 512/256), sha3 (224/256/384/512), md4, md5, ripemd160, blake2s/2b/2x, blake3, bcrypt, scrypt, hmac, adler32, crc32/crc32c/crc32k, crc64/crc64-ecma, fnv (32/64/128 and a-variants) |
+| **formatters** | json, xml, json2xml, jwt, jq |
+| **misc** | certPrinter, certCloner |
 
-## Building & Running
-
-The following command will create a `deen` binary in the `bin/` folder:
+## Install
 
 ```bash
-make
+make            # build ./bin/deen (CLI)
+make gui        # build with the desktop GUI (-tags gui)
 ```
 
-Running the binary without any arguments spawns the GUI. The CLI is used when plugin names are supplied. By default, `deen` reads input from the remaining positional arguments or stdin. Input can also be read from a file with the `-file` flag (both globally, before the plugin name, and as a per-plugin flag).
+## Usage
 
-Processing is typically implemented by calling plugin names without a prefix. Depending on the plugin, this will encode, compress, hash or otherwise transform input data.
+Run a plugin by name to process data; prefix the name with `.` to reverse the
+operation. Input is read from the remaining arguments, stdin, or a file
+(`-file`).
 
 ```bash
-$ deen b64 test
+$ deen base64 test                  # encode
 dGVzdA==
+$ deen .base64 dGVzdA==             # decode
+test
+$ printf secret | deen sha256       # one-way
+2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b
 ```
 
-Unprocessing is called by calling plugins with a "." (dot) prefix. Depending on the plugin, this will decode, decompress or otherwise transform input data in reverse. One-way plugin categories like `hashs` do not implement unprocessing and return an error if called with a dot prefix.
+One-way plugins (such as hashes) return an error if called with a `.` prefix.
+
+### Output
+
+Output is written raw, without a trailing newline, so binary data pipes between
+plugins without corruption:
 
 ```bash
-$ deen .b64 dGVzdA==
+$ printf test | deen gzip | deen .gzip
 test
 ```
 
-### Output and newlines
+Pass `-N` to append a newline for terminal use (accepted before or after the
+plugin name). Decoders ignore surrounding whitespace, and base64 decoding
+auto-detects the standard, raw, URL and raw-URL alphabets unless `-strict`,
+`-url` or `-raw` is given.
 
-`deen` writes output **raw** by default — no trailing newline is appended — so that binary output (e.g. compressed data) can be piped without corruption:
-
-```bash
-$ echo -n test | deen gzip | deen .gzip
-test
-```
-
-Pass `-N` to append a trailing newline, which is handy when reading output in a terminal. Like `-file`, it works both before and after the plugin name:
+### Listing and help
 
 ```bash
-$ deen -N b64 test
-dGVzdA==
+$ deen -l                # list plugins by category
+$ deen -lj               # list as JSON
+$ deen base64 -h         # plugin-specific options
 ```
 
-Decoders tolerate surrounding whitespace, so a trailing newline from the shell does not break decoding (`echo dGVzdA== | deen .b64` works). Base64 decoding auto-detects the standard, raw, URL and raw-URL alphabets unless an explicit `-strict`, `-url` or `-raw` flag is given.
+## GUI
 
-### Listing plugins
-
-List all available plugins and their aliases, optionally as JSON:
+`make gui` produces a binary that launches the GUI when started without
+arguments. On Linux the GUI build needs the X development headers:
 
 ```bash
-$ deen -l        # human-readable, grouped by category
-$ deen -lj       # JSON (includes aliases)
+sudo apt install xorg-dev    # Debian/Ubuntu
 ```
 
-Per-plugin options are shown with `-h` after the plugin name, e.g. `deen base64 -h`.
+## WebAssembly
 
-### GUI
-
-Making a binary with GUI support:
-
-```bash
-make gui
-```
-
-Running the resulting binary without any CLI arguments will start the GUI.
-
-In order to build the GUI, the following dependencies are required:
-
-**Ubuntu**
-
-```bash
-sudo apt update && sudo apt install xorg-dev
-```
-
-### WebAssembly
-
-*Note*: WebAssembly code currently resides in the `web` branch.
-
-Build and run the web interface:
+The experimental web interface lives on the `web` branch. Build and serve it
+with:
 
 ```bash
 make web
 ```
 
-This will spawn a local web server on TCP port 9090 (currently requires [http_server.go](https://github.com/takeshixx/tools/blob/master/net/daemons/http_server.go)) that services the web interface.
-
 ## Writing plugins
 
-Every plugin is a `*types.DeenPlugin` built by a constructor and registered in [`internal/plugins/plugins.go`](internal/plugins/plugins.go). A plugin implements a single unified contract:
+Each plugin is a `*types.DeenPlugin` registered in
+[`internal/plugins/plugins.go`](internal/plugins/plugins.go). It implements a
+single contract:
 
 ```go
 type DeenPlugin struct {
@@ -104,30 +102,27 @@ type DeenPlugin struct {
     Category    string
     Description string
 
-    RegisterFlags func(*flag.FlagSet)                          // optional, plugin-specific flags
-    Process       func(io.Reader, io.Writer, *flag.FlagSet) error // forward (encode/compress/hash/format)
-    Unprocess     func(io.Reader, io.Writer, *flag.FlagSet) error // reverse (decode/decompress); nil = one-way
+    RegisterFlags func(*flag.FlagSet)                              // optional flags
+    Process       func(io.Reader, io.Writer, *flag.FlagSet) error  // forward
+    Unprocess     func(io.Reader, io.Writer, *flag.FlagSet) error  // reverse; nil = one-way
 }
 ```
 
-`Process` and `Unprocess` read input from an `io.Reader` and write the result to an `io.Writer`, returning on the first error (they must not continue after a failure). Leaving `Unprocess` as `nil` marks the plugin one-way (e.g. hashes). See [`examples/example_plugin.go`](examples/example_plugin.go) for an annotated reference implementation, and the [`pkg/hashs`](pkg/hashs) factory for how families of similar plugins are built with minimal boilerplate.
+`Process` and `Unprocess` stream from an `io.Reader` to an `io.Writer` and must
+return on the first error. A `nil` `Unprocess` marks a one-way plugin. See
+[`examples/example_plugin.go`](examples/example_plugin.go) for an annotated
+reference, and [`pkg/hashs`](pkg/hashs) for the factory used to build families
+of similar plugins with minimal boilerplate.
 
-## Why go-deen?
+## Background
 
-tl;dr: Because we can.
+`deen` is distributed as a single static binary, avoiding the dependency and
+packaging overhead of the original Python/PyQt5 version. Plugins stream their
+input, so arbitrarily large inputs are processed with constant memory:
 
-The original version has several issues/limitations:
+```bash
+$ time cat disk.vmdk | deen sha256      # 18 GB input
+003b375eeba7e56ae8e1aa03eb2ac6741023478c41fdc077619f144b114e0d02
+```
 
-* **Dependencies**: it requires various dependencies that are painful to maintain and install on verious operating systems and environments. Thanks to Golang this new version can be compiled and distributed as a single static binary.
-* **Performance**: due to the poor implementation in the original version it does not perform properly with large amounts of data. The new version is implemented with stream readers, which also allows to deal with large files. The following shows an example for a 18G VMDK file:
-    ```bash
-    $ time cat disk001.vmdk | sha256sum
-    003b375eeba7e56ae8e1aa03eb2ac6741023478c41fdc077619f144b114e0d02  -
-    cat   0.10s user 5.40s system 12% cpu 44.792 total
-    sha256sum  41.91s user 2.82s system 99% cpu 44.792 total
-    $ time cat disk001.vmdk | deen sha256
-    003b375eeba7e56ae8e1aa03eb2ac6741023478c41fdc077619f144b114e0d02
-    cat   0.14s user 5.76s system 11% cpu 51.294 total
-    bin/deen sha256  48.15s user 3.06s system 99% cpu 51.293 total
-    ```
-* **GUI**: the original version was implemented with PyQT, which required every system to have QT installed to use the GUI. In Golang there are several projects that allow to create GUIs without any system dependencies. Currently there is only an experimental GUI as the available modules are still evaluated. But the goal is to create deen as a single static binary that also includes a simple GUI without any dependencies.
+The GUI is built with Fyne and requires no system GUI toolkit at runtime.
