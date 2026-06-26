@@ -43,10 +43,10 @@ $ echo -n test | deen gzip | deen .gzip
 test
 ```
 
-Pass `-N` (after the plugin name) to append a trailing newline, which is handy when reading output in a terminal:
+Pass `-N` to append a trailing newline, which is handy when reading output in a terminal. Like `-file`, it works both before and after the plugin name:
 
 ```bash
-$ deen b64 -N test
+$ deen -N b64 test
 dGVzdA==
 ```
 

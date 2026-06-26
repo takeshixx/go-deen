@@ -19,6 +19,7 @@ var printPluginsPtr *bool
 var printPluginsJSONPtr *bool
 var versionPtr *bool
 var filePtr *string
+var newlinePtr *bool
 
 // ParseFlags parses the global (pre-subcommand) flags and handles the
 // informational ones (-l, -lj, -version) that exit immediately.
@@ -27,6 +28,7 @@ func ParseFlags() {
 	printPluginsJSONPtr = flag.Bool("lj", false, "list available plugins in JSON format")
 	versionPtr = flag.Bool("version", false, "print version")
 	filePtr = flag.String("file", "", "read input from file")
+	newlinePtr = flag.Bool("N", false, "append a trailing newline to the output")
 	flag.Parse()
 
 	switch {
@@ -89,7 +91,9 @@ func runPlugin(plugin *types.DeenPlugin, unprocess bool, cmd string) int {
 		fmt.Fprintf(os.Stderr, "deen: %s: %s\n", plugin.Name, err)
 		return 1
 	}
-	if *newline {
+	// The newline may be requested either globally (before the plugin name)
+	// or as a per-plugin flag (after it).
+	if *newline || *newlinePtr {
 		if _, err := out.WriteString("\n"); err != nil {
 			fmt.Fprintln(os.Stderr, "deen:", err)
 			return 1
