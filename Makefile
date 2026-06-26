@@ -1,6 +1,13 @@
 ldflags = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current)"
 ldflagsstripped = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current) -w -s"
 
+# GUI builds use cgo; on macOS the Xcode 15+ linker warns about Fyne passing
+# -lobjc twice. Silence it there only (GNU ld would reject this flag).
+guildflags = $(ldflagsstripped)
+ifeq ($(shell uname -s),Darwin)
+guildflags = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current) -w -s -extldflags=-Wl,-no_warn_duplicate_libraries"
+endif
+
 .PHONY: build
 build:
 ifeq ($(OS),Windows_NT)
@@ -50,7 +57,7 @@ gui:
 ifeq ($(OS),Windows_NT)
 	go build $(ldflagsstripped) --tags gui -o ./bin/deen.exe ./cmd/deen
 else
-	go build $(ldflagsstripped) --tags gui -o ./bin/deen ./cmd/deen
+	go build $(guildflags) --tags gui -o ./bin/deen ./cmd/deen
 endif
 
 .PHONY: fyne-cross
