@@ -285,9 +285,10 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		dg.pipe.RemoveStep(c.index)
 		dg.rebuild()
 	})
+	enabledControl := stepToggleControl(c.enabled, "Step", col)
 	titleRow := container.NewBorder(nil, nil,
 		container.NewHBox(c.collapse, title, c.summary),
-		container.NewHBox(c.enabled, moveUp, moveDown, duplicate, remove))
+		container.NewHBox(enabledControl, moveUp, moveDown, duplicate, remove))
 
 	// Detail: selectors, toggles, options, output, errors.
 	c.options = container.NewVBox()
@@ -330,7 +331,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.status.Hide()
 	toggles := container.NewHBox()
 	if canDecode {
-		toggles.Add(c.decode)
+		toggles.Add(stepToggleControl(c.decode, "Mode", col))
 	}
 	c.detail = container.NewVBox(selectors, toggles, c.options, viewerBox, c.meta, c.status)
 
@@ -498,6 +499,17 @@ func optionHelp(opt pipeline.Option) fyne.CanvasObject {
 
 func stepGeneratesImage(step *pipeline.Step) bool {
 	return step.Plugin == "qr" && !step.Unprocess
+}
+
+func stepToggleControl(check *widget.Check, label string, accent color.NRGBA) fyne.CanvasObject {
+	title := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	title.Importance = widget.LowImportance
+	body := container.NewVBox(title, check)
+	bg := canvas.NewRectangle(tint(accent))
+	bg.StrokeColor = accent
+	bg.StrokeWidth = 1
+	bg.CornerRadius = 6
+	return container.NewStack(bg, container.NewPadded(body))
 }
 
 // refresh updates the body and status from the pipeline output.

@@ -436,10 +436,34 @@ a {
 .header-toggle {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.3rem;
+}
+
+.step-toggle {
+	gap: 0.45rem;
 	min-height: 2rem;
+	padding: 0.25rem 0.6rem;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--panel);
 	color: var(--muted);
+	font-weight: 650;
 	white-space: nowrap;
+	box-shadow: inset 0 0 0 1px transparent;
+}
+
+.step-toggle input {
+	accent-color: var(--accent);
+}
+
+.step-toggle.active {
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+	background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+	color: var(--text);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.mode-toggle {
+	align-self: flex-start;
 }
 
 .selectors {
@@ -458,7 +482,7 @@ a {
 .toggles {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 1rem;
+	gap: 0.5rem;
 	margin-bottom: 0.55rem;
 	color: var(--muted);
 }

@@ -1284,10 +1284,12 @@ func stepCard(i int) js.Value {
 		rebuild()
 	})
 	enabledWrap, enabledInput := checkbox("enabled", !step.Disabled)
-	enabledWrap.Set("className", "header-toggle")
+	styleStepToggle(enabledWrap, enabledInput, "header-toggle", "Step is enabled", !step.Disabled)
 	enabledInput.Set("checked", !step.Disabled)
 	on(enabledInput, "change", func() {
-		pipe.SetStepDisabled(i, !enabledInput.Get("checked").Bool())
+		enabled := enabledInput.Get("checked").Bool()
+		styleStepToggle(enabledWrap, enabledInput, "header-toggle", "Step is enabled", enabled)
+		pipe.SetStepDisabled(i, !enabled)
 		rebuild()
 	})
 
@@ -1299,6 +1301,7 @@ func stepCard(i int) js.Value {
 	// decode toggle (referenced by the category selectors).
 	canDecode := plugins.CanDecode(step.Plugin)
 	decodeWrap, decodeInput := checkbox("decode", step.Unprocess && canDecode)
+	styleStepToggle(decodeWrap, decodeInput, "mode-toggle", "Decode mode", step.Unprocess && canDecode)
 	decodeInput.Set("checked", step.Unprocess && canDecode)
 
 	// One dropdown per category.
@@ -1322,7 +1325,9 @@ func stepCard(i int) js.Value {
 	}
 
 	on(decodeInput, "change", func() {
-		pipe.SetPlugin(i, step.Plugin, decodeInput.Get("checked").Bool() && plugins.CanDecode(step.Plugin))
+		decode := decodeInput.Get("checked").Bool() && plugins.CanDecode(step.Plugin)
+		styleStepToggle(decodeWrap, decodeInput, "mode-toggle", "Decode mode", decode)
+		pipe.SetPlugin(i, step.Plugin, decode)
 		refreshOutputs(i)
 	})
 
@@ -1430,6 +1435,16 @@ func outputViewer(ref *cardRef) js.Value {
 
 	appendChildren(viewer, tabs, panels)
 	return viewer
+}
+
+func styleStepToggle(wrap, input js.Value, baseClass, title string, active bool) {
+	className := baseClass + " step-toggle"
+	if active {
+		className += " active"
+	}
+	wrap.Set("className", className)
+	wrap.Set("title", title)
+	input.Set("checked", active)
 }
 
 func stepGeneratesImage(step *pipeline.Step) bool {
