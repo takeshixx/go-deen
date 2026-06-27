@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -35,6 +36,7 @@ type DeenGUI struct {
 	cards       []*stepCard     // parallel to pipe.Steps()
 	history     *fyne.Container // side panel listing the chain
 	split       *container.Split
+	tabs        *container.AppTabs
 	historyOpen bool
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
@@ -53,12 +55,14 @@ func NewDeenGUI() (*DeenGUI, error) {
 
 	dg.stepsBox = container.NewVBox()
 	dg.history = container.NewVBox()
-	chain := container.NewVScroll(dg.stepsBox)
-	historyPanel := widget.NewCard("History", "", container.NewVScroll(dg.history))
-	dg.split = container.NewHSplit(chain, historyPanel)
-	dg.split.SetOffset(0.78)
 	dg.historyOpen = true
-	content := container.NewBorder(dg.toolbar(), nil, nil, nil, dg.split)
+	dg.tabs = container.NewAppTabs(
+		container.NewTabItem("Home", dg.homeTab()),
+		container.NewTabItem("Plugins", dg.pluginsTab()),
+		container.NewTabItem("About", dg.aboutTab()),
+	)
+	dg.tabs.SetTabLocation(container.TabLocationTop)
+	content := container.NewBorder(dg.toolbar(), nil, nil, nil, dg.tabs)
 	dg.window.SetContent(content)
 	dg.window.SetMainMenu(dg.mainMenu())
 	dg.window.Resize(fyne.NewSize(900, 640))
@@ -104,9 +108,18 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 	)
 	help := fyne.NewMenu("Help",
 		fyne.NewMenuItem("How to use", dg.showHelp),
-		fyne.NewMenuItem("About", dg.showAbout),
+		fyne.NewMenuItem("Plugin catalog", func() { dg.tabs.SelectIndex(1) }),
+		fyne.NewMenuItem("About", func() { dg.tabs.SelectIndex(2) }),
 	)
 	return fyne.NewMainMenu(themeMenu, help)
+}
+
+func (dg *DeenGUI) homeTab() fyne.CanvasObject {
+	chain := container.NewVScroll(dg.stepsBox)
+	historyPanel := widget.NewCard("History", "", container.NewVScroll(dg.history))
+	dg.split = container.NewHSplit(chain, historyPanel)
+	dg.split.SetOffset(0.78)
+	return dg.split
 }
 
 // showHelp displays a usage/info page describing the GUI.
@@ -145,6 +158,10 @@ Decoder. The result of each step feeds into the next.
 
 // showAbout displays version and project information.
 func (dg *DeenGUI) showAbout() {
+	dg.tabs.SelectIndex(2)
+}
+
+func (dg *DeenGUI) aboutTab() fyne.CanvasObject {
 	version := core.Version()
 	if b := core.Branch(); b != "" {
 		version += " (" + b + ")"
@@ -160,8 +177,47 @@ func (dg *DeenGUI) showAbout() {
 		widget.NewLabel("Built with Go, Fyne (desktop GUI) and WebAssembly (web)."),
 		container.NewHBox(widget.NewLabel("Documentation:"), widget.NewHyperlink("deen.adversec.com", docsURL)),
 		container.NewHBox(widget.NewLabel("Source:"), widget.NewHyperlink("github.com/takeshixx/go-deen", repoURL)),
+		widget.NewSeparator(),
+		widget.NewLabel("All processing happens locally in the desktop GUI. The web UI runs the same pipeline model in WebAssembly."),
 	)
-	dialog.ShowCustom("About deen", "Close", content, dg.window)
+	return container.NewPadded(container.NewVScroll(content))
+}
+
+func (dg *DeenGUI) pluginsTab() fyne.CanvasObject {
+	list := container.NewVBox()
+	currentCategory := ""
+	for _, info := range plugins.UICatalog() {
+		if info.Category != currentCategory {
+			currentCategory = info.Category
+			list.Add(widget.NewLabelWithStyle(plugins.CategoryLabel(currentCategory), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+		}
+		list.Add(pluginInfoCard(info))
+	}
+	return container.NewPadded(container.NewVScroll(list))
+}
+
+func pluginInfoCard(info plugins.UIPluginInfo) fyne.CanvasObject {
+	direction := "Encode only"
+	if info.CanDecode {
+		direction = "Encode and decode"
+	}
+	meta := []string{info.Category, direction}
+	if len(info.Aliases) > 0 {
+		meta = append(meta, "Aliases: "+strings.Join(info.Aliases, ", "))
+	}
+
+	body := container.NewVBox(
+		widget.NewLabel(strings.Join(meta, " · ")),
+		widget.NewLabel(info.Description),
+		widget.NewLabel("Use for: "+info.UseFor),
+	)
+	for _, ref := range info.References {
+		u, err := url.Parse(ref.URL)
+		if err == nil {
+			body.Add(container.NewHBox(widget.NewLabel("Reference:"), widget.NewHyperlink(ref.Label, u)))
+		}
+	}
+	return widget.NewCard(info.Name, "", body)
 }
 
 // rebuild recreates the whole card stack. Called on structural changes
