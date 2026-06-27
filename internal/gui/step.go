@@ -3,6 +3,7 @@
 package gui
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"image/color"
@@ -94,6 +95,8 @@ func (dg *DeenGUI) categorySelectors(current string, onPick func(name string)) *
 func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 	dg.sourceEntry = multilineEntry(6)
 	dg.sourceEntry.SetText(string(dg.pipe.Source()))
+	dg.sourceMeta = widget.NewLabel(pipeline.DataMetadata(dg.pipe.Source(), 0).Summary())
+	dg.sourceMeta.Importance = widget.LowImportance
 	dg.sourceEntry.OnChanged = func(s string) {
 		if dg.updating {
 			return
@@ -101,7 +104,7 @@ func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 		dg.pipe.SetSource([]byte(s))
 		dg.refreshFrom(0)
 	}
-	return widget.NewCard("Input", "", dg.sourceEntry)
+	return widget.NewCard("Input", "", container.NewVBox(dg.sourceEntry, dg.sourceMeta))
 }
 
 // stepCard is the view for a single pipeline step.
@@ -109,26 +112,30 @@ type stepCard struct {
 	gui        *DeenGUI
 	index      int
 	pluginName string
-	hexView    bool
+	viewMode   string
 	collapsed  bool
 
 	decode    *widget.Check
+	enabled   *widget.Check
 	summary   *canvas.Text
 	collapse  *widget.Button
 	detail    *fyne.Container
 	options   *fyne.Container
 	body      *widget.Entry
+	meta      *widget.Label
 	status    *widget.Label
 	container fyne.CanvasObject
 }
 
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	step := dg.pipe.Steps()[i]
-	c := &stepCard{gui: dg, index: i, pluginName: step.Plugin}
+	c := &stepCard{gui: dg, index: i, pluginName: step.Plugin, viewMode: "text"}
 	col := accent(i)
 
 	c.decode = widget.NewCheck("decode", nil)
 	c.decode.SetChecked(step.Unprocess)
+	c.enabled = widget.NewCheck("enabled", nil)
+	c.enabled.SetChecked(!step.Disabled)
 
 	apply := func() {
 		if c.pluginName == "" {
@@ -145,11 +152,21 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		apply()
 	})
 	c.decode.OnChanged = func(bool) { apply() }
+	c.enabled.OnChanged = func(enabled bool) {
+		dg.pipe.SetStepDisabled(c.index, !enabled)
+		c.updateSummary()
+		dg.refreshFrom(c.index)
+		dg.updateHistory()
+	}
 
-	hexToggle := widget.NewCheck("hex", func(b bool) {
-		c.hexView = b
+	viewMode := widget.NewSelect([]string{"text", "hex", "base64"}, func(mode string) {
+		if mode == "" {
+			return
+		}
+		c.viewMode = mode
 		c.refresh()
 	})
+	viewMode.Selected = c.viewMode
 
 	// Title row: collapse toggle, coloured title, active-plugin summary, remove.
 	c.summary = canvas.NewText("", col)
@@ -158,27 +175,42 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	c.collapse = widget.NewButtonWithIcon("", theme.MenuDropDownIcon(), c.toggleCollapse)
 	c.collapse.Importance = widget.LowImportance
+	moveUp := widget.NewButtonWithIcon("", theme.MoveUpIcon(), func() {
+		dg.pipe.MoveStep(c.index, c.index-1)
+		dg.rebuild()
+	})
+	moveDown := widget.NewButtonWithIcon("", theme.MoveDownIcon(), func() {
+		dg.pipe.MoveStep(c.index, c.index+1)
+		dg.rebuild()
+	})
+	duplicate := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+		dg.pipe.DuplicateStep(c.index)
+		dg.rebuild()
+	})
 	remove := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 		dg.pipe.RemoveStep(c.index)
 		dg.rebuild()
 	})
 	titleRow := container.NewBorder(nil, nil,
-		container.NewHBox(c.collapse, title, c.summary), remove)
+		container.NewHBox(c.collapse, title, c.summary),
+		container.NewHBox(moveUp, moveDown, duplicate, remove))
 
 	// Detail: selectors, toggles, options, output, errors.
 	c.options = container.NewVBox()
 	c.body = multilineEntry(6)
 	c.body.OnChanged = func(s string) {
-		if dg.updating || c.hexView {
+		if dg.updating || c.viewMode != "text" {
 			return
 		}
 		dg.pipe.EditOutput(c.index, []byte(s))
 		dg.refreshFrom(c.index + 1)
 	}
+	c.meta = widget.NewLabel("")
+	c.meta.Importance = widget.LowImportance
 	c.status = widget.NewLabel("")
 	c.status.Importance = widget.DangerImportance
 	c.status.Hide()
-	c.detail = container.NewVBox(selectors, container.NewHBox(c.decode, hexToggle), c.options, c.body, c.status)
+	c.detail = container.NewVBox(selectors, container.NewHBox(c.enabled, c.decode, widget.NewLabel("view"), viewMode), c.options, c.body, c.meta, c.status)
 
 	bg := canvas.NewRectangle(tint(col))
 	bg.StrokeColor = col
@@ -219,6 +251,9 @@ func (c *stepCard) updateSummary() {
 	}
 	cat := plugins.CategoryOf(name)
 	c.summary.Text = fmt.Sprintf("  %s / %s · %s", cat, name, dir)
+	if !c.enabled.Checked {
+		c.summary.Text += " · disabled"
+	}
 	c.summary.Refresh()
 }
 
@@ -266,18 +301,33 @@ func (c *stepCard) rebuildOptions() {
 // refresh updates the body and status from the pipeline output.
 func (c *stepCard) refresh() {
 	out := c.gui.pipe.Output(c.index)
+	inputBytes := len(c.gui.pipe.Source())
+	if c.index > 0 {
+		inputBytes = len(c.gui.pipe.Output(c.index - 1))
+	}
+	c.meta.SetText(pipeline.DataMetadata(out, inputBytes).Summary())
 	if err := c.gui.pipe.Err(c.index); err != nil {
 		c.status.SetText("error: " + err.Error())
 		c.status.Show()
 	} else {
 		c.status.Hide()
 	}
-	if c.hexView {
+	switch c.viewMode {
+	case "hex":
 		c.gui.setText(c.body, hex.Dump(out))
-		c.body.Disable() // hex view is read-only
-	} else {
+		c.body.Disable()
+	case "base64":
+		c.gui.setText(c.body, base64.StdEncoding.EncodeToString(out))
+		c.body.Disable()
+	default:
+		c.viewMode = "text"
 		c.body.Enable()
 		c.gui.setText(c.body, string(out))
+	}
+	if c.viewMode == "text" {
+		c.body.Enable()
+	} else {
+		c.body.Disable()
 	}
 }
 

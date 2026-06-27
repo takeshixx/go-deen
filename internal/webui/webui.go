@@ -6,6 +6,7 @@
 package webui
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -36,16 +37,18 @@ var (
 )
 
 type cardRef struct {
-	index   int
-	output  js.Value
-	errEl   js.Value
-	hexView bool
+	index    int
+	output   js.Value
+	meta     js.Value
+	errEl    js.Value
+	viewMode string
 }
 
 // Run builds the UI and blocks so the event callbacks stay alive.
 func Run() {
 	doc = js.Global().Get("document")
 	pipe = pipeline.New()
+	loadChainFromHash()
 	buildLayout()
 	select {}
 }
@@ -130,6 +133,41 @@ func button(className, label string, fn func()) js.Value {
 	return b
 }
 
+func textInput(placeholder, value string) js.Value {
+	input := el("input")
+	input.Set("type", "text")
+	input.Set("placeholder", placeholder)
+	input.Set("value", value)
+	return input
+}
+
+func showModal(title string, content js.Value) func() {
+	overlay := div("modal-overlay")
+	modal := div("modal")
+	header := div("modal-header")
+	h := el("h2")
+	h.Set("textContent", title)
+	closeBtn := el("button")
+	closeBtn.Set("type", "button")
+	closeBtn.Set("className", "icon")
+	closeBtn.Set("textContent", "✕")
+	body := div("modal-body")
+
+	appendChildren(header, h, closeBtn)
+	appendChildren(body, content)
+	appendChildren(modal, header, body)
+	overlay.Call("appendChild", modal)
+	doc.Get("body").Call("appendChild", overlay)
+
+	close := func() {
+		if overlay.Truthy() {
+			overlay.Call("remove")
+		}
+	}
+	on(closeBtn, "click", close)
+	return close
+}
+
 // --- layout ---
 
 func buildLayout() {
@@ -203,8 +241,25 @@ func renderHome() {
 		button("primary", "Copy result", copyResult),
 		button("", "Download", downloadResult),
 		filePicker(),
+		chainPicker(),
+		button("", "Export chain", exportChain),
+		button("", "Copy link", copyShareLink),
+		button("", "Copy command", copyCommand),
+		button("", "Presets", showPresets),
+		button("", "Search plugins", searchPlugins),
+		button("", "Detect", showSuggestions),
+		button("", "Undo", func() {
+			if pipe.Undo() {
+				rebuild()
+			}
+		}),
+		button("", "Redo", func() {
+			if pipe.Redo() {
+				rebuild()
+			}
+		}),
 		button("", "Clear", func() {
-			pipe = pipeline.New()
+			pipe.Clear()
 			rebuild()
 		}),
 	)
@@ -317,8 +372,208 @@ func copyResult() {
 	}
 }
 
+func copyCommand() {
+	command := pipe.CommandLine()
+	if command == "" {
+		alert("No enabled transforms to export.")
+		return
+	}
+	clipboard := js.Global().Get("navigator").Get("clipboard")
+	if clipboard.Truthy() {
+		clipboard.Call("writeText", command)
+		alert("Command copied.")
+		return
+	}
+	js.Global().Call("prompt", "Command line:", command)
+}
+
 func downloadResult() {
-	data := pipe.Result()
+	downloadBytes("deen-result.bin", pipe.Result())
+}
+
+func exportChain() {
+	data, err := pipe.ExportJSON()
+	if err != nil {
+		alert(err.Error())
+		return
+	}
+	downloadBytes("deen-chain.json", data)
+}
+
+func copyShareLink() {
+	data, err := pipe.ExportJSONWithoutSource()
+	if err != nil {
+		alert(err.Error())
+		return
+	}
+	link := shareLink(data)
+	clipboard := js.Global().Get("navigator").Get("clipboard")
+	if clipboard.Truthy() {
+		clipboard.Call("writeText", link)
+		alert("Share link copied. Source input was not included.")
+		return
+	}
+	js.Global().Get("location").Set("hash", "chain="+base64.RawURLEncoding.EncodeToString(data))
+	alert("Share link added to the address bar. Source input was not included.")
+}
+
+func showSuggestions() {
+	suggestions := pipeline.Suggestions(pipe.Result())
+	if len(suggestions) == 0 {
+		alert("No likely transforms detected.")
+		return
+	}
+	list := div("modal-list")
+	var close func()
+	for _, suggestion := range suggestions {
+		s := suggestion
+		item := div("modal-item")
+		title := el("strong")
+		title.Set("textContent", s.Label)
+		reason := el("p")
+		reason.Set("textContent", s.Reason)
+		action := el("button")
+		action.Set("type", "button")
+		action.Set("textContent", "Add")
+		on(action, "click", func() {
+			pipe.AddStep(s.Plugin, s.Unprocess)
+			if close != nil {
+				close()
+			}
+			rebuild()
+		})
+		appendChildren(item, title, reason, action)
+		list.Call("appendChild", item)
+	}
+	close = showModal("Suggested transforms", list)
+}
+
+func searchPlugins() {
+	wrap := div("search-panel")
+	query := textInput("Search plugins", "")
+	results := div("modal-list")
+	appendChildren(wrap, query, results)
+
+	var close func()
+	const maxMatches = 24
+	render := func() {
+		results.Set("innerHTML", "")
+		matches := plugins.SearchUICatalog(query.Get("value").String())
+		if len(matches) > maxMatches {
+			matches = matches[:maxMatches]
+		}
+		if len(matches) == 0 {
+			empty := div("empty")
+			empty.Set("textContent", "No plugins found.")
+			results.Call("appendChild", empty)
+			return
+		}
+		for _, match := range matches {
+			info := match
+			item := div("modal-item")
+			title := el("strong")
+			title.Set("textContent", plugins.CategoryLabel(info.Category)+" / "+info.Name)
+			metaParts := []string{info.Category}
+			if len(info.Aliases) > 0 {
+				metaParts = append(metaParts, "Aliases: "+strings.Join(info.Aliases, ", "))
+			}
+			meta := div("plugin-meta")
+			meta.Set("textContent", strings.Join(metaParts, " · "))
+			desc := el("p")
+			desc.Set("textContent", info.Description)
+			actions := div("modal-actions")
+			add := el("button")
+			add.Set("type", "button")
+			if info.CanDecode {
+				add.Set("textContent", "Add encode")
+			} else {
+				add.Set("textContent", "Add")
+			}
+			on(add, "click", func() {
+				pipe.AddStep(info.Name, false)
+				if close != nil {
+					close()
+				}
+				rebuild()
+			})
+			actions.Call("appendChild", add)
+			if info.CanDecode {
+				decode := el("button")
+				decode.Set("type", "button")
+				decode.Set("textContent", "Add decode")
+				on(decode, "click", func() {
+					pipe.AddStep(info.Name, true)
+					if close != nil {
+						close()
+					}
+					rebuild()
+				})
+				actions.Call("appendChild", decode)
+			}
+			appendChildren(item, title, meta, desc, actions)
+			results.Call("appendChild", item)
+		}
+	}
+	on(query, "input", render)
+	render()
+	close = showModal("Add transform", wrap)
+	query.Call("focus")
+}
+
+func showPresets() {
+	list := div("modal-list")
+	var close func()
+	for _, preset := range pipeline.BuiltinPresets() {
+		p := preset
+		item := div("modal-item")
+		title := el("strong")
+		title.Set("textContent", p.Name)
+		desc := el("p")
+		desc.Set("textContent", p.Description)
+		actions := div("modal-actions")
+		apply := el("button")
+		apply.Set("type", "button")
+		apply.Set("textContent", "Apply")
+		on(apply, "click", func() {
+			pipe.ApplyPreset(p)
+			if close != nil {
+				close()
+			}
+			rebuild()
+		})
+		actions.Call("appendChild", apply)
+		appendChildren(item, title, desc, actions)
+		list.Call("appendChild", item)
+	}
+	close = showModal("Presets", list)
+}
+
+func shareLink(data []byte) string {
+	loc := js.Global().Get("location")
+	return loc.Get("origin").String() +
+		loc.Get("pathname").String() +
+		loc.Get("search").String() +
+		"#chain=" + base64.RawURLEncoding.EncodeToString(data)
+}
+
+func loadChainFromHash() {
+	hash := js.Global().Get("location").Get("hash").String()
+	hash = strings.TrimPrefix(hash, "#")
+	if !strings.HasPrefix(hash, "chain=") {
+		return
+	}
+	encoded := strings.TrimPrefix(hash, "chain=")
+	data, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		alert("Could not decode chain from URL: " + err.Error())
+		return
+	}
+	if err := pipe.ImportJSON(data); err != nil {
+		alert("Could not import chain from URL: " + err.Error())
+	}
+}
+
+func downloadBytes(name string, data []byte) {
 	array := js.Global().Get("Uint8Array").New(len(data))
 	js.CopyBytesToJS(array, data)
 	blob := js.Global().Get("Blob").New([]any{array})
@@ -326,11 +581,15 @@ func downloadResult() {
 	u := urlObj.Call("createObjectURL", blob)
 	a := el("a")
 	a.Set("href", u)
-	a.Set("download", "deen-result.bin")
+	a.Set("download", name)
 	doc.Get("body").Call("appendChild", a)
 	a.Call("click")
 	a.Call("remove")
 	urlObj.Call("revokeObjectURL", u)
+}
+
+func alert(message string) {
+	js.Global().Call("alert", message)
 }
 
 func filePicker() js.Value {
@@ -369,6 +628,44 @@ func filePicker() js.Value {
 	return wrap
 }
 
+func chainPicker() js.Value {
+	wrap := div("file-action")
+	openBtn := el("button")
+	openBtn.Set("type", "button")
+	openBtn.Set("textContent", "Import chain")
+	input := el("input")
+	input.Set("type", "file")
+	input.Set("accept", "application/json,.json")
+	input.Get("style").Set("display", "none")
+
+	on(openBtn, "click", func() {
+		input.Call("click")
+	})
+	on(input, "change", func() {
+		files := input.Get("files")
+		if files.Get("length").Int() == 0 {
+			return
+		}
+		file := files.Call("item", 0)
+		reader := js.Global().Get("FileReader").New()
+		var loadCB js.Func
+		loadCB = js.FuncOf(func(js.Value, []js.Value) any {
+			data := []byte(reader.Get("result").String())
+			if err := pipe.ImportJSON(data); err != nil {
+				alert(err.Error())
+			} else {
+				rebuild()
+			}
+			loadCB.Release()
+			return nil
+		})
+		reader.Call("addEventListener", "load", loadCB)
+		reader.Call("readAsText", file)
+	})
+	appendChildren(wrap, openBtn, input)
+	return wrap
+}
+
 func sourceCard() js.Value {
 	card := div("card source")
 	label := el("div")
@@ -377,21 +674,24 @@ func sourceCard() js.Value {
 
 	ta := textarea(string(pipe.Source()))
 	sourceEl = ta
+	meta := div("meta")
+	meta.Set("textContent", pipeline.DataMetadata(pipe.Source(), 0).Summary())
 	on(ta, "input", func() {
 		if updating {
 			return
 		}
 		pipe.SetSource([]byte(ta.Get("value").String()))
+		meta.Set("textContent", pipeline.DataMetadata(pipe.Source(), 0).Summary())
 		refreshOutputs(0)
 	})
-	appendChildren(card, label, ta)
+	appendChildren(card, label, ta, meta)
 	return card
 }
 
 func stepCard(i int) js.Value {
 	step := pipe.Steps()[i]
 	col := accent(i)
-	ref := &cardRef{index: i}
+	ref := &cardRef{index: i, viewMode: "text"}
 	cards = append(cards, ref)
 
 	card := div("card")
@@ -413,15 +713,38 @@ func stepCard(i int) js.Value {
 	remove.Set("className", "icon")
 	remove.Set("textContent", "✕")
 	on(remove, "click", func() { pipe.RemoveStep(i); rebuild() })
+	moveUp := el("button")
+	moveUp.Set("className", "icon")
+	moveUp.Set("textContent", "↑")
+	on(moveUp, "click", func() {
+		pipe.MoveStep(i, i-1)
+		rebuild()
+	})
+	moveDown := el("button")
+	moveDown.Set("className", "icon")
+	moveDown.Set("textContent", "↓")
+	on(moveDown, "click", func() {
+		pipe.MoveStep(i, i+1)
+		rebuild()
+	})
+	duplicate := el("button")
+	duplicate.Set("className", "icon")
+	duplicate.Set("textContent", "⧉")
+	on(duplicate, "click", func() {
+		pipe.DuplicateStep(i)
+		rebuild()
+	})
 
 	spacer := div("spacer")
-	appendChildren(header, collapse, title, summary, spacer, remove)
+	appendChildren(header, collapse, title, summary, spacer, moveUp, moveDown, duplicate, remove)
 
 	detail := div("card-detail")
 
 	// decode toggle (referenced by the category selectors).
 	decodeWrap, decodeInput := checkbox("decode", step.Unprocess)
 	decodeInput.Set("checked", step.Unprocess)
+	enabledWrap, enabledInput := checkbox("enabled", !step.Disabled)
+	enabledInput.Set("checked", !step.Disabled)
 
 	// One dropdown per category.
 	selRow := div("selectors")
@@ -446,32 +769,44 @@ func stepCard(i int) js.Value {
 		pipe.SetPlugin(i, step.Plugin, decodeInput.Get("checked").Bool())
 		refreshOutputs(i)
 	})
-
-	hexWrap, hexInput := checkbox("hex", false)
-	on(hexInput, "change", func() {
-		ref.hexView = hexInput.Get("checked").Bool()
-		renderOutput(ref)
+	on(enabledInput, "change", func() {
+		pipe.SetStepDisabled(i, !enabledInput.Get("checked").Bool())
+		rebuild()
 	})
 
+	viewLabel := el("label")
+	viewLabel.Set("textContent", "view ")
+	viewSelect := selectEl("", []string{"text", "hex", "base64"}, ref.viewMode)
+	on(viewSelect, "change", func() {
+		mode := viewSelect.Get("value").String()
+		if mode == "" {
+			mode = "text"
+		}
+		ref.viewMode = mode
+		renderOutput(ref)
+	})
+	viewLabel.Call("appendChild", viewSelect)
+
 	toggles := div("toggles")
-	appendChildren(toggles, decodeWrap, hexWrap)
+	appendChildren(toggles, enabledWrap, decodeWrap, viewLabel)
 
 	options := div("options")
 	buildOptions(options, i)
 
 	ref.output = textarea("")
 	on(ref.output, "input", func() {
-		if updating || ref.hexView {
+		if updating || ref.viewMode != "text" {
 			return
 		}
 		pipe.EditOutput(i, []byte(ref.output.Get("value").String()))
 		refreshOutputs(i + 1)
 	})
 
+	ref.meta = div("meta")
 	ref.errEl = div("error")
 	ref.errEl.Get("style").Set("display", "none")
 
-	appendChildren(detail, selRow, toggles, options, ref.output, ref.errEl)
+	appendChildren(detail, selRow, toggles, options, ref.output, ref.meta, ref.errEl)
 	on(collapse, "click", func() {
 		if detail.Get("style").Get("display").String() == "none" {
 			detail.Get("style").Set("display", "block")
@@ -558,6 +893,9 @@ func updateHistory() {
 		if s.Unprocess {
 			dir = "decode"
 		}
+		if s.Disabled {
+			dir += ", disabled"
+		}
 		line := div("hist")
 		line.Set("textContent", fmt.Sprintf("%d. %s (%s)", i+1, name, dir))
 		line.Get("style").Set("color", accent(i))
@@ -576,6 +914,11 @@ func refreshOutputs(from int) {
 
 func renderOutput(c *cardRef) {
 	out := pipe.Output(c.index)
+	inputBytes := len(pipe.Source())
+	if c.index > 0 {
+		inputBytes = len(pipe.Output(c.index - 1))
+	}
+	c.meta.Set("textContent", pipeline.DataMetadata(out, inputBytes).Summary())
 	if err := pipe.Err(c.index); err != nil {
 		c.errEl.Set("textContent", "error: "+err.Error())
 		c.errEl.Get("style").Set("display", "block")
@@ -583,10 +926,15 @@ func renderOutput(c *cardRef) {
 		c.errEl.Get("style").Set("display", "none")
 	}
 	updating = true
-	if c.hexView {
+	switch c.viewMode {
+	case "hex":
 		c.output.Set("value", hex.Dump(out))
 		c.output.Set("readOnly", true)
-	} else {
+	case "base64":
+		c.output.Set("value", base64.StdEncoding.EncodeToString(out))
+		c.output.Set("readOnly", true)
+	default:
+		c.viewMode = "text"
 		c.output.Set("value", string(out))
 		c.output.Set("readOnly", false)
 	}
@@ -601,6 +949,9 @@ func summaryText(i int) string {
 	dir := "encode"
 	if step.Unprocess {
 		dir = "decode"
+	}
+	if step.Disabled {
+		dir += " · disabled"
 	}
 	return fmt.Sprintf("%s / %s · %s", plugins.CategoryOf(step.Plugin), step.Plugin, dir)
 }

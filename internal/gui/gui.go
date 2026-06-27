@@ -32,6 +32,7 @@ type DeenGUI struct {
 	pluginNames []string
 
 	sourceEntry *widget.Entry
+	sourceMeta  *widget.Label
 	stepsBox    *fyne.Container // holds the source card, step cards and add-slot
 	cards       []*stepCard     // parallel to pipe.Steps()
 	history     *fyne.Container // side panel listing the chain
@@ -80,6 +81,17 @@ func (dg *DeenGUI) toolbar() *widget.Toolbar {
 		widget.NewToolbarAction(theme.FolderOpenIcon(), dg.openFile),
 		widget.NewToolbarAction(theme.DocumentSaveIcon(), dg.saveResult),
 		widget.NewToolbarAction(theme.ContentCopyIcon(), dg.copyResult),
+		widget.NewToolbarAction(theme.MailForwardIcon(), dg.copyCommand),
+		widget.NewToolbarSeparator(),
+		widget.NewToolbarAction(theme.FileTextIcon(), dg.openChain),
+		widget.NewToolbarAction(theme.DocumentCreateIcon(), dg.saveChain),
+		widget.NewToolbarSeparator(),
+		widget.NewToolbarAction(theme.NavigateBackIcon(), dg.undo),
+		widget.NewToolbarAction(theme.NavigateNextIcon(), dg.redo),
+		widget.NewToolbarSeparator(),
+		widget.NewToolbarAction(theme.ContentAddIcon(), dg.showPluginSearch),
+		widget.NewToolbarAction(theme.HistoryIcon(), dg.showPresets),
+		widget.NewToolbarAction(theme.SearchIcon(), dg.showSuggestions),
 		widget.NewToolbarSeparator(),
 		widget.NewToolbarAction(theme.ContentClearIcon(), dg.clear),
 		widget.NewToolbarSpacer(),
@@ -101,6 +113,11 @@ func (dg *DeenGUI) toggleHistory() {
 // mainMenu builds the window menu (theme switching).
 func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 	setTheme := func(t fyne.Theme) func() { return func() { dg.app.Settings().SetTheme(t) } }
+	chainMenu := fyne.NewMenu("Chain",
+		fyne.NewMenuItem("Open chain", dg.openChain),
+		fyne.NewMenuItem("Save chain", dg.saveChain),
+		fyne.NewMenuItem("Presets", dg.showPresets),
+	)
 	themeMenu := fyne.NewMenu("Theme",
 		fyne.NewMenuItem("System", setTheme(theme.DefaultTheme())),
 		fyne.NewMenuItem("Light", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantLight})),
@@ -111,7 +128,7 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Plugin catalog", func() { dg.tabs.SelectIndex(1) }),
 		fyne.NewMenuItem("About", func() { dg.tabs.SelectIndex(2) }),
 	)
-	return fyne.NewMainMenu(themeMenu, help)
+	return fyne.NewMainMenu(chainMenu, themeMenu, help)
 }
 
 func (dg *DeenGUI) homeTab() fyne.CanvasObject {
@@ -138,6 +155,11 @@ Decoder. The result of each step feeds into the next.
 - Plugin options (e.g. base64 ` + "`-url`" + `, gzip ` + "`-level`" + `) appear as fields
   under each step.
 - **hex** shows a step's output as a hex dump (read-only).
+- Use **Open chain** and **Save chain** to reuse complete transform chains.
+- Use the plus icon to search the plugin catalog and append a transform.
+- Use **Presets** to load starter chains while keeping the current input.
+- Use the search icon to detect likely next transforms from the current result.
+- Copy the equivalent shell pipeline from the toolbar.
 - Editing any step's output recomputes everything below it.
 - Use the disclosure arrow to **collapse/expand** a step, the trash icon
   to remove it.
@@ -250,6 +272,9 @@ func (dg *DeenGUI) updateHistory() {
 		if s.Unprocess {
 			dir = "decode"
 		}
+		if s.Disabled {
+			dir += ", disabled"
+		}
 		line := canvas.NewText(fmt.Sprintf("%d. %s (%s)", i+1, name, dir), accent(i))
 		dg.history.Add(line)
 	}
@@ -259,6 +284,9 @@ func (dg *DeenGUI) updateHistory() {
 // refreshFrom updates the displayed output of every card from index `from`
 // downward without recreating widgets.
 func (dg *DeenGUI) refreshFrom(from int) {
+	if dg.sourceMeta != nil {
+		dg.sourceMeta.SetText(pipeline.DataMetadata(dg.pipe.Source(), 0).Summary())
+	}
 	for i := from; i < len(dg.cards); i++ {
 		dg.cards[i].refresh()
 	}
@@ -302,11 +330,182 @@ func (dg *DeenGUI) saveResult() {
 	}, dg.window)
 }
 
+func (dg *DeenGUI) openChain() {
+	dialog.ShowFileOpen(func(rc fyne.URIReadCloser, err error) {
+		if err != nil || rc == nil {
+			return
+		}
+		defer rc.Close()
+		data, err := io.ReadAll(rc)
+		if err != nil {
+			dialog.ShowError(err, dg.window)
+			return
+		}
+		if err := dg.pipe.ImportJSON(data); err != nil {
+			dialog.ShowError(err, dg.window)
+			return
+		}
+		dg.rebuild()
+	}, dg.window)
+}
+
+func (dg *DeenGUI) saveChain() {
+	dialog.ShowFileSave(func(wc fyne.URIWriteCloser, err error) {
+		if err != nil || wc == nil {
+			return
+		}
+		defer wc.Close()
+		data, err := dg.pipe.ExportJSON()
+		if err != nil {
+			dialog.ShowError(err, dg.window)
+			return
+		}
+		if _, err := wc.Write(data); err != nil {
+			dialog.ShowError(err, dg.window)
+		}
+	}, dg.window)
+}
+
 func (dg *DeenGUI) copyResult() {
 	dg.window.Clipboard().SetContent(string(dg.pipe.Result()))
 }
 
+func (dg *DeenGUI) copyCommand() {
+	command := dg.pipe.CommandLine()
+	if command == "" {
+		dialog.ShowInformation("Command line", "No enabled transforms to export.", dg.window)
+		return
+	}
+	dg.window.Clipboard().SetContent(command)
+	entry := widget.NewMultiLineEntry()
+	entry.SetText(command)
+	entry.Wrapping = fyne.TextWrapBreak
+	entry.SetMinRowsVisible(4)
+	entry.Disable()
+	dialog.ShowCustom("Command copied", "Close", entry, dg.window)
+}
+
+func (dg *DeenGUI) showSuggestions() {
+	suggestions := pipeline.Suggestions(dg.pipe.Result())
+	list := container.NewVBox()
+	if len(suggestions) == 0 {
+		list.Add(widget.NewLabel("No likely transforms detected."))
+		dialog.ShowCustom("Suggested transforms", "Close", list, dg.window)
+		return
+	}
+
+	var d dialog.Dialog
+	for _, s := range suggestions {
+		s := s
+		label := s.Label
+		if s.Reason != "" {
+			label += " - " + s.Reason
+		}
+		list.Add(widget.NewButton(label, func() {
+			dg.pipe.AddStep(s.Plugin, s.Unprocess)
+			dg.rebuild()
+			if d != nil {
+				d.Hide()
+			}
+		}))
+	}
+	d = dialog.NewCustom("Suggested transforms", "Close", container.NewVScroll(list), dg.window)
+	d.Resize(fyne.NewSize(560, 360))
+	d.Show()
+}
+
+func (dg *DeenGUI) showPluginSearch() {
+	query := widget.NewEntry()
+	query.SetPlaceHolder("Search plugins")
+	results := container.NewVBox()
+	scroll := container.NewVScroll(results)
+	scroll.SetMinSize(fyne.NewSize(640, 420))
+
+	var d dialog.Dialog
+	refresh := func(q string) {
+		results.RemoveAll()
+		matches := plugins.SearchUICatalog(q)
+		if len(matches) == 0 {
+			results.Add(widget.NewLabel("No plugins found."))
+		}
+		for _, info := range matches {
+			info := info
+			direction := "encode"
+			if !info.CanDecode {
+				direction = "run"
+			}
+			title := fmt.Sprintf("%s / %s", plugins.CategoryLabel(info.Category), info.Name)
+			if len(info.Aliases) > 0 {
+				title += " (" + strings.Join(info.Aliases, ", ") + ")"
+			}
+			desc := widget.NewLabel(info.Description)
+			desc.Wrapping = fyne.TextWrapWord
+			addEncode := widget.NewButton("Add "+direction, func() {
+				dg.pipe.AddStep(info.Name, false)
+				dg.rebuild()
+				if d != nil {
+					d.Hide()
+				}
+			})
+			actions := container.NewHBox(addEncode)
+			if info.CanDecode {
+				actions.Add(widget.NewButton("Add decode", func() {
+					dg.pipe.AddStep(info.Name, true)
+					dg.rebuild()
+					if d != nil {
+						d.Hide()
+					}
+				}))
+			}
+			results.Add(widget.NewCard(title, "", container.NewVBox(desc, actions)))
+		}
+		results.Refresh()
+	}
+	query.OnChanged = refresh
+	refresh("")
+
+	d = dialog.NewCustom("Add transform", "Close", container.NewBorder(query, nil, nil, nil, scroll), dg.window)
+	d.Resize(fyne.NewSize(700, 520))
+	d.Show()
+	dg.window.Canvas().Focus(query)
+}
+
+func (dg *DeenGUI) showPresets() {
+	list := container.NewVBox()
+	var d dialog.Dialog
+	for _, preset := range pipeline.BuiltinPresets() {
+		preset := preset
+		desc := widget.NewLabel(preset.Description)
+		desc.Wrapping = fyne.TextWrapWord
+		apply := widget.NewButton("Apply", func() {
+			dg.pipe.ApplyPreset(preset)
+			dg.rebuild()
+			if d != nil {
+				d.Hide()
+			}
+		})
+		list.Add(widget.NewCard(preset.Name, "", container.NewVBox(desc, apply)))
+	}
+	scroll := container.NewVScroll(list)
+	scroll.SetMinSize(fyne.NewSize(640, 420))
+	d = dialog.NewCustom("Presets", "Close", scroll, dg.window)
+	d.Resize(fyne.NewSize(700, 520))
+	d.Show()
+}
+
+func (dg *DeenGUI) undo() {
+	if dg.pipe.Undo() {
+		dg.rebuild()
+	}
+}
+
+func (dg *DeenGUI) redo() {
+	if dg.pipe.Redo() {
+		dg.rebuild()
+	}
+}
+
 func (dg *DeenGUI) clear() {
-	dg.pipe = pipeline.New()
+	dg.pipe.Clear()
 	dg.rebuild()
 }
