@@ -46,9 +46,8 @@ type cardRef struct {
 	index        int
 	output       js.Value
 	hexOutput    js.Value
-	base64Output js.Value
-	statsOutput  js.Value
 	preview      js.Value
+	imageEnabled bool
 	imagePanel   js.Value
 	image        js.Value
 	imageMsg     js.Value
@@ -171,8 +170,6 @@ func autoSizeTextareaSoon(t js.Value) {
 func autoSizeOutputTextareas(c *cardRef) {
 	autoSizeTextareaSoon(c.output)
 	autoSizeTextareaSoon(c.hexOutput)
-	autoSizeTextareaSoon(c.base64Output)
-	autoSizeTextareaSoon(c.statsOutput)
 }
 
 func previewBox() js.Value {
@@ -1249,7 +1246,7 @@ func stepCard(i int) js.Value {
 	card := div("card")
 	card.Get("style").Set("borderLeft", "5px solid "+col)
 
-	// Header: collapse, title, summary, remove.
+	// Header: collapse, title, summary, controls.
 	header := div("card-header")
 	collapse := el("button")
 	collapse.Set("className", "icon")
@@ -1286,9 +1283,16 @@ func stepCard(i int) js.Value {
 		pipe.DuplicateStep(i)
 		rebuild()
 	})
+	enabledWrap, enabledInput := checkbox("enabled", !step.Disabled)
+	enabledWrap.Set("className", "header-toggle")
+	enabledInput.Set("checked", !step.Disabled)
+	on(enabledInput, "change", func() {
+		pipe.SetStepDisabled(i, !enabledInput.Get("checked").Bool())
+		rebuild()
+	})
 
 	spacer := div("spacer")
-	appendChildren(header, collapse, title, summary, spacer, moveUp, moveDown, duplicate, remove)
+	appendChildren(header, collapse, title, summary, spacer, enabledWrap, moveUp, moveDown, duplicate, remove)
 
 	detail := div("card-detail")
 
@@ -1296,8 +1300,6 @@ func stepCard(i int) js.Value {
 	canDecode := plugins.CanDecode(step.Plugin)
 	decodeWrap, decodeInput := checkbox("decode", step.Unprocess && canDecode)
 	decodeInput.Set("checked", step.Unprocess && canDecode)
-	enabledWrap, enabledInput := checkbox("enabled", !step.Disabled)
-	enabledInput.Set("checked", !step.Disabled)
 
 	// One dropdown per category.
 	selRow := div("selectors")
@@ -1323,13 +1325,8 @@ func stepCard(i int) js.Value {
 		pipe.SetPlugin(i, step.Plugin, decodeInput.Get("checked").Bool() && plugins.CanDecode(step.Plugin))
 		refreshOutputs(i)
 	})
-	on(enabledInput, "change", func() {
-		pipe.SetStepDisabled(i, !enabledInput.Get("checked").Bool())
-		rebuild()
-	})
 
 	toggles := div("toggles")
-	toggles.Call("appendChild", enabledWrap)
 	if canDecode {
 		toggles.Call("appendChild", decodeWrap)
 	}
@@ -1347,12 +1344,11 @@ func stepCard(i int) js.Value {
 	})
 	ref.hexOutput = textareaWithMax("", 960)
 	ref.hexOutput.Set("readOnly", true)
-	ref.base64Output = textareaWithMax("", 960)
-	ref.base64Output.Set("readOnly", true)
-	ref.statsOutput = textareaWithMax("", 640)
-	ref.statsOutput.Set("readOnly", true)
 	ref.preview = previewBox()
-	ref.imagePanel, ref.image, ref.imageMsg = imagePreviewBox()
+	ref.imageEnabled = stepGeneratesImage(step)
+	if ref.imageEnabled {
+		ref.imagePanel, ref.image, ref.imageMsg = imagePreviewBox()
+	}
 	viewer := outputViewer(ref)
 
 	ref.meta = div("meta")
@@ -1387,10 +1383,13 @@ func outputViewer(ref *cardRef) js.Value {
 	}{
 		{"Text", ref.output},
 		{"Hex", ref.hexOutput},
-		{"Base64", ref.base64Output},
-		{"Stats", ref.statsOutput},
 		{"Preview", ref.preview},
-		{"Image", ref.imagePanel},
+	}
+	if ref.imageEnabled {
+		panelItems = append(panelItems, struct {
+			label string
+			node  js.Value
+		}{"Image", ref.imagePanel})
 	}
 	buttons := make([]js.Value, 0, len(panelItems))
 	panelEls := make([]js.Value, 0, len(panelItems))
@@ -1433,6 +1432,10 @@ func outputViewer(ref *cardRef) js.Value {
 	return viewer
 }
 
+func stepGeneratesImage(step *pipeline.Step) bool {
+	return step.Plugin == "qr" && !step.Unprocess
+}
+
 func autoSizeViewerPanel(panel js.Value) {
 	areas := panel.Call("querySelectorAll", "textarea.io")
 	for i := 0; i < areas.Get("length").Int(); i++ {
@@ -1442,10 +1445,18 @@ func autoSizeViewerPanel(panel js.Value) {
 
 func buildOptions(container js.Value, i int) {
 	step := pipe.Steps()[i]
-	for _, opt := range pipeline.PluginOptions(step.Plugin) {
+	opts := pipeline.PluginOptions(step.Plugin)
+	if len(opts) == 0 {
+		return
+	}
+	checkGroup, checkBody := optionGroup("Checkboxes")
+	fieldGroup, fieldBody := optionGroup("Inputs")
+	var hasChecks, hasFields bool
+	for _, opt := range opts {
 		opt := opt
 		row := div("option")
 		row.Set("title", opt.Usage)
+		row.Get("classList").Call("toggle", "option-multiline", opt.Multiline)
 		if opt.IsBool {
 			wrap, input := checkbox(opt.Label, step.Options[opt.Name] == "true")
 			on(input, "change", func() {
@@ -1456,10 +1467,13 @@ func buildOptions(container js.Value, i int) {
 				pipe.SetOption(i, opt.Name, val)
 				refreshOutputs(i)
 			})
-			row.Call("appendChild", wrap)
+			appendChildren(row, wrap, optionHelp(opt))
+			checkBody.Call("appendChild", row)
+			hasChecks = true
 		} else {
-			label := el("span")
-			label.Set("textContent", opt.Label+": ")
+			label := el("label")
+			label.Set("className", "option-label")
+			label.Set("textContent", opt.Label)
 			var input js.Value
 			current := opt.Default
 			if v, ok := step.Options[opt.Name]; ok {
@@ -1467,33 +1481,88 @@ func buildOptions(container js.Value, i int) {
 			}
 			if opt.Kind == "select" {
 				input = selectEl("", opt.Choices, current)
+				input.Set("title", opt.Description)
 				on(input, "change", func() {
 					pipe.SetOption(i, opt.Name, input.Get("value").String())
 					refreshOutputs(i)
 				})
 			} else {
-				input = el("input")
-				inputType := "text"
-				if opt.Kind == "number" {
-					inputType = "number"
-				}
-				if opt.Kind == "secret" || opt.Secret {
-					inputType = "password"
-				}
-				input.Set("type", inputType)
-				input.Set("placeholder", "default: "+opt.Default)
-				if v, ok := step.Options[opt.Name]; ok {
-					input.Set("value", v)
+				if opt.Multiline {
+					input = el("textarea")
+					input.Set("rows", 3)
+					input.Set("placeholder", optionPlaceholder(opt))
+					input.Set("value", current)
+					input.Set("title", opt.Description)
+				} else {
+					input = el("input")
+					inputType := "text"
+					if opt.Kind == "number" {
+						inputType = "number"
+					}
+					if opt.Kind == "secret" || opt.Secret {
+						inputType = "password"
+					}
+					input.Set("type", inputType)
+					input.Set("placeholder", optionPlaceholder(opt))
+					input.Set("title", opt.Description)
+					if v, ok := step.Options[opt.Name]; ok {
+						input.Set("value", v)
+					}
 				}
 				on(input, "input", func() {
 					pipe.SetOption(i, opt.Name, input.Get("value").String())
 					refreshOutputs(i)
 				})
 			}
-			appendChildren(row, label, input)
+			appendChildren(row, label, input, optionHelp(opt))
+			fieldBody.Call("appendChild", row)
+			hasFields = true
 		}
-		container.Call("appendChild", row)
 	}
+	if hasChecks {
+		container.Call("appendChild", checkGroup)
+	}
+	if hasFields {
+		container.Call("appendChild", fieldGroup)
+	}
+}
+
+func optionGroup(title string) (js.Value, js.Value) {
+	group := div("option-group")
+	heading := div("option-group-title")
+	heading.Set("textContent", title)
+	body := div("option-group-body")
+	appendChildren(group, heading, body)
+	return group, body
+}
+
+func optionPlaceholder(opt pipeline.Option) string {
+	if opt.Default == "" {
+		return opt.Label
+	}
+	return "default: " + opt.Default
+}
+
+func optionHelp(opt pipeline.Option) js.Value {
+	help := div("option-help")
+	if opt.Description != "" {
+		desc := el("span")
+		desc.Set("textContent", opt.Description)
+		help.Call("appendChild", desc)
+	}
+	if opt.HelpURL != "" {
+		link := el("a")
+		link.Set("href", opt.HelpURL)
+		link.Set("target", "_blank")
+		link.Set("rel", "noopener noreferrer")
+		if opt.HelpLabel != "" {
+			link.Set("textContent", opt.HelpLabel)
+		} else {
+			link.Set("textContent", "Reference")
+		}
+		help.Call("appendChild", link)
+	}
+	return help
 }
 
 func addCard() js.Value {
@@ -1584,10 +1653,10 @@ func renderOutput(c *cardRef) {
 	c.output.Set("value", string(out))
 	c.output.Set("readOnly", false)
 	c.hexOutput.Set("value", hex.Dump(out))
-	c.base64Output.Set("value", base64.StdEncoding.EncodeToString(out))
-	c.statsOutput.Set("value", summary)
 	autoSizeOutputTextareas(c)
-	renderImageOutput(c, out)
+	if c.imageEnabled {
+		renderImageOutput(c, out)
+	}
 	preview, ok := pipeline.StructuredPreview(out)
 	if !ok {
 		preview = "No structured preview available."

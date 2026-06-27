@@ -433,6 +433,15 @@ a {
 	background: transparent;
 }
 
+.header-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	min-height: 2rem;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
 .selectors {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
@@ -455,21 +464,70 @@ a {
 }
 
 .options {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.6rem;
+	display: grid;
+	gap: 0.75rem;
 	margin-bottom: 0.55rem;
 }
 
-.option {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.35rem;
+.option-group {
+	display: grid;
+	gap: 0.45rem;
 }
 
-.options input[type="text"], .options input[type="number"], .options input[type="password"], .options select {
+.option-group-title {
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.option-group-body {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.6rem;
+}
+
+.option {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.35rem;
+	min-width: 13rem;
+	max-width: 22rem;
+}
+
+.option-multiline {
+	flex-basis: 100%;
+	max-width: min(100%, 44rem);
+}
+
+.option-label {
+	font-weight: 650;
+	color: var(--text);
+}
+
+.option-help {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+	font-size: 0.82rem;
+	line-height: 1.35;
+	color: var(--muted);
+}
+
+.option-help a {
+	color: var(--accent);
+}
+
+.options input[type="text"], .options input[type="number"], .options input[type="password"], .options select, .options textarea {
 	min-height: 2rem;
 	padding: 0.25rem 0.4rem;
+	width: 100%;
+}
+
+.options textarea {
+	min-height: 5.75rem;
+	resize: vertical;
 }
 
 .viewer {

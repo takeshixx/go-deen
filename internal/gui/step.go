@@ -4,7 +4,6 @@ package gui
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"image"
@@ -12,6 +11,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	neturl "net/url"
 	"sort"
 	"strings"
 
@@ -221,8 +221,6 @@ type stepCard struct {
 	options   *fyne.Container
 	body      *widget.Entry
 	hexBody   *widget.Entry
-	b64Body   *widget.Entry
-	statsBody *widget.Entry
 	preview   *widget.TextGrid
 	image     *canvas.Image
 	imageMsg  *widget.Label
@@ -289,7 +287,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	})
 	titleRow := container.NewBorder(nil, nil,
 		container.NewHBox(c.collapse, title, c.summary),
-		container.NewHBox(moveUp, moveDown, duplicate, remove))
+		container.NewHBox(c.enabled, moveUp, moveDown, duplicate, remove))
 
 	// Detail: selectors, toggles, options, output, errors.
 	c.options = container.NewVBox()
@@ -303,27 +301,24 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	}
 	c.hexBody = multilineEntry(6)
 	c.hexBody.Disable()
-	c.b64Body = multilineEntry(6)
-	c.b64Body.Disable()
-	c.statsBody = multilineEntry(6)
-	c.statsBody.Disable()
 	c.preview = widget.NewTextGrid()
 	c.preview.ShowLineNumbers = false
 	c.preview.Scroll = fyne.ScrollBoth
-	c.image = canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 1, 1)))
-	c.image.FillMode = canvas.ImageFillContain
-	c.imageMsg = widget.NewLabel("No image preview available.")
-	c.imageMsg.Alignment = fyne.TextAlignCenter
-	c.image.Hide()
-	imageViewer := container.NewBorder(nil, c.imageMsg, nil, nil, container.NewPadded(c.image))
-	viewer := container.NewAppTabs(
+	viewerTabs := []*container.TabItem{
 		container.NewTabItem("Text", c.body),
 		container.NewTabItem("Hex", c.hexBody),
-		container.NewTabItem("Base64", c.b64Body),
-		container.NewTabItem("Stats", c.statsBody),
 		container.NewTabItem("Preview", c.preview),
-		container.NewTabItem("Image", imageViewer),
-	)
+	}
+	if stepGeneratesImage(step) {
+		c.image = canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 1, 1)))
+		c.image.FillMode = canvas.ImageFillContain
+		c.imageMsg = widget.NewLabel("No image preview available.")
+		c.imageMsg.Alignment = fyne.TextAlignCenter
+		c.image.Hide()
+		imageViewer := container.NewBorder(nil, c.imageMsg, nil, nil, container.NewPadded(c.image))
+		viewerTabs = append(viewerTabs, container.NewTabItem("Image", imageViewer))
+	}
+	viewer := container.NewAppTabs(viewerTabs...)
 	viewer.SetTabLocation(container.TabLocationTop)
 	viewerBox := container.New(fixedHeightLayout{height: outputViewerHeight}, viewer)
 	c.meta = widget.NewLabel("")
@@ -333,7 +328,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.status.Importance = widget.DangerImportance
 	c.status.Wrapping = fyne.TextWrapBreak
 	c.status.Hide()
-	toggles := container.NewHBox(c.enabled)
+	toggles := container.NewHBox()
 	if canDecode {
 		toggles.Add(c.decode)
 	}
@@ -393,9 +388,13 @@ func (c *stepCard) rebuildOptions() {
 		c.options.Refresh()
 		return
 	}
-	form := widget.NewForm()
+	var checkOptions []fyne.CanvasObject
+	var fieldOptions []fyne.CanvasObject
 	for _, opt := range opts {
 		opt := opt
+		label := widget.NewLabelWithStyle(opt.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		var control fyne.CanvasObject
+		var target *[]fyne.CanvasObject
 		if opt.IsBool {
 			chk := widget.NewCheck("", nil)
 			chk.SetChecked(step.Options[opt.Name] == "true")
@@ -407,7 +406,8 @@ func (c *stepCard) rebuildOptions() {
 				c.gui.pipe.SetOption(c.index, opt.Name, val)
 				c.gui.refreshFrom(c.index)
 			}
-			form.Append(opt.Label, chk)
+			control = chk
+			target = &checkOptions
 		} else if opt.Kind == "select" {
 			selectInput := widget.NewSelect(opt.Choices, func(s string) {
 				c.gui.pipe.SetOption(c.index, opt.Name, s)
@@ -418,13 +418,17 @@ func (c *stepCard) rebuildOptions() {
 			} else {
 				selectInput.SetSelected(opt.Default)
 			}
-			form.Append(opt.Label, selectInput)
+			control = selectInput
+			target = &fieldOptions
 		} else {
 			entry := widget.NewEntry()
+			if opt.Multiline {
+				entry = multilineEntry(3)
+			}
 			if opt.Kind == "secret" || opt.Secret {
 				entry = widget.NewPasswordEntry()
 			}
-			entry.SetPlaceHolder(fmt.Sprintf("default: %s", opt.Default))
+			entry.SetPlaceHolder(optionPlaceholder(opt))
 			if v, ok := step.Options[opt.Name]; ok {
 				entry.SetText(v)
 			}
@@ -432,11 +436,68 @@ func (c *stepCard) rebuildOptions() {
 				c.gui.pipe.SetOption(c.index, opt.Name, s)
 				c.gui.refreshFrom(c.index)
 			}
-			form.Append(opt.Label, entry)
+			control = entry
+			target = &fieldOptions
+		}
+		*target = append(*target, optionBlock(label, control, opt))
+	}
+	if len(checkOptions) > 0 {
+		c.options.Add(optionSection("Checkboxes", checkOptions))
+	}
+	if len(fieldOptions) > 0 {
+		c.options.Add(optionSection("Inputs", fieldOptions))
+	}
+	c.options.Refresh()
+}
+
+func optionPlaceholder(opt pipeline.Option) string {
+	if opt.Default == "" {
+		return opt.Label
+	}
+	return fmt.Sprintf("default: %s", opt.Default)
+}
+
+func optionBlock(label, control fyne.CanvasObject, opt pipeline.Option) fyne.CanvasObject {
+	items := []fyne.CanvasObject{label, control}
+	if help := optionHelp(opt); help != nil {
+		items = append(items, help)
+	}
+	return container.NewVBox(items...)
+}
+
+func optionSection(title string, items []fyne.CanvasObject) fyne.CanvasObject {
+	heading := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	heading.Importance = widget.LowImportance
+	children := []fyne.CanvasObject{heading}
+	children = append(children, items...)
+	return container.NewVBox(children...)
+}
+
+func optionHelp(opt pipeline.Option) fyne.CanvasObject {
+	var items []fyne.CanvasObject
+	if opt.Description != "" {
+		desc := widget.NewLabel(opt.Description)
+		desc.Wrapping = fyne.TextWrapWord
+		items = append(items, desc)
+	}
+	if opt.HelpURL != "" {
+		u, err := neturl.Parse(opt.HelpURL)
+		if err == nil {
+			label := opt.HelpLabel
+			if label == "" {
+				label = "Reference"
+			}
+			items = append(items, widget.NewHyperlink(label, u))
 		}
 	}
-	c.options.Add(form)
-	c.options.Refresh()
+	if len(items) == 0 {
+		return nil
+	}
+	return container.NewVBox(items...)
+}
+
+func stepGeneratesImage(step *pipeline.Step) bool {
+	return step.Plugin == "qr" && !step.Unprocess
 }
 
 // refresh updates the body and status from the pipeline output.
@@ -457,9 +518,9 @@ func (c *stepCard) refresh() {
 	c.body.Enable()
 	c.gui.setText(c.body, string(out))
 	c.gui.setText(c.hexBody, hex.Dump(out))
-	c.gui.setText(c.b64Body, base64.StdEncoding.EncodeToString(out))
-	c.gui.setText(c.statsBody, summary)
-	setImagePreview(c.image, c.imageMsg, out)
+	if c.image != nil {
+		setImagePreview(c.image, c.imageMsg, out)
+	}
 	preview, spans, ok := pipeline.HighlightedPreview(out)
 	if !ok {
 		preview = "No structured preview available."
@@ -467,8 +528,6 @@ func (c *stepCard) refresh() {
 	}
 	setPreviewText(c.preview, preview, spans)
 	c.hexBody.Disable()
-	c.b64Body.Disable()
-	c.statsBody.Disable()
 }
 
 func setImagePreview(img *canvas.Image, msg *widget.Label, data []byte) {

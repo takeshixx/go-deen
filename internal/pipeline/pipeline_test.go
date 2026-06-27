@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -223,12 +224,18 @@ func TestImportNormalizesOneWayDecodeSteps(t *testing.T) {
 }
 
 func TestPluginOptionsMetadata(t *testing.T) {
-	var unit Option
-	for _, opt := range PluginOptions("timestamp") {
-		if opt.Name == "unit" {
-			unit = opt
+	find := func(plugin, name string) Option {
+		t.Helper()
+		for _, opt := range PluginOptions(plugin) {
+			if opt.Name == name {
+				return opt
+			}
 		}
+		t.Fatalf("%s option %q not found", plugin, name)
+		return Option{}
 	}
+
+	unit := find("timestamp", "unit")
 	if unit.Kind != "select" {
 		t.Fatalf("timestamp unit kind = %q, want select", unit.Kind)
 	}
@@ -236,34 +243,54 @@ func TestPluginOptionsMetadata(t *testing.T) {
 		t.Fatal("timestamp unit should have choices")
 	}
 
-	var key Option
-	for _, opt := range PluginOptions("hmac") {
-		if opt.Name == "key" {
-			key = opt
-		}
-	}
+	key := find("hmac", "key")
 	if key.Kind != "secret" || !key.Secret {
 		t.Fatalf("hmac key metadata = %#v, want secret", key)
 	}
 
-	var cost Option
-	for _, opt := range PluginOptions("scrypt") {
-		if opt.Name == "cost" {
-			cost = opt
-		}
-	}
+	cost := find("scrypt", "cost")
 	if cost.Kind != "number" {
 		t.Fatalf("scrypt cost kind = %q, want number", cost.Kind)
 	}
-
-	var recreate Option
-	for _, opt := range PluginOptions("jwt") {
-		if opt.Name == "r" {
-			recreate = opt
-		}
+	if got := find("scrypt", "p").Label; got != "Parallelization" {
+		t.Fatalf("scrypt p label = %q", got)
 	}
+	if got := find("scrypt", "len").Label; got != "Output length" {
+		t.Fatalf("scrypt len label = %q", got)
+	}
+
+	recreate := find("jwt", "r")
 	if recreate.Label != "Recreate token, keep signature" {
 		t.Fatalf("jwt r label = %q", recreate.Label)
+	}
+	if recreate.Description == "" || strings.Contains(recreate.Description, "given") {
+		t.Fatalf("jwt r description = %q, want concise UI description", recreate.Description)
+	}
+	if got := find("jwt", "sign-alg").Label; got != "Signing algorithm" {
+		t.Fatalf("jwt sign-alg label = %q", got)
+	}
+	if got := find("jwt", "enc-keyfile").Label; got != "Encryption key file" {
+		t.Fatalf("jwt enc-keyfile label = %q", got)
+	}
+	if got := find("jwt", "verify").Description; got != "Verify the token signature while decoding." {
+		t.Fatalf("jwt verify description = %q", got)
+	}
+
+	query := find("jq", "q")
+	if query.Label != "Query" || !query.Multiline || query.HelpURL == "" {
+		t.Fatalf("jq q metadata = %#v, want query label, multiline input and help URL", query)
+	}
+	if got := find("jq", "no-color").Label; got != "No color" {
+		t.Fatalf("jq no-color label = %q", got)
+	}
+	if got := find("base32", "no-pad").Label; got != "No padding" {
+		t.Fatalf("base32 no-pad label = %q", got)
+	}
+	if got := find("brotli", "lgwin").Label; got != "Window size" {
+		t.Fatalf("brotli lgwin label = %q", got)
+	}
+	if got := find("aes", "aad").Label; got != "AAD" {
+		t.Fatalf("aes aad label = %q", got)
 	}
 }
 
