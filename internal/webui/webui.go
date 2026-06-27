@@ -8,8 +8,10 @@ package webui
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"syscall/js"
 
+	"github.com/takeshixx/deen/internal/core"
 	"github.com/takeshixx/deen/internal/pipeline"
 	"github.com/takeshixx/deen/internal/plugins"
 )
@@ -21,12 +23,16 @@ func accent(i int) string { return palette[i%len(palette)] }
 var (
 	doc       js.Value
 	pipe      *pipeline.Pipeline
+	contentEl js.Value
+	tabBtns   []js.Value
 	stepsEl   js.Value
 	historyEl js.Value
 	sourceEl  js.Value
 	updating  bool
 	callbacks []js.Func
+	staticCBs []js.Func
 	cards     []*cardRef
+	activeTab = "home"
 )
 
 type cardRef struct {
@@ -65,6 +71,12 @@ func appendChildren(parent js.Value, kids ...js.Value) {
 func on(elem js.Value, event string, fn func()) {
 	cb := js.FuncOf(func(js.Value, []js.Value) any { fn(); return nil })
 	callbacks = append(callbacks, cb)
+	elem.Call("addEventListener", event, cb)
+}
+
+func onStatic(elem js.Value, event string, fn func()) {
+	cb := js.FuncOf(func(js.Value, []js.Value) any { fn(); return nil })
+	staticCBs = append(staticCBs, cb)
 	elem.Call("addEventListener", event, cb)
 }
 
@@ -109,45 +121,252 @@ func checkbox(label string, checked bool) (wrap, input js.Value) {
 	return wrap, input
 }
 
+func button(className, label string, fn func()) js.Value {
+	b := el("button")
+	b.Set("className", className)
+	b.Set("type", "button")
+	b.Set("textContent", label)
+	on(b, "click", fn)
+	return b
+}
+
 // --- layout ---
 
 func buildLayout() {
 	body := doc.Get("body")
 	body.Set("innerHTML", "")
 
-	app := div("app")
-	main := div("main")
-	side := div("side")
-
+	shell := div("shell")
+	header := div("app-header")
 	heading := el("h1")
 	heading.Set("textContent", "deen")
+	tabs := div("tabs")
+	appendChildren(tabs, tabButton("home", "Home"), tabButton("plugins", "Plugins"), tabButton("about", "About"))
+	appendChildren(header, heading, tabs)
 
-	stepsEl = div("steps")
+	contentEl = div("tab-content")
+	appendChildren(shell, header, contentEl)
+	body.Call("appendChild", shell)
 
-	sideTitle := el("h2")
-	sideTitle.Set("textContent", "History")
-	historyEl = div("history")
+	renderActiveTab()
+}
 
-	appendChildren(main, heading, stepsEl)
-	appendChildren(side, sideTitle, historyEl)
-	appendChildren(app, main, side)
-	body.Call("appendChild", app)
+func tabButton(tab, label string) js.Value {
+	b := el("button")
+	b.Set("type", "button")
+	b.Set("className", "tab")
+	b.Set("textContent", label)
+	tabBtns = append(tabBtns, b)
+	onStatic(b, "click", func() {
+		activeTab = tab
+		renderActiveTab()
+	})
+	return b
+}
 
-	rebuild()
+func renderActiveTab() {
+	releaseCallbacks()
+	contentEl.Set("innerHTML", "")
+	cards = cards[:0]
+	for _, b := range tabBtns {
+		if strings.EqualFold(b.Get("textContent").String(), activeTab) {
+			b.Set("className", "tab active")
+		} else {
+			b.Set("className", "tab")
+		}
+	}
+	switch activeTab {
+	case "plugins":
+		renderPlugins()
+	case "about":
+		renderAbout()
+	default:
+		renderHome()
+	}
 }
 
 // rebuild reconstructs the source card, step cards and add card.
 func rebuild() {
 	releaseCallbacks()
-	stepsEl.Set("innerHTML", "")
+	contentEl.Set("innerHTML", "")
 	cards = cards[:0]
+	renderHome()
+}
+
+func renderHome() {
+	app := div("app")
+	main := div("main")
+	side := div("side")
+
+	toolbar := div("toolbar")
+	appendChildren(toolbar,
+		button("primary", "Copy result", copyResult),
+		button("", "Download", downloadResult),
+		filePicker(),
+		button("", "Clear", func() {
+			pipe = pipeline.New()
+			rebuild()
+		}),
+	)
+
+	stepsEl = div("steps")
 
 	stepsEl.Call("appendChild", sourceCard())
 	for i := range pipe.Steps() {
 		stepsEl.Call("appendChild", stepCard(i))
 	}
 	stepsEl.Call("appendChild", addCard())
+
+	sideTitle := el("h2")
+	sideTitle.Set("textContent", "History")
+	historyEl = div("history")
+
+	appendChildren(main, toolbar, stepsEl)
+	appendChildren(side, sideTitle, historyEl)
+	appendChildren(app, main, side)
+	contentEl.Call("appendChild", app)
 	updateHistory()
+}
+
+func renderAbout() {
+	version := core.Version()
+	if b := core.Branch(); b != "" {
+		version += " (" + b + ")"
+	}
+	page := div("info-page")
+	h := el("h2")
+	h.Set("textContent", "deen")
+	desc := el("p")
+	desc.Set("textContent", "deen encodes, decodes, hashes, compresses and formats data through a configurable chain of plugins.")
+	versionEl := el("p")
+	versionEl.Set("textContent", "Version: "+version)
+	built := el("p")
+	built.Set("textContent", "Built with Go, Fyne for desktop, and WebAssembly for this browser interface. Processing runs locally in the current app surface.")
+	docs := link("Documentation", "https://deen.adversec.com")
+	repo := link("Source", "https://github.com/takeshixx/go-deen")
+	appendChildren(page, h, desc, versionEl, built, docs, repo)
+	contentEl.Call("appendChild", page)
+}
+
+func renderPlugins() {
+	page := div("catalog")
+	current := ""
+	for _, info := range plugins.UICatalog() {
+		if info.Category != current {
+			current = info.Category
+			h := el("h2")
+			h.Set("textContent", plugins.CategoryLabel(current))
+			page.Call("appendChild", h)
+		}
+		page.Call("appendChild", pluginCard(info))
+	}
+	contentEl.Call("appendChild", page)
+}
+
+func link(label, href string) js.Value {
+	a := el("a")
+	a.Set("href", href)
+	a.Set("textContent", label)
+	a.Set("target", "_blank")
+	a.Set("rel", "noopener noreferrer")
+	return a
+}
+
+func pluginCard(info plugins.UIPluginInfo) js.Value {
+	card := div("plugin-card")
+	title := el("h3")
+	title.Set("textContent", info.Name)
+
+	direction := "Encode only"
+	if info.CanDecode {
+		direction = "Encode and decode"
+	}
+	metaParts := []string{info.Category, direction}
+	if len(info.Aliases) > 0 {
+		metaParts = append(metaParts, "Aliases: "+strings.Join(info.Aliases, ", "))
+	}
+	meta := div("plugin-meta")
+	meta.Set("textContent", strings.Join(metaParts, " · "))
+
+	desc := el("p")
+	desc.Set("textContent", info.Description)
+	use := el("p")
+	use.Set("textContent", "Use for: "+info.UseFor)
+	appendChildren(card, title, meta, desc, use)
+
+	if len(info.References) > 0 {
+		refs := div("refs")
+		label := el("span")
+		label.Set("textContent", "References: ")
+		refs.Call("appendChild", label)
+		for i, ref := range info.References {
+			if i > 0 {
+				refs.Call("appendChild", textNode(" · "))
+			}
+			refs.Call("appendChild", link(ref.Label, ref.URL))
+		}
+		card.Call("appendChild", refs)
+	}
+	return card
+}
+
+func copyResult() {
+	clipboard := js.Global().Get("navigator").Get("clipboard")
+	if clipboard.Truthy() {
+		clipboard.Call("writeText", string(pipe.Result()))
+	}
+}
+
+func downloadResult() {
+	data := pipe.Result()
+	array := js.Global().Get("Uint8Array").New(len(data))
+	js.CopyBytesToJS(array, data)
+	blob := js.Global().Get("Blob").New([]any{array})
+	urlObj := js.Global().Get("URL")
+	u := urlObj.Call("createObjectURL", blob)
+	a := el("a")
+	a.Set("href", u)
+	a.Set("download", "deen-result.bin")
+	doc.Get("body").Call("appendChild", a)
+	a.Call("click")
+	a.Call("remove")
+	urlObj.Call("revokeObjectURL", u)
+}
+
+func filePicker() js.Value {
+	wrap := div("file-action")
+	openBtn := el("button")
+	openBtn.Set("type", "button")
+	openBtn.Set("textContent", "Open file")
+	input := el("input")
+	input.Set("type", "file")
+	input.Get("style").Set("display", "none")
+
+	on(openBtn, "click", func() {
+		input.Call("click")
+	})
+	on(input, "change", func() {
+		files := input.Get("files")
+		if files.Get("length").Int() == 0 {
+			return
+		}
+		file := files.Call("item", 0)
+		reader := js.Global().Get("FileReader").New()
+		var loadCB js.Func
+		loadCB = js.FuncOf(func(js.Value, []js.Value) any {
+			array := js.Global().Get("Uint8Array").New(reader.Get("result"))
+			buf := make([]byte, array.Get("byteLength").Int())
+			js.CopyBytesToGo(buf, array)
+			pipe.SetSource(buf)
+			rebuild()
+			loadCB.Release()
+			return nil
+		})
+		reader.Call("addEventListener", "load", loadCB)
+		reader.Call("readAsArrayBuffer", file)
+	})
+	appendChildren(wrap, openBtn, input)
+	return wrap
 }
 
 func sourceCard() js.Value {

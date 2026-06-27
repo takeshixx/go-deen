@@ -84,3 +84,67 @@ func TestHandlerNoAssets(t *testing.T) {
 		t.Error("expected an error when neither Root nor Assets is set")
 	}
 }
+
+func TestSecurityHeaders(t *testing.T) {
+	h, err := Handler(Config{Root: tempRoot(t), CSP: DefaultCSP, TLSCert: "cert.pem"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	hdr := rec.Header()
+	if hdr.Get("Content-Security-Policy") != DefaultCSP {
+		t.Errorf("CSP = %q", hdr.Get("Content-Security-Policy"))
+	}
+	if hdr.Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("missing nosniff")
+	}
+	if hdr.Get("X-Frame-Options") != "DENY" {
+		t.Error("missing X-Frame-Options DENY")
+	}
+	if hdr.Get("Strict-Transport-Security") == "" {
+		t.Error("HSTS should be set when serving TLS")
+	}
+}
+
+func TestNoHSTSWithoutTLS(t *testing.T) {
+	h, _ := Handler(Config{Root: tempRoot(t), CSP: DefaultCSP})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Header().Get("Strict-Transport-Security") != "" {
+		t.Error("HSTS must not be set without TLS")
+	}
+}
+
+func TestPrecompressedServing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "app.js"), []byte("PLAIN"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "app.js.gz"), []byte("GZIPPED"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := Handler(Config{Root: dir})
+
+	// Client accepts gzip -> serves the .gz with Content-Encoding.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	h.ServeHTTP(rec, req)
+	if rec.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("expected gzip encoding, got %q", rec.Header().Get("Content-Encoding"))
+	}
+	if rec.Body.String() != "GZIPPED" {
+		t.Errorf("expected precompressed body, got %q", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct == "" || ct == "application/gzip" {
+		t.Errorf("Content-Type should reflect the original extension, got %q", ct)
+	}
+
+	// No Accept-Encoding -> serves the plain file.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/app.js", nil))
+	if rec.Header().Get("Content-Encoding") != "" || rec.Body.String() != "PLAIN" {
+		t.Errorf("expected plain file, got encoding=%q body=%q", rec.Header().Get("Content-Encoding"), rec.Body.String())
+	}
+}

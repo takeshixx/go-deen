@@ -29,6 +29,7 @@ func runServe() int {
 	tlsKey := fs.String("tls-key", "", "TLS private key file")
 	authUser := fs.String("auth-user", "", "require HTTP basic auth with this user")
 	authPass := fs.String("auth-pass", "", "HTTP basic auth password (random if omitted)")
+	csp := fs.String("csp", server.DefaultCSP, "Content-Security-Policy header (empty to disable)")
 	logReq := fs.Bool("log", false, "log requests")
 	fs.Parse(helpers.RemoveBeforeSubcommand(os.Args, "serve"))
 
@@ -52,6 +53,7 @@ func runServe() int {
 		TLSKey:   *tlsKey,
 		AuthUser: *authUser,
 		AuthPass: pass,
+		CSP:      *csp,
 		Log:      *logReq,
 	})
 	if err != nil {
