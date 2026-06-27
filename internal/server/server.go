@@ -20,7 +20,7 @@ import (
 // 'wasm-unsafe-eval' is required to compile WebAssembly; everything else is
 // restricted to same-origin with no inline scripts or styles.
 const DefaultCSP = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; " +
-	"style-src 'self'; connect-src 'self'; img-src 'self'; " +
+	"style-src 'self'; connect-src 'self'; img-src 'self' data:; " +
 	"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // Config configures the deen web server.

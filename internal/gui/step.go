@@ -3,14 +3,22 @@
 package gui
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"image"
 	"image/color"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"sort"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -33,6 +41,50 @@ func accent(i int) color.NRGBA { return stepPalette[i%len(stepPalette)] }
 // tint returns the accent at low opacity, for card backgrounds.
 func tint(c color.NRGBA) color.NRGBA { return color.NRGBA{R: c.R, G: c.G, B: c.B, A: 0x22} }
 
+const outputViewerHeight float32 = 260
+const compactControlMinWidth float32 = 360
+
+type fixedHeightLayout struct {
+	height float32
+}
+
+func (l fixedHeightLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, obj := range objects {
+		obj.Resize(size)
+	}
+}
+
+func (l fixedHeightLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(compactControlMinWidth, l.height)
+}
+
+type cappedMinWidthLayout struct {
+	width float32
+}
+
+func (l cappedMinWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, obj := range objects {
+		obj.Resize(size)
+	}
+}
+
+func (l cappedMinWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var width, height float32
+	for _, obj := range objects {
+		min := obj.MinSize()
+		if min.Width > width {
+			width = min.Width
+		}
+		if min.Height > height {
+			height = min.Height
+		}
+	}
+	if l.width > 0 && width > l.width {
+		width = l.width
+	}
+	return fyne.NewSize(width, height)
+}
+
 // multilineEntry returns a word-wrapping multi-line entry with a readable
 // minimum height.
 func multilineEntry(rows int) *widget.Entry {
@@ -42,69 +94,96 @@ func multilineEntry(rows int) *widget.Entry {
 	return e
 }
 
-// categorySelectors builds one dropdown per plugin category (codecs, hashs, …),
-// each listing the plugins in that category. Selecting a plugin in any dropdown
-// calls onPick and clears the others. When current is non-empty its dropdown is
-// pre-selected (highlighting which plugin/category is in use).
+func pluginSelectLabels(category string) (labels []string, labelToName, nameToLabel map[string]string) {
+	labelToName = map[string]string{}
+	nameToLabel = map[string]string{}
+	for _, name := range plugins.InCategory(category) {
+		label := plugins.PluginLabel(name)
+		labelToName[label] = name
+		nameToLabel[name] = label
+		labels = append(labels, label)
+	}
+	sort.Slice(labels, func(i, j int) bool {
+		return strings.ToLower(labels[i]) < strings.ToLower(labels[j])
+	})
+	return labels, labelToName, nameToLabel
+}
+
+// categorySelectors builds compact category and transformer dropdowns.
 func (dg *DeenGUI) categorySelectors(current string, onPick func(name string)) *fyne.Container {
-	cats := plugins.PluginCategories
-	selects := make([]*widget.Select, len(cats))
-	for i, cat := range cats {
-		s := widget.NewSelect(plugins.InCategory(cat), nil)
-		s.PlaceHolder = cat
-		selects[i] = s
+	categoryToID := map[string]string{}
+	var categoryLabels []string
+	for _, category := range plugins.PluginCategories {
+		label := plugins.CategoryLabel(category)
+		categoryToID[label] = category
+		categoryLabels = append(categoryLabels, label)
 	}
 
-	clearOthers := func(except *widget.Select) {
-		for _, s := range selects {
-			if s != except && s.Selected != "" {
-				s.Selected = ""
-				s.Refresh()
-			}
+	var transformerByLabel map[string]string
+	updatingSelectors := false
+	transformerSelect := widget.NewSelect(nil, func(label string) {
+		if updatingSelectors || label == "" || transformerByLabel == nil {
+			return
 		}
-	}
-	for _, s := range selects {
-		s := s
-		s.OnChanged = func(name string) {
-			if name == "" {
-				return
-			}
-			clearOthers(s)
+		name := transformerByLabel[label]
+		if name != "" {
 			onPick(name)
 		}
+	})
+	transformerSelect.PlaceHolder = "Select transformer"
+	transformerSelect.Disable()
+
+	setCategory := func(category, selectedPlugin string) {
+		labels, labelToName, nameToLabel := pluginSelectLabels(category)
+		transformerByLabel = labelToName
+		updatingSelectors = true
+		transformerSelect.Options = labels
+		transformerSelect.Selected = ""
+		if selectedPlugin != "" {
+			transformerSelect.Selected = nameToLabel[selectedPlugin]
+		}
+		transformerSelect.PlaceHolder = plugins.CategorySelectLabel(category)
+		transformerSelect.Enable()
+		transformerSelect.Refresh()
+		updatingSelectors = false
 	}
 
+	categorySelect := widget.NewSelect(categoryLabels, func(label string) {
+		category := categoryToID[label]
+		if category != "" {
+			setCategory(category, "")
+		}
+	})
+	categorySelect.PlaceHolder = "Select category"
+
 	if current != "" {
-		cat := plugins.CategoryOf(current)
-		for i, c := range cats {
-			if c == cat {
-				selects[i].Selected = current // set directly so OnChanged does not fire
-				selects[i].Refresh()
-			}
+		if category := plugins.CategoryOf(current); category != "" {
+			categorySelect.Selected = plugins.CategoryLabel(category)
+			categorySelect.Refresh()
+			setCategory(category, current)
 		}
 	}
 
-	objs := make([]fyne.CanvasObject, len(selects))
-	for i, s := range selects {
-		objs[i] = s
-	}
-	return container.NewGridWithColumns(len(selects), objs...)
+	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewGridWithColumns(2, categorySelect, transformerSelect))
 }
 
 // newSourceCard builds the editable source-input card at the top of the chain.
 func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 	dg.sourceEntry = multilineEntry(6)
 	dg.sourceEntry.SetText(string(dg.pipe.Source()))
-	dg.sourceMeta = widget.NewLabel(pipeline.DataMetadata(dg.pipe.Source(), 0).Summary())
+	dg.sourceMeta = widget.NewLabel(dg.sourceMetadataSummary())
 	dg.sourceMeta.Importance = widget.LowImportance
+	dg.sourceMeta.Wrapping = fyne.TextWrapBreak
 	dg.sourceEntry.OnChanged = func(s string) {
 		if dg.updating {
 			return
 		}
+		dg.sourceName = ""
 		dg.pipe.SetSource([]byte(s))
 		dg.refreshFrom(0)
 	}
-	return widget.NewCard("Input", "", container.NewVBox(dg.sourceEntry, dg.sourceMeta))
+	content := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(dg.sourceEntry, dg.sourceMeta))
+	return widget.NewCard("Input", "", container.NewPadded(content))
 }
 
 // stepCard is the view for a single pipeline step.
@@ -112,7 +191,6 @@ type stepCard struct {
 	gui        *DeenGUI
 	index      int
 	pluginName string
-	viewMode   string
 	collapsed  bool
 
 	decode    *widget.Check
@@ -122,6 +200,12 @@ type stepCard struct {
 	detail    *fyne.Container
 	options   *fyne.Container
 	body      *widget.Entry
+	hexBody   *widget.Entry
+	b64Body   *widget.Entry
+	statsBody *widget.Entry
+	preview   *widget.TextGrid
+	image     *canvas.Image
+	imageMsg  *widget.Label
 	meta      *widget.Label
 	status    *widget.Label
 	container fyne.CanvasObject
@@ -129,11 +213,12 @@ type stepCard struct {
 
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	step := dg.pipe.Steps()[i]
-	c := &stepCard{gui: dg, index: i, pluginName: step.Plugin, viewMode: "text"}
+	c := &stepCard{gui: dg, index: i, pluginName: step.Plugin}
 	col := accent(i)
+	canDecode := plugins.CanDecode(step.Plugin)
 
 	c.decode = widget.NewCheck("decode", nil)
-	c.decode.SetChecked(step.Unprocess)
+	c.decode.SetChecked(step.Unprocess && canDecode)
 	c.enabled = widget.NewCheck("enabled", nil)
 	c.enabled.SetChecked(!step.Disabled)
 
@@ -141,11 +226,11 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		if c.pluginName == "" {
 			return
 		}
-		dg.pipe.SetPlugin(c.index, c.pluginName, c.decode.Checked)
+		decode := c.decode.Checked && plugins.CanDecode(c.pluginName)
+		dg.pipe.SetPlugin(c.index, c.pluginName, decode)
 		c.rebuildOptions()
 		c.updateSummary()
-		dg.refreshFrom(c.index)
-		dg.updateHistory()
+		dg.rebuild()
 	}
 	selectors := dg.categorySelectors(step.Plugin, func(name string) {
 		c.pluginName = name
@@ -158,15 +243,6 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		dg.refreshFrom(c.index)
 		dg.updateHistory()
 	}
-
-	viewMode := widget.NewSelect([]string{"text", "hex", "base64"}, func(mode string) {
-		if mode == "" {
-			return
-		}
-		c.viewMode = mode
-		c.refresh()
-	})
-	viewMode.Selected = c.viewMode
 
 	// Title row: collapse toggle, coloured title, active-plugin summary, remove.
 	c.summary = canvas.NewText("", col)
@@ -199,18 +275,49 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.options = container.NewVBox()
 	c.body = multilineEntry(6)
 	c.body.OnChanged = func(s string) {
-		if dg.updating || c.viewMode != "text" {
+		if dg.updating {
 			return
 		}
 		dg.pipe.EditOutput(c.index, []byte(s))
 		dg.refreshFrom(c.index + 1)
 	}
+	c.hexBody = multilineEntry(6)
+	c.hexBody.Disable()
+	c.b64Body = multilineEntry(6)
+	c.b64Body.Disable()
+	c.statsBody = multilineEntry(6)
+	c.statsBody.Disable()
+	c.preview = widget.NewTextGrid()
+	c.preview.ShowLineNumbers = false
+	c.preview.Scroll = fyne.ScrollBoth
+	c.image = canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 1, 1)))
+	c.image.FillMode = canvas.ImageFillContain
+	c.imageMsg = widget.NewLabel("No image preview available.")
+	c.imageMsg.Alignment = fyne.TextAlignCenter
+	c.image.Hide()
+	imageViewer := container.NewBorder(nil, c.imageMsg, nil, nil, container.NewPadded(c.image))
+	viewer := container.NewAppTabs(
+		container.NewTabItem("Text", c.body),
+		container.NewTabItem("Hex", c.hexBody),
+		container.NewTabItem("Base64", c.b64Body),
+		container.NewTabItem("Stats", c.statsBody),
+		container.NewTabItem("Preview", c.preview),
+		container.NewTabItem("Image", imageViewer),
+	)
+	viewer.SetTabLocation(container.TabLocationTop)
+	viewerBox := container.New(fixedHeightLayout{height: outputViewerHeight}, viewer)
 	c.meta = widget.NewLabel("")
 	c.meta.Importance = widget.LowImportance
+	c.meta.Wrapping = fyne.TextWrapBreak
 	c.status = widget.NewLabel("")
 	c.status.Importance = widget.DangerImportance
+	c.status.Wrapping = fyne.TextWrapBreak
 	c.status.Hide()
-	c.detail = container.NewVBox(selectors, container.NewHBox(c.enabled, c.decode, widget.NewLabel("view"), viewMode), c.options, c.body, c.meta, c.status)
+	toggles := container.NewHBox(c.enabled)
+	if canDecode {
+		toggles.Add(c.decode)
+	}
+	c.detail = container.NewVBox(selectors, toggles, c.options, viewerBox, c.meta, c.status)
 
 	bg := canvas.NewRectangle(tint(col))
 	bg.StrokeColor = col
@@ -250,7 +357,7 @@ func (c *stepCard) updateSummary() {
 		dir = "decode"
 	}
 	cat := plugins.CategoryOf(name)
-	c.summary.Text = fmt.Sprintf("  %s / %s · %s", cat, name, dir)
+	c.summary.Text = fmt.Sprintf("  %s / %s · %s", plugins.CategoryLabel(cat), plugins.PluginLabel(name), dir)
 	if !c.enabled.Checked {
 		c.summary.Text += " · disabled"
 	}
@@ -280,9 +387,23 @@ func (c *stepCard) rebuildOptions() {
 				c.gui.pipe.SetOption(c.index, opt.Name, val)
 				c.gui.refreshFrom(c.index)
 			}
-			form.Append(opt.Name, chk)
+			form.Append(opt.Label, chk)
+		} else if opt.Kind == "select" {
+			selectInput := widget.NewSelect(opt.Choices, func(s string) {
+				c.gui.pipe.SetOption(c.index, opt.Name, s)
+				c.gui.refreshFrom(c.index)
+			})
+			if v, ok := step.Options[opt.Name]; ok {
+				selectInput.SetSelected(v)
+			} else {
+				selectInput.SetSelected(opt.Default)
+			}
+			form.Append(opt.Label, selectInput)
 		} else {
 			entry := widget.NewEntry()
+			if opt.Kind == "secret" || opt.Secret {
+				entry = widget.NewPasswordEntry()
+			}
 			entry.SetPlaceHolder(fmt.Sprintf("default: %s", opt.Default))
 			if v, ok := step.Options[opt.Name]; ok {
 				entry.SetText(v)
@@ -291,7 +412,7 @@ func (c *stepCard) rebuildOptions() {
 				c.gui.pipe.SetOption(c.index, opt.Name, s)
 				c.gui.refreshFrom(c.index)
 			}
-			form.Append(opt.Name, entry)
+			form.Append(opt.Label, entry)
 		}
 	}
 	c.options.Add(form)
@@ -305,37 +426,120 @@ func (c *stepCard) refresh() {
 	if c.index > 0 {
 		inputBytes = len(c.gui.pipe.Output(c.index - 1))
 	}
-	c.meta.SetText(pipeline.DataMetadata(out, inputBytes).Summary())
+	summary := pipeline.DataMetadata(out, inputBytes).Summary()
+	c.meta.SetText(summary)
 	if err := c.gui.pipe.Err(c.index); err != nil {
 		c.status.SetText("error: " + err.Error())
 		c.status.Show()
 	} else {
 		c.status.Hide()
 	}
-	switch c.viewMode {
-	case "hex":
-		c.gui.setText(c.body, hex.Dump(out))
-		c.body.Disable()
-	case "base64":
-		c.gui.setText(c.body, base64.StdEncoding.EncodeToString(out))
-		c.body.Disable()
-	default:
-		c.viewMode = "text"
-		c.body.Enable()
-		c.gui.setText(c.body, string(out))
+	c.body.Enable()
+	c.gui.setText(c.body, string(out))
+	c.gui.setText(c.hexBody, hex.Dump(out))
+	c.gui.setText(c.b64Body, base64.StdEncoding.EncodeToString(out))
+	c.gui.setText(c.statsBody, summary)
+	setImagePreview(c.image, c.imageMsg, out)
+	preview, spans, ok := pipeline.HighlightedPreview(out)
+	if !ok {
+		preview = "No structured preview available."
+		spans = nil
 	}
-	if c.viewMode == "text" {
-		c.body.Enable()
-	} else {
-		c.body.Disable()
-	}
+	setPreviewText(c.preview, preview, spans)
+	c.hexBody.Disable()
+	c.b64Body.Disable()
+	c.statsBody.Disable()
 }
 
-// newAddSlot builds the trailing per-category dropdowns that append a step.
+func setImagePreview(img *canvas.Image, msg *widget.Label, data []byte) {
+	decoded, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		img.Hide()
+		msg.SetText("No image preview available.")
+		msg.Show()
+		return
+	}
+	img.Image = decoded
+	img.Show()
+	img.Refresh()
+	msg.SetText("image/" + format)
+	msg.Show()
+}
+
+// newAddSlot builds the compact category/transformer picker that appends a step.
 func (dg *DeenGUI) newAddSlot() fyne.CanvasObject {
-	selectors := dg.categorySelectors("", func(name string) {
-		dg.pipe.AddStep(name, false)
-		dg.rebuild()
-	})
-	return widget.NewCard("Add transform", "", selectors)
+	actions := container.NewHBox(
+		widget.NewButtonWithIcon("Browse by category", theme.ListIcon(), dg.showCategoryBrowser),
+		widget.NewButtonWithIcon("Search transformers", theme.SearchIcon(), dg.showPluginSearch),
+		widget.NewButtonWithIcon("Detect next", theme.ContentAddIcon(), dg.showSuggestions),
+	)
+	subtitle := widget.NewLabel("Choose a transformer by category or search the catalog.")
+	subtitle.Importance = widget.LowImportance
+	return widget.NewCard("Add transformer step", "", container.NewVBox(subtitle, actions))
+}
+
+func (dg *DeenGUI) showCategoryBrowser() {
+	list := container.NewVBox()
+	var d dialog.Dialog
+	for _, category := range plugins.PluginCategories {
+		category := category
+		group := container.NewVBox()
+		for _, name := range plugins.InCategory(category) {
+			name := name
+			group.Add(widget.NewButton(plugins.PluginLabel(name), func() {
+				dg.pipe.AddStep(name, false)
+				dg.rebuild()
+				if d != nil {
+					d.Hide()
+				}
+			}))
+		}
+		list.Add(widget.NewCard(plugins.CategoryLabel(category), "", group))
+	}
+	scroll := container.NewVScroll(list)
+	scroll.SetMinSize(fyne.NewSize(520, 420))
+	d = dialog.NewCustom("Browse transformers", "Close", scroll, dg.window)
+	d.Resize(fyne.NewSize(620, 520))
+	d.Show()
+}
+
+var previewStyles = map[pipeline.SyntaxKind]widget.TextGridStyle{
+	pipeline.SyntaxKey:         &widget.CustomTextGridStyle{FGColor: color.NRGBA{R: 0x24, G: 0x74, B: 0xd5, A: 0xff}},
+	pipeline.SyntaxString:      &widget.CustomTextGridStyle{FGColor: color.NRGBA{R: 0x0f, G: 0x9d, B: 0x58, A: 0xff}},
+	pipeline.SyntaxNumber:      &widget.CustomTextGridStyle{FGColor: color.NRGBA{R: 0xdb, G: 0x44, B: 0x37, A: 0xff}},
+	pipeline.SyntaxBool:        &widget.CustomTextGridStyle{FGColor: color.NRGBA{R: 0xab, G: 0x47, B: 0xbc, A: 0xff}},
+	pipeline.SyntaxNull:        &widget.CustomTextGridStyle{FGColor: color.NRGBA{R: 0x8a, G: 0x6d, B: 0x00, A: 0xff}},
+	pipeline.SyntaxPunctuation: &widget.CustomTextGridStyle{FGColor: color.NRGBA{R: 0x7a, G: 0x7a, B: 0x7a, A: 0xff}},
+}
+
+func setPreviewText(grid *widget.TextGrid, text string, spans []pipeline.SyntaxSpan) {
+	grid.SetText(text)
+	for _, span := range spans {
+		style := previewStyles[span.Kind]
+		if style == nil || span.Start < 0 || span.End > len(text) || span.Start >= span.End {
+			continue
+		}
+		startRow, startCol := byteOffsetToGridPosition(text, span.Start)
+		endRow, endCol := byteOffsetToGridPosition(text, span.End)
+		if endCol > 0 {
+			endCol--
+		}
+		grid.SetStyleRange(startRow, startCol, endRow, endCol, style)
+	}
+	grid.Refresh()
+}
+
+func byteOffsetToGridPosition(text string, offset int) (row, col int) {
+	for i, r := range text {
+		if i >= offset {
+			return row, col
+		}
+		if r == '\n' {
+			row++
+			col = 0
+			continue
+		}
+		col++
+	}
+	return row, col
 }

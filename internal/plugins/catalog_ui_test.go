@@ -19,6 +19,11 @@ func TestUICatalogHasUserFacingCopy(t *testing.T) {
 				t.Errorf("%s has an incomplete reference: %#v", info.Name, ref)
 			}
 		}
+		for _, example := range info.Examples {
+			if example.Label == "" || example.Input == "" || example.Output == "" {
+				t.Errorf("%s has an incomplete example: %#v", info.Name, example)
+			}
+		}
 	}
 }
 
@@ -45,5 +50,44 @@ func TestSearchUICatalog(t *testing.T) {
 	}
 	if !foundJWT {
 		t.Fatal("use-case search did not find jwt")
+	}
+
+	var foundProtobuf bool
+	for _, info := range SearchUICatalog("protocol buffers") {
+		if info.Name == "protobuf" {
+			foundProtobuf = true
+		}
+	}
+	if !foundProtobuf {
+		t.Fatal("display-name search did not find protobuf")
+	}
+}
+
+func TestPluginLabel(t *testing.T) {
+	tests := map[string]string{
+		"html":     "HTML",
+		"protobuf": "Protocol Buffers",
+		"sha256":   "SHA-256",
+		"base64":   "base64",
+	}
+	for name, want := range tests {
+		if got := PluginLabel(name); got != want {
+			t.Fatalf("PluginLabel(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestCategorySelectLabel(t *testing.T) {
+	tests := map[string]string{
+		"codecs":       "Select codec",
+		"formatters":   "Select formatter",
+		"compressions": "Select compression",
+		"hashs":        "Select hash",
+		"misc":         "Select misc tool",
+	}
+	for category, want := range tests {
+		if got := CategorySelectLabel(category); got != want {
+			t.Fatalf("CategorySelectLabel(%q) = %q, want %q", category, got, want)
+		}
 	}
 }

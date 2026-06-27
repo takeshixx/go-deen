@@ -4,9 +4,21 @@
 		<meta charset="utf-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<title>deen</title>
+		<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
 		<link rel="stylesheet" href="style.css"/>
 		<script defer src="wasm_exec.js"></script>
 		<script defer src="main.js"></script>
 	</head>
-	<body></body>
+	<body>
+		<main id="wasm-fallback" class="wasm-fallback">
+			<h1>deen requires WebAssembly</h1>
+			<p>This browser could not start the deen web interface. Use a browser with WebAssembly enabled, or use the desktop/CLI version of deen.</p>
+		</main>
+		<noscript>
+			<main class="wasm-fallback">
+				<h1>JavaScript is required</h1>
+				<p>The deen web interface runs locally in your browser using WebAssembly and JavaScript.</p>
+			</main>
+		</noscript>
+	</body>
 </html>

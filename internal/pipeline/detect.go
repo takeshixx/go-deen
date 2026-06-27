@@ -2,20 +2,32 @@ package pipeline
 
 import (
 	"bytes"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"net/http"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/fxamacker/cbor/v2"
+	"github.com/liyue201/goqr"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 // Suggestion describes a transform that is likely useful for the given data.
 type Suggestion struct {
 	Plugin    string
 	Unprocess bool
+	Options   map[string]string
 	Label     string
 	Reason    string
 }
@@ -32,10 +44,31 @@ func Suggestions(data []byte) []Suggestion {
 	add := func(plugin string, unprocess bool, label, reason string) {
 		out = append(out, Suggestion{Plugin: plugin, Unprocess: unprocess, Label: label, Reason: reason})
 	}
+	addOptions := func(plugin string, unprocess bool, options map[string]string, label, reason string) {
+		out = append(out, Suggestion{Plugin: plugin, Unprocess: unprocess, Options: options, Label: label, Reason: reason})
+	}
+
+	meta := DataMetadata(trimmed, 0)
+	switch meta.Encoding {
+	case "UTF-16LE", "likely UTF-16LE":
+		addOptions("unicode", true, map[string]string{"encoding": "utf16le"}, "Decode UTF-16LE to UTF-8", "input has UTF-16 little-endian byte patterns")
+	case "UTF-16BE", "likely UTF-16BE":
+		addOptions("unicode", true, map[string]string{"encoding": "utf16be"}, "Decode UTF-16BE to UTF-8", "input has UTF-16 big-endian byte patterns")
+	case "UTF-32LE", "likely UTF-32LE":
+		addOptions("unicode", true, map[string]string{"encoding": "utf32le"}, "Decode UTF-32LE to UTF-8", "input has UTF-32 little-endian byte patterns")
+	case "UTF-32BE", "likely UTF-32BE":
+		addOptions("unicode", true, map[string]string{"encoding": "utf32be"}, "Decode UTF-32BE to UTF-8", "input has UTF-32 big-endian byte patterns")
+	}
+	if meta.Encoding != "ASCII / UTF-8" && meta.Encoding != "UTF-8" && meta.Encoding != "empty" {
+		add("unicode-inspect", false, "Inspect text encoding", "input has text-encoding clues worth inspecting")
+	}
 
 	text := string(trimmed)
 	if looksLikeJWT(text) {
 		add("jwt", true, "Decode JWT", "input has three base64url JWT sections")
+	}
+	if looksLikeUUID(text) {
+		add("uuid", false, "Inspect UUID", "input is a UUID")
 	}
 	if looksLikeBase64(text) {
 		add("base64", true, "Decode Base64", "input matches a Base64 alphabet and decodes cleanly")
@@ -58,6 +91,24 @@ func Suggestions(data []byte) []Suggestion {
 	if looksLikeXML(trimmed) {
 		add("xml", false, "Format XML", "input parses as XML")
 	}
+	if looksLikeASN1(trimmed) {
+		add("asn1", false, "Inspect ASN.1 DER", "input parses as ASN.1 DER")
+	}
+	if looksLikeDNSName(trimmed) {
+		add("dns", true, "Decode DNS name", "input looks like a DNS wire-format name")
+	}
+	if looksLikeMessagePack(trimmed) {
+		add("msgpack", true, "Decode MessagePack", "input parses as MessagePack")
+	}
+	if looksLikeCBOR(trimmed) {
+		add("cbor", true, "Decode CBOR", "input parses as CBOR")
+	}
+	if magicType(trimmed) != "" {
+		add("magic", false, "Detect file type", "input has a recognizable file signature")
+	}
+	if looksLikeQRImage(trimmed) {
+		add("qr", true, "Decode QR image", "input image contains a QR code")
+	}
 	if bytes.HasPrefix(trimmed, []byte{0x1f, 0x8b}) {
 		add("gzip", true, "Decompress gzip", "input has a gzip magic header")
 	}
@@ -68,6 +119,12 @@ func Suggestions(data []byte) []Suggestion {
 		add("protobuf", false, "Decode protobuf", "input looks like binary protobuf wire data")
 	}
 	return out
+}
+
+var uuidRE = regexp.MustCompile(`(?i)^(urn:uuid:)?[0-9a-f]{8}-?[0-9a-f]{4}-?[1-8][0-9a-f]{3}-?[89ab][0-9a-f]{3}-?[0-9a-f]{12}$`)
+
+func looksLikeUUID(s string) bool {
+	return uuidRE.MatchString(strings.TrimSpace(s))
 }
 
 func looksLikeJWT(s string) bool {
@@ -172,6 +229,93 @@ func looksLikeProtobuf(data []byte) bool {
 		return false
 	}
 	return scanProto(data, 0) == nil
+}
+
+func looksLikeASN1(data []byte) bool {
+	var raw asn1.RawValue
+	rest, err := asn1.Unmarshal(data, &raw)
+	return err == nil && len(rest) == 0 && len(data) > 2
+}
+
+func looksLikeDNSName(data []byte) bool {
+	if len(data) < 2 || len(data) > 255 {
+		return false
+	}
+	pos := 0
+	labels := 0
+	for {
+		if pos >= len(data) {
+			return false
+		}
+		l := int(data[pos])
+		pos++
+		if l == 0 {
+			return pos == len(data) && labels > 0
+		}
+		if l > 63 || pos+l > len(data) {
+			return false
+		}
+		for _, b := range data[pos : pos+l] {
+			if !((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-') {
+				return false
+			}
+		}
+		pos += l
+		labels++
+	}
+}
+
+func looksLikeMessagePack(data []byte) bool {
+	if len(data) < 2 || utf8.Valid(data) && mostlyPrintable(data) {
+		return false
+	}
+	var v interface{}
+	if err := msgpack.Unmarshal(data, &v); err != nil {
+		return false
+	}
+	return v != nil
+}
+
+func looksLikeCBOR(data []byte) bool {
+	if len(data) < 2 || utf8.Valid(data) && mostlyPrintable(data) {
+		return false
+	}
+	var v interface{}
+	return cbor.Unmarshal(data, &v) == nil && v != nil
+}
+
+func magicType(data []byte) string {
+	switch {
+	case bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}):
+		return "PNG image"
+	case bytes.HasPrefix(data, []byte{0xff, 0xd8, 0xff}):
+		return "JPEG image"
+	case bytes.HasPrefix(data, []byte("GIF8")):
+		return "GIF image"
+	case bytes.HasPrefix(data, []byte("%PDF-")):
+		return "PDF document"
+	case bytes.HasPrefix(data, []byte("PK\x03\x04")):
+		return "ZIP archive"
+	case bytes.HasPrefix(data, []byte{0x1f, 0x8b}):
+		return "gzip data"
+	case bytes.HasPrefix(data, []byte{0x7f, 'E', 'L', 'F'}):
+		return "ELF executable"
+	default:
+		mime := http.DetectContentType(data)
+		if strings.HasPrefix(mime, "image/") || strings.HasPrefix(mime, "application/pdf") {
+			return mime
+		}
+		return ""
+	}
+}
+
+func looksLikeQRImage(data []byte) bool {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return false
+	}
+	codes, err := goqr.Recognize(img)
+	return err == nil && len(codes) > 0
 }
 
 func scanProto(data []byte, depth int) error {

@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"sort"
 	"testing"
 )
 
@@ -61,5 +62,27 @@ func TestGetForCategory(t *testing.T) {
 	invalidCategory = GetForCategory("nocategory", false)
 	if len(invalidCategory) > 0 {
 		t.Error("Invalid category returned plugin list")
+	}
+}
+
+func TestInCategorySorted(t *testing.T) {
+	names := InCategory("formatters")
+	if len(names) == 0 {
+		t.Fatal("expected formatter plugins")
+	}
+	if !sort.StringsAreSorted(names) {
+		t.Fatalf("formatter names are not sorted: %#v", names)
+	}
+}
+
+func TestCanDecode(t *testing.T) {
+	if !CanDecode("base64") {
+		t.Fatal("base64 should support decoding")
+	}
+	if CanDecode("sha256") {
+		t.Fatal("sha256 should not support decoding")
+	}
+	if CanDecode("doesnotexist") {
+		t.Fatal("unknown plugin should not support decoding")
 	}
 }

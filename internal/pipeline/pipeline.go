@@ -169,9 +169,10 @@ func (p *Pipeline) ImportJSON(data []byte) error {
 		for k, v := range step.Options {
 			opts[k] = v
 		}
+		unprocess := step.Unprocess && plugins.CanDecode(pluginName)
 		s.Steps = append(s.Steps, stepSnapshot{
 			Plugin:      pluginName,
-			Unprocess:   step.Unprocess,
+			Unprocess:   unprocess,
 			Options:     opts,
 			Disabled:    step.Disabled,
 			Override:    append([]byte(nil), step.Override...),
@@ -195,8 +196,21 @@ func (p *Pipeline) SetSource(b []byte) {
 
 // AddStep appends a transform and returns its index.
 func (p *Pipeline) AddStep(plugin string, unprocess bool) int {
+	return p.AddStepWithOptions(plugin, unprocess, nil)
+}
+
+// AddStepWithOptions appends a transform with initial option values and returns
+// its index.
+func (p *Pipeline) AddStepWithOptions(plugin string, unprocess bool, options map[string]string) int {
 	p.record()
-	p.steps = append(p.steps, &Step{Plugin: plugin, Unprocess: unprocess, Options: map[string]string{}})
+	if unprocess && !plugins.CanDecode(plugin) {
+		unprocess = false
+	}
+	opts := make(map[string]string, len(options))
+	for k, v := range options {
+		opts[k] = v
+	}
+	p.steps = append(p.steps, &Step{Plugin: plugin, Unprocess: unprocess, Options: opts})
 	p.Compute()
 	return len(p.steps) - 1
 }
@@ -252,6 +266,9 @@ func (p *Pipeline) SetStepDisabled(i int, disabled bool) {
 func (p *Pipeline) SetPlugin(i int, plugin string, unprocess bool) {
 	if i < 0 || i >= len(p.steps) {
 		return
+	}
+	if unprocess && !plugins.CanDecode(plugin) {
+		unprocess = false
 	}
 	p.record()
 	p.steps[i].Plugin = plugin

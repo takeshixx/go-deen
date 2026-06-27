@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -19,10 +20,13 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	codecs.NewPluginBase32,
 	codecs.NewPluginBase64,
 	codecs.NewPluginBase85,
+	codecs.NewPluginASCII,
 	codecs.NewPluginHex,
 	codecs.NewPluginURL,
 	codecs.NewPluginHTML,
 	codecs.NewPluginUnicode,
+	codecs.NewPluginUnicodeInspect,
+	codecs.NewPluginUnicodeNormalize,
 	codecs.NewPluginStrconv,
 	codecs.NewPluginPEM,
 	codecs.NewPluginQuotedPrintable,
@@ -72,12 +76,27 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginJSONFormatter,
 	formatters.NewPluginXMLFormatter,
 	formatters.NewPluginJSON2XML,
+	formatters.NewPluginTOML,
 	formatters.NewPluginJwt,
 	formatters.NewPluginJWK,
 	formatters.NewPluginJQFormatter,
 	formatters.NewPluginProtobuf,
+	formatters.NewPluginMessagePack,
+	formatters.NewPluginCBOR,
+	formatters.NewPluginYAMLFormatter,
+	formatters.NewPluginCSV,
+	formatters.NewPluginQR,
 	formatters.NewPluginSAML,
 	formatters.NewPluginTimestamp,
+	misc.NewPluginASN1,
+	misc.NewPluginDNS,
+	misc.NewPluginUUID,
+	misc.NewPluginEntropy,
+	misc.NewPluginMagic,
+	misc.NewPluginRegex,
+	misc.NewPluginAES,
+	misc.NewPluginChaCha20Poly1305,
+	misc.NewPluginSign,
 	misc.NewPluginCertCloner,
 	misc.NewPluginCertPrinter,
 }
@@ -203,8 +222,33 @@ func Names() []string {
 	return names
 }
 
-// InCategory returns the plugin names belonging to a category, in registry
-// order.
+// PluginInfo describes a plugin for catalogs and UIs.
+type PluginInfo struct {
+	Name        string
+	Category    string
+	Aliases     []string
+	Description string
+}
+
+// Catalog returns metadata for every plugin, grouped by category order.
+func Catalog() []PluginInfo {
+	infos := make([]PluginInfo, 0, len(metadata))
+	for _, c := range PluginCategories {
+		for _, p := range metadata {
+			if p.Category == c {
+				infos = append(infos, PluginInfo{
+					Name:        p.Name,
+					Category:    p.Category,
+					Aliases:     p.Aliases,
+					Description: p.Description,
+				})
+			}
+		}
+	}
+	return infos
+}
+
+// InCategory returns the plugin names belonging to a category alphabetically.
 func InCategory(category string) []string {
 	var names []string
 	for _, p := range metadata {
@@ -212,6 +256,7 @@ func InCategory(category string) []string {
 			names = append(names, p.Name)
 		}
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -223,6 +268,12 @@ func CategoryOf(name string) string {
 		}
 	}
 	return ""
+}
+
+// CanDecode reports whether the named plugin supports the reverse operation.
+func CanDecode(name string) bool {
+	p, _, ok := Resolve(name)
+	return ok && p.Unprocess != nil
 }
 
 // GetForCategory returns plugin names for a given category. When aliases is

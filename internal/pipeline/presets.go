@@ -79,17 +79,6 @@ func (p *Pipeline) ApplyPreset(preset Preset) {
 	p.record()
 	source := append([]byte(nil), p.source...)
 	p.source = source
-	p.steps = make([]*Step, 0, len(preset.Steps))
-	for _, ps := range preset.Steps {
-		opts := make(map[string]string, len(ps.Options))
-		for k, v := range ps.Options {
-			opts[k] = v
-		}
-		p.steps = append(p.steps, &Step{
-			Plugin:    ps.Plugin,
-			Unprocess: ps.Unprocess,
-			Options:   opts,
-		})
-	}
+	p.steps = presetSteps(preset.Steps)
 	p.Compute()
 }

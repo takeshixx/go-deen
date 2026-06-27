@@ -44,12 +44,15 @@ func TestDecodeDirection(t *testing.T) {
 	}
 }
 
-func TestOneWayDecodeError(t *testing.T) {
+func TestOneWayDecodeNormalizesToEncode(t *testing.T) {
 	p := New()
 	p.SetSource([]byte("x"))
 	p.AddStep("sha256", true) // hashes can't decode
-	if p.Err(0) == nil {
-		t.Error("expected an error decoding with a one-way plugin")
+	if p.Steps()[0].Unprocess {
+		t.Fatal("one-way plugin should not remain in decode mode")
+	}
+	if p.Err(0) != nil {
+		t.Fatalf("one-way plugin should run in encode mode, got %v", p.Err(0))
 	}
 }
 
@@ -187,6 +190,80 @@ func TestPluginOptions(t *testing.T) {
 	}
 	if PluginOptions("sha256") != nil {
 		t.Error("sha256 should have no options")
+	}
+}
+
+func TestOneWayPluginsCannotBeAddedAsDecodeSteps(t *testing.T) {
+	p := New()
+	p.AddStep("sha256", true)
+	if p.Steps()[0].Unprocess {
+		t.Fatal("one-way plugin was added as a decode step")
+	}
+
+	p.SetPlugin(0, "base64", true)
+	if !p.Steps()[0].Unprocess {
+		t.Fatal("reversible plugin should allow decode")
+	}
+
+	p.SetPlugin(0, "sha256", true)
+	if p.Steps()[0].Unprocess {
+		t.Fatal("one-way plugin was set as a decode step")
+	}
+}
+
+func TestImportNormalizesOneWayDecodeSteps(t *testing.T) {
+	p := New()
+	err := p.ImportJSON([]byte(`{"version":1,"steps":[{"plugin":"sha256","unprocess":true}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Steps()[0].Unprocess {
+		t.Fatal("imported one-way plugin remained a decode step")
+	}
+}
+
+func TestPluginOptionsMetadata(t *testing.T) {
+	var unit Option
+	for _, opt := range PluginOptions("timestamp") {
+		if opt.Name == "unit" {
+			unit = opt
+		}
+	}
+	if unit.Kind != "select" {
+		t.Fatalf("timestamp unit kind = %q, want select", unit.Kind)
+	}
+	if len(unit.Choices) == 0 {
+		t.Fatal("timestamp unit should have choices")
+	}
+
+	var key Option
+	for _, opt := range PluginOptions("hmac") {
+		if opt.Name == "key" {
+			key = opt
+		}
+	}
+	if key.Kind != "secret" || !key.Secret {
+		t.Fatalf("hmac key metadata = %#v, want secret", key)
+	}
+
+	var cost Option
+	for _, opt := range PluginOptions("scrypt") {
+		if opt.Name == "cost" {
+			cost = opt
+		}
+	}
+	if cost.Kind != "number" {
+		t.Fatalf("scrypt cost kind = %q, want number", cost.Kind)
+	}
+
+	var recreate Option
+	for _, opt := range PluginOptions("jwt") {
+		if opt.Name == "r" {
+			recreate = opt
+		}
+	}
+	if recreate.Label != "Recreate token, keep signature" {
+		t.Fatalf("jwt r label = %q", recreate.Label)
 	}
 }
 

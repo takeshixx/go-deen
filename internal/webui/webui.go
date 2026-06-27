@@ -8,9 +8,13 @@ package webui
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall/js"
+	"unicode/utf8"
 
 	"github.com/takeshixx/deen/internal/core"
 	"github.com/takeshixx/deen/internal/pipeline"
@@ -22,26 +26,34 @@ var palette = []string{"#4285f4", "#0f9d58", "#f4b400", "#db4437", "#ab47bc", "#
 func accent(i int) string { return palette[i%len(palette)] }
 
 var (
-	doc       js.Value
-	pipe      *pipeline.Pipeline
-	contentEl js.Value
-	tabBtns   []js.Value
-	stepsEl   js.Value
-	historyEl js.Value
-	sourceEl  js.Value
-	updating  bool
-	callbacks []js.Func
-	staticCBs []js.Func
-	cards     []*cardRef
-	activeTab = "home"
+	doc          js.Value
+	pipe         *pipeline.Pipeline
+	contentEl    js.Value
+	tabBtns      []js.Value
+	stepsEl      js.Value
+	historyEl    js.Value
+	sourceEl     js.Value
+	updating     bool
+	callbacks    []js.Func
+	staticCBs    []js.Func
+	cards        []*cardRef
+	activeTab    = "home"
+	sourceName   string
+	navCollapsed bool
 )
 
 type cardRef struct {
-	index    int
-	output   js.Value
-	meta     js.Value
-	errEl    js.Value
-	viewMode string
+	index        int
+	output       js.Value
+	hexOutput    js.Value
+	base64Output js.Value
+	statsOutput  js.Value
+	preview      js.Value
+	imagePanel   js.Value
+	image        js.Value
+	imageMsg     js.Value
+	meta         js.Value
+	errEl        js.Value
 }
 
 // Run builds the UI and blocks so the event callbacks stay alive.
@@ -56,6 +68,10 @@ func Run() {
 // --- small DOM helpers ---
 
 func el(tag string) js.Value { return doc.Call("createElement", tag) }
+
+func svgEl(tag string) js.Value {
+	return doc.Call("createElementNS", "http://www.w3.org/2000/svg", tag)
+}
 
 func div(class string) js.Value {
 	d := el("div")
@@ -77,6 +93,17 @@ func on(elem js.Value, event string, fn func()) {
 	elem.Call("addEventListener", event, cb)
 }
 
+func onEvent(elem js.Value, event string, fn func(js.Value)) {
+	cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if len(args) > 0 {
+			fn(args[0])
+		}
+		return nil
+	})
+	callbacks = append(callbacks, cb)
+	elem.Call("addEventListener", event, cb)
+}
+
 func onStatic(elem js.Value, event string, fn func()) {
 	cb := js.FuncOf(func(js.Value, []js.Value) any { fn(); return nil })
 	staticCBs = append(staticCBs, cb)
@@ -91,10 +118,67 @@ func releaseCallbacks() {
 }
 
 func textarea(value string) js.Value {
+	return textareaWithMax(value, 512)
+}
+
+func textareaWithMax(value string, maxHeight int) js.Value {
 	t := el("textarea")
 	t.Set("className", "io")
 	t.Set("value", value)
+	t.Call("setAttribute", "data-max-height", strconv.Itoa(maxHeight))
+	autoSizeTextarea(t)
+	on(t, "input", func() { autoSizeTextarea(t) })
 	return t
+}
+
+func autoSizeTextarea(t js.Value) {
+	t.Get("style").Set("height", "auto")
+	maxHeight := 512
+	if attr := t.Call("getAttribute", "data-max-height"); attr.Truthy() {
+		if n, err := strconv.Atoi(attr.String()); err == nil && n > 0 {
+			maxHeight = n
+		}
+	}
+	scrollHeight := t.Get("scrollHeight").Int() + 2
+	if scrollHeight <= 2 {
+		return
+	}
+	height := scrollHeight
+	if height > maxHeight {
+		height = maxHeight
+		t.Get("style").Set("overflowY", "auto")
+	} else {
+		t.Get("style").Set("overflowY", "hidden")
+	}
+	t.Get("style").Set("height", fmt.Sprintf("%dpx", height))
+}
+
+func autoSizeTextareaSoon(t js.Value) {
+	autoSizeTextarea(t)
+	raf := js.Global().Get("requestAnimationFrame")
+	if !raf.Truthy() {
+		return
+	}
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		autoSizeTextarea(t)
+		cb.Release()
+		return nil
+	})
+	raf.Invoke(cb)
+}
+
+func autoSizeOutputTextareas(c *cardRef) {
+	autoSizeTextareaSoon(c.output)
+	autoSizeTextareaSoon(c.hexOutput)
+	autoSizeTextareaSoon(c.base64Output)
+	autoSizeTextareaSoon(c.statsOutput)
+}
+
+func previewBox() js.Value {
+	p := el("pre")
+	p.Set("className", "syntax-preview")
+	return p
 }
 
 func selectEl(placeholder string, options []string, selected string) js.Value {
@@ -115,6 +199,41 @@ func selectEl(placeholder string, options []string, selected string) js.Value {
 	return s
 }
 
+type selectOption struct {
+	value string
+	label string
+}
+
+func selectOptionsEl(placeholder string, options []selectOption, selected string) js.Value {
+	s := el("select")
+	opt0 := el("option")
+	opt0.Set("value", "")
+	opt0.Set("textContent", placeholder)
+	s.Call("appendChild", opt0)
+	for _, o := range options {
+		op := el("option")
+		op.Set("value", o.value)
+		op.Set("textContent", o.label)
+		if o.value == selected {
+			op.Set("selected", true)
+		}
+		s.Call("appendChild", op)
+	}
+	return s
+}
+
+func pluginSelectOptions(category string) []selectOption {
+	names := plugins.InCategory(category)
+	opts := make([]selectOption, 0, len(names))
+	for _, name := range names {
+		opts = append(opts, selectOption{value: name, label: plugins.PluginLabel(name)})
+	}
+	sort.Slice(opts, func(i, j int) bool {
+		return strings.ToLower(opts[i].label) < strings.ToLower(opts[j].label)
+	})
+	return opts
+}
+
 func checkbox(label string, checked bool) (wrap, input js.Value) {
 	wrap = el("label")
 	input = el("input")
@@ -131,6 +250,69 @@ func button(className, label string, fn func()) js.Value {
 	b.Set("textContent", label)
 	on(b, "click", fn)
 	return b
+}
+
+func iconButton(className, icon, label string, fn func()) js.Value {
+	b := el("button")
+	b.Set("className", className)
+	b.Set("type", "button")
+	b.Set("aria-label", label)
+	setIconButtonContent(b, icon, label)
+	on(b, "click", fn)
+	return b
+}
+
+func setIconButtonContent(b js.Value, icon, label string) {
+	className := b.Get("className").String()
+	if !strings.Contains(" "+className+" ", " icon-label ") {
+		b.Set("className", strings.TrimSpace(className+" icon-label"))
+	}
+	b.Set("aria-label", label)
+	text := el("span")
+	text.Set("textContent", label)
+	appendChildren(b, iconGraphic(icon), text)
+}
+
+func iconGraphic(name string) js.Value {
+	svg := svgEl("svg")
+	svg.Call("setAttribute", "class", "button-icon")
+	svg.Call("setAttribute", "width", "16")
+	svg.Call("setAttribute", "height", "16")
+	svg.Call("setAttribute", "viewBox", "0 0 24 24")
+	svg.Call("setAttribute", "aria-hidden", "true")
+	svg.Call("setAttribute", "focusable", "false")
+	svg.Call("setAttribute", "fill", "none")
+	svg.Call("setAttribute", "stroke", "currentColor")
+	svg.Call("setAttribute", "stroke-width", "2")
+	svg.Call("setAttribute", "stroke-linecap", "round")
+	svg.Call("setAttribute", "stroke-linejoin", "round")
+	for _, d := range iconPaths[name] {
+		path := svgEl("path")
+		path.Call("setAttribute", "d", d)
+		svg.Call("appendChild", path)
+	}
+	return svg
+}
+
+var iconPaths = map[string][]string{
+	"copy":     {"M8 8h11v11H8z", "M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"},
+	"download": {"M12 3v12", "M7 10l5 5 5-5", "M5 21h14"},
+	"upload":   {"M12 21V9", "M7 14l5-5 5 5", "M5 3h14"},
+	"link":     {"M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.2 1.2", "M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.2-1.2"},
+	"terminal": {"M4 17l6-5-6-5", "M12 19h8"},
+	"star":     {"M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9z"},
+	"compare":  {"M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"},
+	"undo":     {"M9 14l-5-5 5-5", "M4 9h10a6 6 0 0 1 0 12h-1"},
+	"redo":     {"M15 14l5-5-5-5", "M20 9H10a6 6 0 0 0 0 12h1"},
+	"clear":    {"M18 6L6 18", "M6 6l12 12"},
+	"collapse": {"M15 18l-6-6 6-6"},
+	"expand":   {"M9 18l6-6-6-6"},
+}
+
+func toolbarGroup(kids ...js.Value) js.Value {
+	group := div("toolbar-group")
+	appendChildren(group, kids...)
+	return group
 }
 
 func textInput(placeholder, value string) js.Value {
@@ -176,11 +358,18 @@ func buildLayout() {
 
 	shell := div("shell")
 	header := div("app-header")
+	brand := div("brand")
+	logo := el("img")
+	logo.Set("className", "brand-logo")
+	logo.Set("src", "favicon.svg")
+	logo.Set("alt", "")
+	logo.Set("aria-hidden", "true")
 	heading := el("h1")
 	heading.Set("textContent", "deen")
+	appendChildren(brand, logo, heading)
 	tabs := div("tabs")
-	appendChildren(tabs, tabButton("home", "Home"), tabButton("plugins", "Plugins"), tabButton("about", "About"))
-	appendChildren(header, heading, tabs)
+	appendChildren(tabs, tabButton("home", "Home"), tabButton("examples", "Examples"), tabButton("plugins", "Plugins"), tabButton("about", "About"))
+	appendChildren(header, brand, tabs)
 
 	contentEl = div("tab-content")
 	appendChildren(shell, header, contentEl)
@@ -214,6 +403,8 @@ func renderActiveTab() {
 		}
 	}
 	switch activeTab {
+	case "examples":
+		renderExamples()
 	case "plugins":
 		renderPlugins()
 	case "about":
@@ -233,36 +424,11 @@ func rebuild() {
 
 func renderHome() {
 	app := div("app")
+	if navCollapsed {
+		app.Set("className", "app nav-collapsed")
+	}
 	main := div("main")
 	side := div("side")
-
-	toolbar := div("toolbar")
-	appendChildren(toolbar,
-		button("primary", "Copy result", copyResult),
-		button("", "Download", downloadResult),
-		filePicker(),
-		chainPicker(),
-		button("", "Export chain", exportChain),
-		button("", "Copy link", copyShareLink),
-		button("", "Copy command", copyCommand),
-		button("", "Presets", showPresets),
-		button("", "Search plugins", searchPlugins),
-		button("", "Detect", showSuggestions),
-		button("", "Undo", func() {
-			if pipe.Undo() {
-				rebuild()
-			}
-		}),
-		button("", "Redo", func() {
-			if pipe.Redo() {
-				rebuild()
-			}
-		}),
-		button("", "Clear", func() {
-			pipe.Clear()
-			rebuild()
-		}),
-	)
 
 	stepsEl = div("steps")
 
@@ -272,15 +438,75 @@ func renderHome() {
 	}
 	stepsEl.Call("appendChild", addCard())
 
+	sideHeader := div("side-header")
 	sideTitle := el("h2")
-	sideTitle.Set("textContent", "History")
+	sideTitle.Set("textContent", "Navigation")
+	toggleLabel := "Collapse navigation"
+	toggleIcon := "collapse"
+	if navCollapsed {
+		toggleLabel = "Expand navigation"
+		toggleIcon = "expand"
+	}
+	toggleNav := iconButton("nav-toggle", toggleIcon, toggleLabel, func() {
+		navCollapsed = !navCollapsed
+		rebuild()
+	})
+	appendChildren(sideHeader, sideTitle, toggleNav)
+	chainTitle := el("h2")
+	chainTitle.Set("className", "chain-heading")
+	chainTitle.Set("textContent", "Transformer Chain")
 	historyEl = div("history")
+	sideActions := div("side-actions")
+	appendChildren(sideActions,
+		sideActionGroup("Result",
+			iconButton("primary", "copy", "Copy result", copyResult),
+			iconButton("", "download", "Download", downloadResult),
+			filePicker(),
+		),
+		sideActionGroup("Chain",
+			chainPicker(),
+			iconButton("", "upload", "Export chain", exportChain),
+			iconButton("", "link", "Copy link", copyShareLink),
+			iconButton("", "terminal", "Copy command", copyCommand),
+		),
+		sideActionGroup("Workflow",
+			iconButton("", "star", "Presets", showPresets),
+			iconButton("", "compare", "Compare", showCompare),
+			iconButton("", "undo", "Undo", func() {
+				if pipe.Undo() {
+					rebuild()
+				}
+			}),
+			iconButton("", "redo", "Redo", func() {
+				if pipe.Redo() {
+					rebuild()
+				}
+			}),
+			iconButton("", "clear", "Clear", func() {
+				sourceName = ""
+				pipe.Clear()
+				rebuild()
+			}),
+		),
+	)
 
-	appendChildren(main, toolbar, stepsEl)
-	appendChildren(side, sideTitle, historyEl)
+	appendChildren(main, stepsEl)
+	appendChildren(side, sideHeader, sideActions, chainTitle, historyEl)
 	appendChildren(app, main, side)
 	contentEl.Call("appendChild", app)
 	updateHistory()
+}
+
+func sideActionGroup(title string, kids ...js.Value) js.Value {
+	group := div("side-action-group")
+	label := el("div")
+	label.Set("className", "side-action-title")
+	label.Set("textContent", title)
+	appendChildren(group, label)
+	for _, kid := range kids {
+		group.Call("appendChild", kid)
+	}
+	return group
 }
 
 func renderAbout() {
@@ -301,6 +527,180 @@ func renderAbout() {
 	repo := link("Source", "https://github.com/takeshixx/go-deen")
 	appendChildren(page, h, desc, versionEl, built, docs, repo)
 	contentEl.Call("appendChild", page)
+}
+
+func renderExamples() {
+	page := div("catalog examples-page")
+	header := div("examples-header")
+	title := el("h2")
+	title.Set("textContent", "Examples")
+	query := textInput("Search examples", "")
+	appendChildren(header, title, query)
+	results := div("examples-grid")
+	appendChildren(page, header, results)
+
+	render := func() {
+		results.Set("innerHTML", "")
+		matches := 0
+		for _, example := range pipeline.BuiltinExamples() {
+			if !pipeline.ExampleMatches(example, query.Get("value").String()) {
+				continue
+			}
+			matches++
+			results.Call("appendChild", exampleCard(example))
+		}
+		if matches == 0 {
+			empty := div("empty")
+			empty.Set("textContent", "No examples found.")
+			results.Call("appendChild", empty)
+		}
+	}
+	on(query, "input", render)
+	render()
+	contentEl.Call("appendChild", page)
+}
+
+func exampleCard(example pipeline.Example) js.Value {
+	card := el("details")
+	card.Set("className", "plugin-card example-card")
+	summary := el("summary")
+	title := el("h3")
+	title.Set("textContent", example.Name)
+	summary.Call("appendChild", title)
+
+	desc := el("p")
+	desc.Set("textContent", example.Description)
+	result, err := pipeline.ExampleResult(example)
+	chain := exampleChain(example.Steps)
+
+	data := div("example-data-grid")
+	inputPanel := exampleDataPanel("Input data", example.Source)
+	outputPanel := exampleDataPanel("Output result", result)
+	appendChildren(data, inputPanel, outputPanel)
+
+	actions := div("modal-actions")
+	load := el("button")
+	load.Set("type", "button")
+	load.Set("textContent", "Load example")
+	on(load, "click", func() {
+		sourceName = ""
+		pipe.ApplyExample(example)
+		activeTab = "home"
+		renderActiveTab()
+	})
+	actions.Call("appendChild", load)
+	appendChildren(card, summary, desc, chain)
+	if err != nil {
+		output := div("error")
+		output.Set("textContent", "Output error: "+err.Error())
+		card.Call("appendChild", output)
+	}
+	if example.WantContains != "" {
+		want := div("plugin-meta")
+		want.Set("textContent", "Expected result contains: "+example.WantContains)
+		card.Call("appendChild", want)
+	}
+	card.Call("appendChild", data)
+	card.Call("appendChild", actions)
+	return card
+}
+
+func exampleDataPanel(title string, data []byte) js.Value {
+	panel := div("example-data-panel")
+	label := el("strong")
+	label.Set("textContent", title)
+	body := el("pre")
+	body.Set("className", "syntax-preview example-data-code")
+	text := exampleDataText(data)
+	renderHighlightedText(body, text, exampleSyntaxSpans(text))
+	appendChildren(panel, label, body)
+	return panel
+}
+
+func exampleSyntaxSpans(text string) []pipeline.SyntaxSpan {
+	if !json.Valid([]byte(strings.TrimSpace(text))) {
+		return nil
+	}
+	return pipeline.JSONSyntaxSpans(text)
+}
+
+func exampleChain(steps []pipeline.PresetStep) js.Value {
+	wrap := div("example-chain")
+	label := el("span")
+	label.Set("className", "example-chain-label")
+	label.Set("textContent", "Transformer chain")
+	wrap.Call("appendChild", label)
+	for i, step := range steps {
+		if i > 0 {
+			arrow := el("span")
+			arrow.Set("className", "chain-arrow")
+			arrow.Set("textContent", "->")
+			wrap.Call("appendChild", arrow)
+		}
+		wrap.Call("appendChild", exampleStepPill(step))
+	}
+	return wrap
+}
+
+func exampleStepPill(step pipeline.PresetStep) js.Value {
+	pill := div("chain-pill")
+	name := plugins.PluginLabel(step.Plugin)
+	if step.Unprocess {
+		name = "." + name
+	}
+	title := el("span")
+	title.Set("className", "chain-plugin")
+	title.Set("textContent", name)
+	pill.Call("appendChild", title)
+	if len(step.Options) > 0 {
+		opts := make([]string, 0, len(step.Options))
+		for k, v := range step.Options {
+			opts = append(opts, k+"="+v)
+		}
+		sort.Strings(opts)
+		meta := el("span")
+		meta.Set("className", "chain-options")
+		meta.Set("textContent", strings.Join(opts, ", "))
+		pill.Call("appendChild", meta)
+	}
+	return pill
+}
+
+func exampleChainSummary(steps []pipeline.PresetStep) string {
+	parts := make([]string, 0, len(steps))
+	for _, step := range steps {
+		name := plugins.PluginLabel(step.Plugin)
+		if step.Unprocess {
+			name = "." + name
+		}
+		parts = append(parts, name)
+	}
+	return strings.Join(parts, " -> ")
+}
+
+func exampleDataText(data []byte) string {
+	if len(data) == 0 {
+		return "(empty)"
+	}
+	if looksReadable(data) {
+		return string(data)
+	}
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func looksReadable(data []byte) bool {
+	if !utf8.Valid(data) {
+		return false
+	}
+	for _, b := range data {
+		if b == '\n' || b == '\r' || b == '\t' {
+			continue
+		}
+		if b < 0x20 || b == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func renderPlugins() {
@@ -330,13 +730,16 @@ func link(label, href string) js.Value {
 func pluginCard(info plugins.UIPluginInfo) js.Value {
 	card := div("plugin-card")
 	title := el("h3")
-	title.Set("textContent", info.Name)
+	title.Set("textContent", info.Label)
 
 	direction := "Encode only"
 	if info.CanDecode {
 		direction = "Encode and decode"
 	}
-	metaParts := []string{info.Category, direction}
+	metaParts := []string{plugins.CategoryLabel(info.Category), direction}
+	if info.Label != info.Name {
+		metaParts = append(metaParts, "Command: "+info.Name)
+	}
 	if len(info.Aliases) > 0 {
 		metaParts = append(metaParts, "Aliases: "+strings.Join(info.Aliases, ", "))
 	}
@@ -348,6 +751,18 @@ func pluginCard(info plugins.UIPluginInfo) js.Value {
 	use := el("p")
 	use.Set("textContent", "Use for: "+info.UseFor)
 	appendChildren(card, title, meta, desc, use)
+
+	for _, ex := range info.Examples {
+		example := div("example")
+		label := el("strong")
+		label.Set("textContent", "Example: "+ex.Label)
+		input := el("pre")
+		input.Set("textContent", "Input: "+ex.Input)
+		output := el("pre")
+		output.Set("textContent", "Output: "+ex.Output)
+		appendChildren(example, label, input, output)
+		card.Call("appendChild", example)
+	}
 
 	if len(info.References) > 0 {
 		refs := div("refs")
@@ -388,7 +803,7 @@ func copyCommand() {
 }
 
 func downloadResult() {
-	downloadBytes("deen-result.bin", pipe.Result())
+	downloadBytes(resultDownloadName(), pipe.Result())
 }
 
 func exportChain() {
@@ -436,7 +851,7 @@ func showSuggestions() {
 		action.Set("type", "button")
 		action.Set("textContent", "Add")
 		on(action, "click", func() {
-			pipe.AddStep(s.Plugin, s.Unprocess)
+			pipe.AddStepWithOptions(s.Plugin, s.Unprocess, s.Options)
 			if close != nil {
 				close()
 			}
@@ -450,7 +865,7 @@ func showSuggestions() {
 
 func searchPlugins() {
 	wrap := div("search-panel")
-	query := textInput("Search plugins", "")
+	query := textInput("Search transformers", "")
 	results := div("modal-list")
 	appendChildren(wrap, query, results)
 
@@ -464,7 +879,7 @@ func searchPlugins() {
 		}
 		if len(matches) == 0 {
 			empty := div("empty")
-			empty.Set("textContent", "No plugins found.")
+			empty.Set("textContent", "No transformers found.")
 			results.Call("appendChild", empty)
 			return
 		}
@@ -472,8 +887,11 @@ func searchPlugins() {
 			info := match
 			item := div("modal-item")
 			title := el("strong")
-			title.Set("textContent", plugins.CategoryLabel(info.Category)+" / "+info.Name)
-			metaParts := []string{info.Category}
+			title.Set("textContent", plugins.CategoryLabel(info.Category)+" / "+info.Label)
+			metaParts := []string{plugins.CategoryLabel(info.Category)}
+			if info.Label != info.Name {
+				metaParts = append(metaParts, "Command: "+info.Name)
+			}
 			if len(info.Aliases) > 0 {
 				metaParts = append(metaParts, "Aliases: "+strings.Join(info.Aliases, ", "))
 			}
@@ -516,7 +934,7 @@ func searchPlugins() {
 	}
 	on(query, "input", render)
 	render()
-	close = showModal("Add transform", wrap)
+	close = showModal("Search transformers", wrap)
 	query.Call("focus")
 }
 
@@ -546,6 +964,92 @@ func showPresets() {
 		list.Call("appendChild", item)
 	}
 	close = showModal("Presets", list)
+}
+
+type comparePoint struct {
+	label string
+	data  []byte
+}
+
+func comparePoints() []comparePoint {
+	points := []comparePoint{{label: "Input", data: pipe.Source()}}
+	for i := range pipe.Steps() {
+		points = append(points, comparePoint{
+			label: fmt.Sprintf("Step %d output", i+1),
+			data:  pipe.Output(i),
+		})
+	}
+	return points
+}
+
+func compareLabels(points []comparePoint) []string {
+	labels := make([]string, len(points))
+	for i, point := range points {
+		labels[i] = point.label
+	}
+	return labels
+}
+
+func compareData(points []comparePoint, label string) []byte {
+	for _, point := range points {
+		if point.label == label {
+			return point.data
+		}
+	}
+	return nil
+}
+
+func formatCompareData(data []byte, mode string) string {
+	switch mode {
+	case "hex":
+		return hex.Dump(data)
+	case "base64":
+		return base64.StdEncoding.EncodeToString(data)
+	default:
+		return string(data)
+	}
+}
+
+func showCompare() {
+	points := comparePoints()
+	labels := compareLabels(points)
+	wrap := div("compare-panel")
+	controls := div("compare-controls")
+	leftSelect := selectEl("", labels, labels[0])
+	rightSelect := selectEl("", labels, labels[len(labels)-1])
+	modeSelect := selectEl("", []string{"text", "hex", "base64"}, "text")
+	appendChildren(controls, leftSelect, rightSelect, modeSelect)
+
+	grid := div("compare-grid")
+	left := div("compare-pane")
+	right := div("compare-pane")
+	leftMeta := div("meta")
+	rightMeta := div("meta")
+	leftBody := textarea("")
+	leftBody.Set("readOnly", true)
+	rightBody := textarea("")
+	rightBody.Set("readOnly", true)
+	appendChildren(left, leftMeta, leftBody)
+	appendChildren(right, rightMeta, rightBody)
+	appendChildren(grid, left, right)
+	appendChildren(wrap, controls, grid)
+
+	refresh := func() {
+		mode := modeSelect.Get("value").String()
+		leftData := compareData(points, leftSelect.Get("value").String())
+		rightData := compareData(points, rightSelect.Get("value").String())
+		leftMeta.Set("textContent", pipeline.DataMetadata(leftData, 0).Summary())
+		rightMeta.Set("textContent", pipeline.DataMetadata(rightData, 0).Summary())
+		leftBody.Set("value", formatCompareData(leftData, mode))
+		rightBody.Set("value", formatCompareData(rightData, mode))
+		autoSizeTextarea(leftBody)
+		autoSizeTextarea(rightBody)
+	}
+	on(leftSelect, "change", refresh)
+	on(rightSelect, "change", refresh)
+	on(modeSelect, "change", refresh)
+	refresh()
+	showModal("Compare pipeline data", wrap)
 }
 
 func shareLink(data []byte) string {
@@ -588,15 +1092,48 @@ func downloadBytes(name string, data []byte) {
 	urlObj.Call("revokeObjectURL", u)
 }
 
+func resultDownloadName() string {
+	if sourceName == "" {
+		return "deen-result.bin"
+	}
+	name := strings.TrimSpace(sourceName)
+	name = strings.ReplaceAll(name, "\\", "_")
+	name = strings.ReplaceAll(name, "/", "_")
+	if name == "" || name == "." || name == ".." {
+		return "deen-result.bin"
+	}
+	if dot := strings.LastIndex(name, "."); dot > 0 && dot < len(name)-1 {
+		return name[:dot] + ".deen-result" + name[dot:]
+	}
+	return name + ".deen-result"
+}
+
 func alert(message string) {
 	js.Global().Call("alert", message)
+}
+
+func loadSourceFile(file js.Value) {
+	reader := js.Global().Get("FileReader").New()
+	var loadCB js.Func
+	loadCB = js.FuncOf(func(js.Value, []js.Value) any {
+		array := js.Global().Get("Uint8Array").New(reader.Get("result"))
+		buf := make([]byte, array.Get("byteLength").Int())
+		js.CopyBytesToGo(buf, array)
+		sourceName = file.Get("name").String()
+		pipe.SetSource(buf)
+		rebuild()
+		loadCB.Release()
+		return nil
+	})
+	reader.Call("addEventListener", "load", loadCB)
+	reader.Call("readAsArrayBuffer", file)
 }
 
 func filePicker() js.Value {
 	wrap := div("file-action")
 	openBtn := el("button")
 	openBtn.Set("type", "button")
-	openBtn.Set("textContent", "Open file")
+	setIconButtonContent(openBtn, "upload", "Open file")
 	input := el("input")
 	input.Set("type", "file")
 	input.Get("style").Set("display", "none")
@@ -609,20 +1146,7 @@ func filePicker() js.Value {
 		if files.Get("length").Int() == 0 {
 			return
 		}
-		file := files.Call("item", 0)
-		reader := js.Global().Get("FileReader").New()
-		var loadCB js.Func
-		loadCB = js.FuncOf(func(js.Value, []js.Value) any {
-			array := js.Global().Get("Uint8Array").New(reader.Get("result"))
-			buf := make([]byte, array.Get("byteLength").Int())
-			js.CopyBytesToGo(buf, array)
-			pipe.SetSource(buf)
-			rebuild()
-			loadCB.Release()
-			return nil
-		})
-		reader.Call("addEventListener", "load", loadCB)
-		reader.Call("readAsArrayBuffer", file)
+		loadSourceFile(files.Call("item", 0))
 	})
 	appendChildren(wrap, openBtn, input)
 	return wrap
@@ -632,7 +1156,7 @@ func chainPicker() js.Value {
 	wrap := div("file-action")
 	openBtn := el("button")
 	openBtn.Set("type", "button")
-	openBtn.Set("textContent", "Import chain")
+	setIconButtonContent(openBtn, "upload", "Import chain")
 	input := el("input")
 	input.Set("type", "file")
 	input.Set("accept", "application/json,.json")
@@ -654,6 +1178,7 @@ func chainPicker() js.Value {
 			if err := pipe.ImportJSON(data); err != nil {
 				alert(err.Error())
 			} else {
+				sourceName = ""
 				rebuild()
 			}
 			loadCB.Release()
@@ -675,23 +1200,50 @@ func sourceCard() js.Value {
 	ta := textarea(string(pipe.Source()))
 	sourceEl = ta
 	meta := div("meta")
-	meta.Set("textContent", pipeline.DataMetadata(pipe.Source(), 0).Summary())
+	meta.Set("textContent", sourceMetadataSummary())
 	on(ta, "input", func() {
 		if updating {
 			return
 		}
+		sourceName = ""
 		pipe.SetSource([]byte(ta.Get("value").String()))
-		meta.Set("textContent", pipeline.DataMetadata(pipe.Source(), 0).Summary())
+		meta.Set("textContent", sourceMetadataSummary())
 		refreshOutputs(0)
 	})
+	onEvent(card, "dragover", func(ev js.Value) {
+		ev.Call("preventDefault")
+		card.Set("className", "card source drag-over")
+	})
+	onEvent(card, "dragleave", func(ev js.Value) {
+		ev.Call("preventDefault")
+		card.Set("className", "card source")
+	})
+	onEvent(card, "drop", func(ev js.Value) {
+		ev.Call("preventDefault")
+		card.Set("className", "card source")
+		files := ev.Get("dataTransfer").Get("files")
+		if files.Get("length").Int() == 0 {
+			return
+		}
+		loadSourceFile(files.Call("item", 0))
+	})
 	appendChildren(card, label, ta, meta)
+	autoSizeTextarea(ta)
 	return card
+}
+
+func sourceMetadataSummary() string {
+	summary := pipeline.DataMetadata(pipe.Source(), 0).Summary()
+	if strings.TrimSpace(sourceName) == "" {
+		return summary
+	}
+	return "source: " + sourceName + " · " + summary
 }
 
 func stepCard(i int) js.Value {
 	step := pipe.Steps()[i]
 	col := accent(i)
-	ref := &cardRef{index: i, viewMode: "text"}
+	ref := &cardRef{index: i}
 	cards = append(cards, ref)
 
 	card := div("card")
@@ -741,8 +1293,9 @@ func stepCard(i int) js.Value {
 	detail := div("card-detail")
 
 	// decode toggle (referenced by the category selectors).
-	decodeWrap, decodeInput := checkbox("decode", step.Unprocess)
-	decodeInput.Set("checked", step.Unprocess)
+	canDecode := plugins.CanDecode(step.Plugin)
+	decodeWrap, decodeInput := checkbox("decode", step.Unprocess && canDecode)
+	decodeInput.Set("checked", step.Unprocess && canDecode)
 	enabledWrap, enabledInput := checkbox("enabled", !step.Disabled)
 	enabledInput.Set("checked", !step.Disabled)
 
@@ -753,20 +1306,21 @@ func stepCard(i int) js.Value {
 		if plugins.CategoryOf(step.Plugin) == cat {
 			selected = step.Plugin
 		}
-		sel := selectEl(cat, plugins.InCategory(cat), selected)
+		sel := selectOptionsEl(plugins.CategoryLabel(cat), pluginSelectOptions(cat), selected)
 		on(sel, "change", func() {
 			name := sel.Get("value").String()
 			if name == "" {
 				return
 			}
-			pipe.SetPlugin(i, name, decodeInput.Get("checked").Bool())
+			decode := decodeInput.Get("checked").Bool() && plugins.CanDecode(name)
+			pipe.SetPlugin(i, name, decode)
 			rebuild()
 		})
 		selRow.Call("appendChild", sel)
 	}
 
 	on(decodeInput, "change", func() {
-		pipe.SetPlugin(i, step.Plugin, decodeInput.Get("checked").Bool())
+		pipe.SetPlugin(i, step.Plugin, decodeInput.Get("checked").Bool() && plugins.CanDecode(step.Plugin))
 		refreshOutputs(i)
 	})
 	on(enabledInput, "change", func() {
@@ -774,43 +1328,43 @@ func stepCard(i int) js.Value {
 		rebuild()
 	})
 
-	viewLabel := el("label")
-	viewLabel.Set("textContent", "view ")
-	viewSelect := selectEl("", []string{"text", "hex", "base64"}, ref.viewMode)
-	on(viewSelect, "change", func() {
-		mode := viewSelect.Get("value").String()
-		if mode == "" {
-			mode = "text"
-		}
-		ref.viewMode = mode
-		renderOutput(ref)
-	})
-	viewLabel.Call("appendChild", viewSelect)
-
 	toggles := div("toggles")
-	appendChildren(toggles, enabledWrap, decodeWrap, viewLabel)
+	toggles.Call("appendChild", enabledWrap)
+	if canDecode {
+		toggles.Call("appendChild", decodeWrap)
+	}
 
 	options := div("options")
 	buildOptions(options, i)
 
-	ref.output = textarea("")
+	ref.output = textareaWithMax("", 960)
 	on(ref.output, "input", func() {
-		if updating || ref.viewMode != "text" {
+		if updating {
 			return
 		}
 		pipe.EditOutput(i, []byte(ref.output.Get("value").String()))
 		refreshOutputs(i + 1)
 	})
+	ref.hexOutput = textareaWithMax("", 960)
+	ref.hexOutput.Set("readOnly", true)
+	ref.base64Output = textareaWithMax("", 960)
+	ref.base64Output.Set("readOnly", true)
+	ref.statsOutput = textareaWithMax("", 640)
+	ref.statsOutput.Set("readOnly", true)
+	ref.preview = previewBox()
+	ref.imagePanel, ref.image, ref.imageMsg = imagePreviewBox()
+	viewer := outputViewer(ref)
 
 	ref.meta = div("meta")
 	ref.errEl = div("error")
 	ref.errEl.Get("style").Set("display", "none")
 
-	appendChildren(detail, selRow, toggles, options, ref.output, ref.meta, ref.errEl)
+	appendChildren(detail, selRow, toggles, options, viewer, ref.meta, ref.errEl)
 	on(collapse, "click", func() {
 		if detail.Get("style").Get("display").String() == "none" {
 			detail.Get("style").Set("display", "block")
 			collapse.Set("textContent", "▾")
+			autoSizeOutputTextareas(ref)
 		} else {
 			detail.Get("style").Set("display", "none")
 			collapse.Set("textContent", "▸")
@@ -822,13 +1376,78 @@ func stepCard(i int) js.Value {
 	return card
 }
 
+func outputViewer(ref *cardRef) js.Value {
+	viewer := div("viewer")
+	tabs := div("viewer-tabs")
+	panels := div("viewer-panels")
+
+	panelItems := []struct {
+		label string
+		node  js.Value
+	}{
+		{"Text", ref.output},
+		{"Hex", ref.hexOutput},
+		{"Base64", ref.base64Output},
+		{"Stats", ref.statsOutput},
+		{"Preview", ref.preview},
+		{"Image", ref.imagePanel},
+	}
+	buttons := make([]js.Value, 0, len(panelItems))
+	panelEls := make([]js.Value, 0, len(panelItems))
+	var activate func(int)
+	for idx, item := range panelItems {
+		panel := div("viewer-panel")
+		if idx != 0 {
+			panel.Set("className", "viewer-panel hidden")
+		}
+		panel.Call("appendChild", item.node)
+		panelEls = append(panelEls, panel)
+		btn := el("button")
+		btn.Set("type", "button")
+		if idx == 0 {
+			btn.Set("className", "viewer-tab active")
+		} else {
+			btn.Set("className", "viewer-tab")
+		}
+		btn.Set("textContent", item.label)
+		i := idx
+		on(btn, "click", func() { activate(i) })
+		buttons = append(buttons, btn)
+		tabs.Call("appendChild", btn)
+		panels.Call("appendChild", panel)
+	}
+	activate = func(active int) {
+		for i, btn := range buttons {
+			if i == active {
+				btn.Set("className", "viewer-tab active")
+				panelEls[i].Set("className", "viewer-panel")
+				autoSizeViewerPanel(panelEls[i])
+			} else {
+				btn.Set("className", "viewer-tab")
+				panelEls[i].Set("className", "viewer-panel hidden")
+			}
+		}
+	}
+
+	appendChildren(viewer, tabs, panels)
+	return viewer
+}
+
+func autoSizeViewerPanel(panel js.Value) {
+	areas := panel.Call("querySelectorAll", "textarea.io")
+	for i := 0; i < areas.Get("length").Int(); i++ {
+		autoSizeTextareaSoon(areas.Call("item", i))
+	}
+}
+
 func buildOptions(container js.Value, i int) {
 	step := pipe.Steps()[i]
 	for _, opt := range pipeline.PluginOptions(step.Plugin) {
 		opt := opt
 		row := div("option")
+		row.Set("title", opt.Usage)
 		if opt.IsBool {
-			wrap, input := checkbox(opt.Name, step.Options[opt.Name] == "true")
+			wrap, input := checkbox(opt.Label, step.Options[opt.Name] == "true")
 			on(input, "change", func() {
 				val := "false"
 				if input.Get("checked").Bool() {
@@ -840,17 +1459,37 @@ func buildOptions(container js.Value, i int) {
 			row.Call("appendChild", wrap)
 		} else {
 			label := el("span")
-			label.Set("textContent", opt.Name+": ")
-			input := el("input")
-			input.Set("type", "text")
-			input.Set("placeholder", "default: "+opt.Default)
+			label.Set("textContent", opt.Label+": ")
+			var input js.Value
+			current := opt.Default
 			if v, ok := step.Options[opt.Name]; ok {
-				input.Set("value", v)
+				current = v
 			}
-			on(input, "input", func() {
-				pipe.SetOption(i, opt.Name, input.Get("value").String())
-				refreshOutputs(i)
-			})
+			if opt.Kind == "select" {
+				input = selectEl("", opt.Choices, current)
+				on(input, "change", func() {
+					pipe.SetOption(i, opt.Name, input.Get("value").String())
+					refreshOutputs(i)
+				})
+			} else {
+				input = el("input")
+				inputType := "text"
+				if opt.Kind == "number" {
+					inputType = "number"
+				}
+				if opt.Kind == "secret" || opt.Secret {
+					inputType = "password"
+				}
+				input.Set("type", inputType)
+				input.Set("placeholder", "default: "+opt.Default)
+				if v, ok := step.Options[opt.Name]; ok {
+					input.Set("value", v)
+				}
+				on(input, "input", func() {
+					pipe.SetOption(i, opt.Name, input.Get("value").String())
+					refreshOutputs(i)
+				})
+			}
 			appendChildren(row, label, input)
 		}
 		container.Call("appendChild", row)
@@ -859,12 +1498,26 @@ func buildOptions(container js.Value, i int) {
 
 func addCard() js.Value {
 	card := div("card add")
+	header := div("add-header")
+	titleBlock := div("add-title")
 	label := el("div")
 	label.Set("className", "card-title")
-	label.Set("textContent", "Add transform")
-	selRow := div("selectors")
+	label.Set("textContent", "Add transformer step")
+	subtitle := div("add-subtitle")
+	subtitle.Set("textContent", "Choose a transformer by category or search the catalog.")
+	appendChildren(titleBlock, label, subtitle)
+	actions := div("add-actions")
+	appendChildren(actions,
+		button("", "Search transformers", searchPlugins),
+		button("", "Detect next", showSuggestions),
+	)
+	appendChildren(header, titleBlock, actions)
+	selRow := div("add-selectors")
 	for _, cat := range plugins.PluginCategories {
-		sel := selectEl(cat, plugins.InCategory(cat), "")
+		group := div("add-picker")
+		pickerLabel := el("label")
+		pickerLabel.Set("textContent", plugins.CategoryLabel(cat))
+		sel := selectOptionsEl(plugins.CategorySelectLabel(cat), pluginSelectOptions(cat), "")
 		on(sel, "change", func() {
 			name := sel.Get("value").String()
 			if name == "" {
@@ -873,9 +1526,10 @@ func addCard() js.Value {
 			pipe.AddStep(name, false)
 			rebuild()
 		})
-		selRow.Call("appendChild", sel)
+		appendChildren(group, pickerLabel, sel)
+		selRow.Call("appendChild", group)
 	}
-	appendChildren(card, label, selRow)
+	appendChildren(card, header, selRow)
 	return card
 }
 
@@ -885,7 +1539,7 @@ func updateHistory() {
 	input.Set("textContent", "Input")
 	historyEl.Call("appendChild", input)
 	for i, s := range pipe.Steps() {
-		name := s.Plugin
+		name := plugins.PluginLabel(s.Plugin)
 		if name == "" {
 			name = "(none)"
 		}
@@ -918,7 +1572,8 @@ func renderOutput(c *cardRef) {
 	if c.index > 0 {
 		inputBytes = len(pipe.Output(c.index - 1))
 	}
-	c.meta.Set("textContent", pipeline.DataMetadata(out, inputBytes).Summary())
+	summary := pipeline.DataMetadata(out, inputBytes).Summary()
+	c.meta.Set("textContent", summary)
 	if err := pipe.Err(c.index); err != nil {
 		c.errEl.Set("textContent", "error: "+err.Error())
 		c.errEl.Get("style").Set("display", "block")
@@ -926,19 +1581,119 @@ func renderOutput(c *cardRef) {
 		c.errEl.Get("style").Set("display", "none")
 	}
 	updating = true
-	switch c.viewMode {
-	case "hex":
-		c.output.Set("value", hex.Dump(out))
-		c.output.Set("readOnly", true)
-	case "base64":
-		c.output.Set("value", base64.StdEncoding.EncodeToString(out))
-		c.output.Set("readOnly", true)
-	default:
-		c.viewMode = "text"
-		c.output.Set("value", string(out))
-		c.output.Set("readOnly", false)
+	c.output.Set("value", string(out))
+	c.output.Set("readOnly", false)
+	c.hexOutput.Set("value", hex.Dump(out))
+	c.base64Output.Set("value", base64.StdEncoding.EncodeToString(out))
+	c.statsOutput.Set("value", summary)
+	autoSizeOutputTextareas(c)
+	renderImageOutput(c, out)
+	preview, ok := pipeline.StructuredPreview(out)
+	if !ok {
+		preview = "No structured preview available."
+		renderHighlightedText(c.preview, preview, nil)
+	} else {
+		preview, spans, _ := pipeline.HighlightedPreview(out)
+		renderHighlightedText(c.preview, preview, spans)
 	}
 	updating = false
+}
+
+func imagePreviewBox() (wrap, img, msg js.Value) {
+	wrap = div("image-preview")
+	img = el("img")
+	img.Set("alt", "Output image preview")
+	msg = div("image-preview-message")
+	appendChildren(wrap, img, msg)
+	return wrap, img, msg
+}
+
+func renderImageOutput(c *cardRef, data []byte) {
+	imageData, mime := imagePreviewPayload(data)
+	if mime == "" {
+		c.image.Get("style").Set("display", "none")
+		c.image.Set("src", "")
+		c.imageMsg.Set("textContent", "No image preview available.")
+		return
+	}
+	c.image.Set("src", "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(imageData))
+	c.image.Get("style").Set("display", "block")
+	c.imageMsg.Set("textContent", mime)
+}
+
+func imagePreviewPayload(data []byte) ([]byte, string) {
+	if mime := imageMIME(data); mime != "" {
+		return data, mime
+	}
+	compact := strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\n', '\r', '\t':
+			return -1
+		default:
+			return r
+		}
+	}, string(data))
+	if len(compact) < 8 {
+		return nil, ""
+	}
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	} {
+		decoded, err := enc.DecodeString(compact)
+		if err != nil {
+			continue
+		}
+		if mime := imageMIME(decoded); mime != "" {
+			return decoded, mime
+		}
+	}
+	return nil, ""
+}
+
+func imageMIME(data []byte) string {
+	switch {
+	case len(data) >= 8 && string(data[:8]) == "\x89PNG\r\n\x1a\n":
+		return "image/png"
+	case len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff:
+		return "image/jpeg"
+	case len(data) >= 6 && (string(data[:6]) == "GIF87a" || string(data[:6]) == "GIF89a"):
+		return "image/gif"
+	case len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP":
+		return "image/webp"
+	case looksLikeSVG(data):
+		return "image/svg+xml"
+	default:
+		return ""
+	}
+}
+
+func looksLikeSVG(data []byte) bool {
+	s := strings.TrimSpace(string(data))
+	return strings.HasPrefix(s, "<svg ") || strings.HasPrefix(s, "<svg>")
+}
+
+func renderHighlightedText(node js.Value, text string, spans []pipeline.SyntaxSpan) {
+	node.Set("innerHTML", "")
+	pos := 0
+	for _, span := range spans {
+		if span.Start < pos || span.End > len(text) || span.Start >= span.End {
+			continue
+		}
+		if span.Start > pos {
+			node.Call("appendChild", textNode(text[pos:span.Start]))
+		}
+		part := el("span")
+		part.Set("className", "syntax-"+string(span.Kind))
+		part.Set("textContent", text[span.Start:span.End])
+		node.Call("appendChild", part)
+		pos = span.End
+	}
+	if pos < len(text) {
+		node.Call("appendChild", textNode(text[pos:]))
+	}
 }
 
 func summaryText(i int) string {
@@ -953,5 +1708,5 @@ func summaryText(i int) string {
 	if step.Disabled {
 		dir += " · disabled"
 	}
-	return fmt.Sprintf("%s / %s · %s", plugins.CategoryOf(step.Plugin), step.Plugin, dir)
+	return fmt.Sprintf("%s / %s · %s", plugins.CategoryLabel(plugins.CategoryOf(step.Plugin)), plugins.PluginLabel(step.Plugin), dir)
 }

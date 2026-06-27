@@ -1,6 +1,9 @@
 package pipeline
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestBuiltinPresetsAreValid(t *testing.T) {
 	presets := BuiltinPresets()
@@ -63,5 +66,62 @@ func TestBuiltinPresetNames(t *testing.T) {
 		if !names[want] {
 			t.Fatalf("missing preset %q", want)
 		}
+	}
+}
+
+func TestBuiltinExamplesAreRunnable(t *testing.T) {
+	examples := BuiltinExamples()
+	if len(examples) == 0 {
+		t.Fatal("expected built-in examples")
+	}
+	for _, example := range examples {
+		t.Run(example.Name, func(t *testing.T) {
+			if example.Description == "" {
+				t.Fatal("missing description")
+			}
+			if len(example.Steps) == 0 {
+				t.Fatal("missing steps")
+			}
+			p := New()
+			p.ApplyExample(example)
+			if len(p.Source()) == 0 {
+				t.Fatal("example did not set source")
+			}
+			for i, step := range p.Steps() {
+				if step.err != nil {
+					t.Fatalf("step %d failed: %v", i+1, step.err)
+				}
+			}
+			if example.WantContains != "" && !strings.Contains(string(p.Result()), example.WantContains) {
+				t.Fatalf("result %q does not contain %q", string(p.Result()), example.WantContains)
+			}
+		})
+	}
+}
+
+func TestApplyExampleIsUndoable(t *testing.T) {
+	p := New()
+	p.SetSource([]byte("before"))
+	p.AddStep("hex", false)
+	p.ApplyExample(Example{
+		Name:        "test",
+		Description: "test example",
+		Source:      []byte("dGVzdA=="),
+		Steps:       []PresetStep{{Plugin: "base64", Unprocess: true}},
+	})
+	if got := string(p.Source()); got != "dGVzdA==" {
+		t.Fatalf("source = %q", got)
+	}
+	if got := string(p.Result()); got != "test" {
+		t.Fatalf("result = %q, want test", got)
+	}
+	if !p.Undo() {
+		t.Fatal("expected example application to be undoable")
+	}
+	if got := string(p.Source()); got != "before" {
+		t.Fatalf("undo source = %q", got)
+	}
+	if p.Len() != 1 || p.Steps()[0].Plugin != "hex" {
+		t.Fatalf("undo did not restore previous chain: %#v", p.Steps())
 	}
 }
