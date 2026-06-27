@@ -121,6 +121,14 @@ func buildLayout() {
 
 	heading := el("h1")
 	heading.Set("textContent", "deen")
+	aboutBtn := el("button")
+	aboutBtn.Set("className", "about")
+	aboutBtn.Set("textContent", "About")
+	// Persistent callback: not added to the per-rebuild release list.
+	aboutCB := js.FuncOf(func(js.Value, []js.Value) any { showInfo(); return nil })
+	aboutBtn.Call("addEventListener", "click", aboutCB)
+	headerBar := div("headerbar")
+	appendChildren(headerBar, heading, aboutBtn)
 
 	stepsEl = div("steps")
 
@@ -128,12 +136,47 @@ func buildLayout() {
 	sideTitle.Set("textContent", "History")
 	historyEl = div("history")
 
-	appendChildren(main, heading, stepsEl)
+	appendChildren(main, headerBar, stepsEl)
 	appendChildren(side, sideTitle, historyEl)
 	appendChildren(app, main, side)
 	body.Call("appendChild", app)
 
 	rebuild()
+}
+
+// showInfo displays an "About" modal with a short description, the build
+// stack and a link to the project.
+func showInfo() {
+	overlay := div("overlay")
+	modal := div("modal")
+
+	h := el("h2")
+	h.Set("textContent", "deen")
+	desc := el("p")
+	desc.Set("textContent", "deen encodes, decodes, hashes, compresses and formats data through a configurable chain of plugins.")
+	built := el("p")
+	built.Set("textContent", "Built with Go, Fyne (desktop GUI) and WebAssembly (this web interface).")
+
+	link := el("a")
+	link.Set("href", "https://github.com/takeshixx/go-deen")
+	link.Set("textContent", "github.com/takeshixx/go-deen")
+	link.Set("target", "_blank")
+	link.Set("rel", "noopener noreferrer")
+
+	closeBtn := el("button")
+	closeBtn.Set("textContent", "Close")
+
+	var closeCB js.Func
+	closeCB = js.FuncOf(func(js.Value, []js.Value) any {
+		overlay.Call("remove")
+		closeCB.Release()
+		return nil
+	})
+	closeBtn.Call("addEventListener", "click", closeCB)
+
+	appendChildren(modal, h, desc, built, link, closeBtn)
+	overlay.Call("appendChild", modal)
+	doc.Get("body").Call("appendChild", overlay)
 }
 
 // rebuild reconstructs the source card, step cards and add card.

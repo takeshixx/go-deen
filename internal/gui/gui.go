@@ -156,7 +156,8 @@ func (dg *DeenGUI) showAbout() {
 	content := container.NewVBox(
 		title,
 		widget.NewLabel("Version: "+version),
-		widget.NewLabel("Chain data encodings, decodings, hashes and formatters."),
+		widget.NewLabel("deen encodes, decodes, hashes, compresses and formats data\nthrough a configurable chain of plugins."),
+		widget.NewLabel("Built with Go, Fyne (desktop GUI) and WebAssembly (web)."),
 		container.NewHBox(widget.NewLabel("Documentation:"), widget.NewHyperlink("deen.adversec.com", docsURL)),
 		container.NewHBox(widget.NewLabel("Source:"), widget.NewHyperlink("github.com/takeshixx/go-deen", repoURL)),
 	)

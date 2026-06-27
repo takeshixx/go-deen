@@ -25,3 +25,16 @@ textarea.io { width: 100%; min-height: 7rem; box-sizing: border-box;
 .error { color: #db4437; font-family: ui-monospace, monospace; margin-top: 0.3rem; }
 
 .history .hist { padding: 0.15rem 0; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+
+.headerbar { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1rem; }
+.headerbar h1 { margin: 0; }
+button.about { cursor: pointer; }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+	display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: Canvas; color: CanvasText; border-radius: 8px;
+	padding: 1.2rem 1.5rem; max-width: 32rem; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.modal h2 { margin-top: 0; }
+.modal p { line-height: 1.4; }
+.modal a { display: inline-block; margin: 0.3rem 0 1rem; }
+.modal button { cursor: pointer; }
