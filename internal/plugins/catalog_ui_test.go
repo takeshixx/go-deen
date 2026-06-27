@@ -21,3 +21,29 @@ func TestUICatalogHasUserFacingCopy(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchUICatalog(t *testing.T) {
+	if got := SearchUICatalog(""); len(got) != len(UICatalog()) {
+		t.Fatalf("empty search returned %d plugins, want %d", len(got), len(UICatalog()))
+	}
+
+	var foundBase64 bool
+	for _, info := range SearchUICatalog("b64") {
+		if info.Name == "base64" {
+			foundBase64 = true
+		}
+	}
+	if !foundBase64 {
+		t.Fatal("alias search did not find base64")
+	}
+
+	var foundJWT bool
+	for _, info := range SearchUICatalog("authentication tokens") {
+		if info.Name == "jwt" {
+			foundJWT = true
+		}
+	}
+	if !foundJWT {
+		t.Fatal("use-case search did not find jwt")
+	}
+}

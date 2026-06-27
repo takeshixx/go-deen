@@ -73,7 +73,11 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginXMLFormatter,
 	formatters.NewPluginJSON2XML,
 	formatters.NewPluginJwt,
+	formatters.NewPluginJWK,
 	formatters.NewPluginJQFormatter,
+	formatters.NewPluginProtobuf,
+	formatters.NewPluginSAML,
+	formatters.NewPluginTimestamp,
 	misc.NewPluginCertCloner,
 	misc.NewPluginCertPrinter,
 }

@@ -1,5 +1,7 @@
 package plugins
 
+import "strings"
+
 // Reference points users to background material for a plugin or family.
 type Reference struct {
 	Label string
@@ -132,8 +134,23 @@ var referenceSets = map[string][]Reference{
 	"jwt": {
 		{"RFC 7519", "https://www.rfc-editor.org/rfc/rfc7519"},
 	},
+	"jwk": {
+		{"RFC 7517", "https://www.rfc-editor.org/rfc/rfc7517"},
+		{"RFC 7638", "https://www.rfc-editor.org/rfc/rfc7638"},
+	},
 	"jq": {
 		{"jq manual", "https://jqlang.github.io/jq/manual/"},
+	},
+	"protobuf": {
+		{"Protocol Buffers encoding", "https://protobuf.dev/programming-guides/encoding/"},
+	},
+	"saml": {
+		{"SAML Bindings", "https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf"},
+		{"SAML Core", "https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf"},
+	},
+	"timestamp": {
+		{"Unix time", "https://en.wikipedia.org/wiki/Unix_time"},
+		{"Go time layouts", "https://pkg.go.dev/time#pkg-constants"},
 	},
 	"x509": {
 		{"RFC 5280", "https://www.rfc-editor.org/rfc/rfc5280"},
@@ -276,10 +293,30 @@ var catalogCopyByName = map[string]catalogCopy{
 		"Use it to inspect authentication tokens, claim sets, algorithms, and expiration fields.",
 		referenceSets["jwt"],
 	},
+	"jwk": {
+		"Formats, compacts, publicizes and thumbprints JSON Web Keys and JSON Web Key Sets.",
+		"Use it to inspect OAuth/OIDC key sets, normalize JWK JSON, strip private key material where possible, and compute SHA-256 JWK thumbprints.",
+		referenceSets["jwk"],
+	},
 	"jq": {
 		"Runs jq-style queries and filters against JSON input.",
 		"Use it to extract fields, reshape responses, and test JSON filters without leaving deen.",
 		referenceSets["jq"],
+	},
+	"protobuf": {
+		"Decodes schema-less Protocol Buffers wire data into a readable field listing.",
+		"Use it to inspect raw protobuf payloads from logs, captures, or binary API traffic when you do not have the .proto schema handy.",
+		referenceSets["protobuf"],
+	},
+	"saml": {
+		"Decodes SAMLRequest and SAMLResponse payloads into readable XML and encodes XML back to SAML payloads.",
+		"Use it to inspect SAML HTTP-POST and HTTP-Redirect binding values copied from forms, URLs, browser tools, or proxy logs.",
+		referenceSets["saml"],
+	},
+	"timestamp": {
+		"Converts Unix timestamps to formatted times and formatted times back to Unix timestamps.",
+		"Use it for logs, API payloads, JWT claims, database rows, and any workflow that mixes epoch seconds, milliseconds, microseconds, nanoseconds, and RFC3339-style strings.",
+		referenceSets["timestamp"],
 	},
 	"certPrinter": {
 		"Parses and prints X.509 certificate details.",
@@ -315,6 +352,30 @@ func UICatalog() []UIPluginInfo {
 		}
 	}
 	return infos
+}
+
+// SearchUICatalog returns plugins whose user-facing catalog fields match query.
+// Empty queries return the full catalog in normal category order.
+func SearchUICatalog(query string) []UIPluginInfo {
+	query = strings.ToLower(strings.TrimSpace(query))
+	catalog := UICatalog()
+	if query == "" {
+		return catalog
+	}
+
+	var matches []UIPluginInfo
+	for _, info := range catalog {
+		haystack := strings.ToLower(strings.Join(append([]string{
+			info.Name,
+			info.Category,
+			info.Description,
+			info.UseFor,
+		}, info.Aliases...), " "))
+		if strings.Contains(haystack, query) {
+			matches = append(matches, info)
+		}
+	}
+	return matches
 }
 
 func copyForPlugin(name, category string) catalogCopy {
