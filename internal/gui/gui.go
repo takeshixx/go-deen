@@ -41,7 +41,9 @@ type DeenGUI struct {
 	cards       []*stepCard     // parallel to pipe.Steps()
 	history     *fyne.Container // side panel listing the chain
 	split       *container.Split
-	tabs        *container.AppTabs
+	tabButtons  []*navTab
+	tabContent  *fyne.Container
+	activeTab   int
 	historyOpen bool
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
@@ -55,24 +57,23 @@ func NewDeenGUI() (*DeenGUI, error) {
 		pipe:        pipeline.New(),
 		pluginNames: plugins.Names(),
 	}
+	dg.app.Settings().SetTheme(newAdversecTheme(theme.VariantDark))
 	dg.window = dg.app.NewWindow("deen")
 	dg.window.SetMaster()
+	dg.window.SetIcon(deenLogoResource)
 
 	dg.stepsBox = container.NewVBox()
 	dg.history = container.NewVBox()
 	dg.historyOpen = true
-	dg.tabs = container.NewAppTabs(
-		container.NewTabItem("Home", compactMinWidth(dg.homeTab())),
-		container.NewTabItem("Examples", compactMinWidth(dg.examplesTab())),
-		container.NewTabItem("Plugins", compactMinWidth(dg.pluginsTab())),
-		container.NewTabItem("About", compactMinWidth(dg.aboutTab())),
-	)
-	dg.tabs.SetTabLocation(container.TabLocationTop)
-	content := container.NewBorder(compactMinWidth(dg.toolbar()), nil, nil, nil, dg.tabs)
-	dg.window.SetContent(content)
+	dg.activeTab = -1
+	dg.tabContent = container.NewMax()
+	bg := canvas.NewRectangle(theme.Color(theme.ColorNameBackground))
+	content := container.NewBorder(dg.tabHeader(), nil, nil, nil, dg.tabContent)
+	dg.window.SetContent(container.NewStack(bg, content))
 	dg.window.SetMainMenu(dg.mainMenu())
 	dg.window.Resize(fyne.NewSize(760, 560))
 
+	dg.selectTab(0)
 	dg.rebuild()
 	return dg, nil
 }
@@ -84,26 +85,79 @@ func compactMinWidth(obj fyne.CanvasObject) fyne.CanvasObject {
 	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, obj)
 }
 
-// toolbar builds the top action bar.
-func (dg *DeenGUI) toolbar() *widget.Toolbar {
-	return widget.NewToolbar(
-		widget.NewToolbarAction(theme.FolderOpenIcon(), dg.openFile),
-		widget.NewToolbarAction(theme.DocumentSaveIcon(), dg.saveResult),
-		widget.NewToolbarAction(theme.ContentCopyIcon(), dg.copyResult),
-		widget.NewToolbarAction(theme.MailForwardIcon(), dg.copyCommand),
-		widget.NewToolbarSeparator(),
-		widget.NewToolbarAction(theme.FileTextIcon(), dg.openChain),
-		widget.NewToolbarAction(theme.DocumentCreateIcon(), dg.saveChain),
-		widget.NewToolbarSeparator(),
-		widget.NewToolbarAction(theme.NavigateBackIcon(), dg.undo),
-		widget.NewToolbarAction(theme.NavigateNextIcon(), dg.redo),
-		widget.NewToolbarSeparator(),
-		widget.NewToolbarAction(theme.HistoryIcon(), dg.showPresets),
-		widget.NewToolbarAction(theme.ContentClearIcon(), dg.clear),
-		widget.NewToolbarSpacer(),
-		widget.NewToolbarAction(theme.ListIcon(), dg.toggleHistory),
-		widget.NewToolbarAction(theme.HelpIcon(), dg.showHelp),
+func (dg *DeenGUI) tabHeader() fyne.CanvasObject {
+	logo := canvas.NewImageFromResource(deenLogoResource)
+	logo.FillMode = canvas.ImageFillContain
+	logo.SetMinSize(fyne.NewSize(24, 24))
+	title := widget.NewLabelWithStyle("deen", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	brand := container.NewHBox(logo, title, widget.NewSeparator())
+
+	dg.tabButtons = []*navTab{
+		newNavTab("Home", func() { dg.selectTab(0) }),
+		newNavTab("Examples", func() { dg.selectTab(1) }),
+		newNavTab("Plugins", func() { dg.selectTab(2) }),
+		newNavTab("About", func() { dg.selectTab(3) }),
+	}
+	nav := make([]fyne.CanvasObject, 0, len(dg.tabButtons)+1)
+	nav = append(nav, brand)
+	for _, tab := range dg.tabButtons {
+		nav = append(nav, tab)
+	}
+	return container.NewPadded(container.NewHBox(nav...))
+}
+
+func (dg *DeenGUI) selectTab(index int) {
+	if index < 0 || index > 3 || dg.activeTab == index || dg.tabContent == nil {
+		return
+	}
+	dg.activeTab = index
+	for i, tab := range dg.tabButtons {
+		tab.setActive(i == index)
+	}
+
+	var content fyne.CanvasObject
+	switch index {
+	case 1:
+		content = dg.examplesTab()
+	case 2:
+		content = dg.pluginsTab()
+	case 3:
+		content = dg.aboutTab()
+	default:
+		content = dg.homeTab()
+	}
+	dg.tabContent.Objects = []fyne.CanvasObject{compactMinWidth(content)}
+	dg.tabContent.Refresh()
+}
+
+func (dg *DeenGUI) homeActions() fyne.CanvasObject {
+	open := widget.NewButtonWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile)
+	open.Importance = widget.HighImportance
+	save := widget.NewButtonWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult)
+	copyResult := widget.NewButtonWithIcon("Copy result", theme.ContentCopyIcon(), dg.copyResult)
+	undo := widget.NewButtonWithIcon("Undo", theme.NavigateBackIcon(), dg.undo)
+	redo := widget.NewButtonWithIcon("Redo", theme.NavigateNextIcon(), dg.redo)
+	clear := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), dg.clear)
+
+	openChain := widget.NewButtonWithIcon("Open chain", theme.FileTextIcon(), dg.openChain)
+	saveChain := widget.NewButtonWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain)
+	presets := widget.NewButtonWithIcon("Presets", theme.HistoryIcon(), dg.showPresets)
+	copyCommand := widget.NewButtonWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand)
+
+	compare := widget.NewButtonWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare)
+	toggle := widget.NewButtonWithIcon("Toggle panel", theme.ListIcon(), dg.toggleHistory)
+
+	return container.NewVBox(
+		actionGroup("Result", copyResult, save, open),
+		actionGroup("Chain", openChain, saveChain, copyCommand),
+		actionGroup("Workflow", presets, compare, undo, redo, clear, toggle),
 	)
+}
+
+func actionGroup(title string, objects ...fyne.CanvasObject) fyne.CanvasObject {
+	label := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	label.TextStyle.Monospace = false
+	return container.NewVBox(label, container.NewGridWithColumns(1, objects...))
 }
 
 // toggleHistory collapses or expands the transformer-chain side panel.
@@ -125,15 +179,15 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Presets", dg.showPresets),
 	)
 	themeMenu := fyne.NewMenu("Theme",
+		fyne.NewMenuItem("Dark", setTheme(newAdversecTheme(theme.VariantDark))),
+		fyne.NewMenuItem("Light", setTheme(newAdversecTheme(theme.VariantLight))),
 		fyne.NewMenuItem("System", setTheme(theme.DefaultTheme())),
-		fyne.NewMenuItem("Light", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantLight})),
-		fyne.NewMenuItem("Dark", setTheme(&forcedVariantTheme{theme.DefaultTheme(), theme.VariantDark})),
 	)
 	help := fyne.NewMenu("Help",
 		fyne.NewMenuItem("How to use", dg.showHelp),
-		fyne.NewMenuItem("Examples", func() { dg.tabs.SelectIndex(1) }),
-		fyne.NewMenuItem("Plugin catalog", func() { dg.tabs.SelectIndex(2) }),
-		fyne.NewMenuItem("About", func() { dg.tabs.SelectIndex(3) }),
+		fyne.NewMenuItem("Examples", func() { dg.selectTab(1) }),
+		fyne.NewMenuItem("Plugin catalog", func() { dg.selectTab(2) }),
+		fyne.NewMenuItem("About", func() { dg.selectTab(3) }),
 	)
 	return fyne.NewMainMenu(chainMenu, themeMenu, help)
 }
@@ -141,14 +195,14 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 func (dg *DeenGUI) homeTab() fyne.CanvasObject {
 	chain := container.NewVScroll(dg.stepsBox)
 	historyPanel := widget.NewCard("Transformer Chain", "", container.NewBorder(
-		container.NewHBox(widget.NewButtonWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare)),
+		dg.homeActions(),
 		nil,
 		nil,
 		nil,
 		container.NewVScroll(dg.history),
 	))
-	dg.split = container.NewHSplit(chain, container.New(cappedMinWidthLayout{width: 180}, historyPanel))
-	dg.split.SetOffset(0.78)
+	dg.split = container.NewHSplit(chain, container.New(cappedMinWidthLayout{width: 220}, historyPanel))
+	dg.split.SetOffset(0.72)
 	return dg.split
 }
 
@@ -194,7 +248,7 @@ Decoder. The result of each step feeds into the next.
 
 // showAbout displays version and project information.
 func (dg *DeenGUI) showAbout() {
-	dg.tabs.SelectIndex(3)
+	dg.selectTab(3)
 }
 
 func (dg *DeenGUI) aboutTab() fyne.CanvasObject {
@@ -205,9 +259,7 @@ func (dg *DeenGUI) aboutTab() fyne.CanvasObject {
 	docsURL, _ := url.Parse("https://deen.adversec.com")
 	repoURL, _ := url.Parse("https://github.com/takeshixx/go-deen")
 
-	title := widget.NewLabelWithStyle("deen", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	content := container.NewVBox(
-		title,
 		widget.NewLabel("Version: "+version),
 		widget.NewLabel("deen encodes, decodes, hashes, compresses and formats data\nthrough a configurable chain of plugins."),
 		widget.NewLabel("Built with Go, Fyne (desktop GUI) and WebAssembly (web)."),
@@ -279,7 +331,7 @@ func (dg *DeenGUI) exampleCard(example pipeline.Example) fyne.CanvasObject {
 	load := widget.NewButtonWithIcon("Load example", theme.MediaPlayIcon(), func() {
 		dg.pipe.ApplyExample(example)
 		dg.rebuild()
-		dg.tabs.SelectIndex(0)
+		dg.selectTab(0)
 	})
 
 	body := container.NewVBox(desc, source, outputSummary, chain)

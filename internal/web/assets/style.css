@@ -1,15 +1,17 @@
 :root {
-	color-scheme: light dark;
-	--bg: Canvas;
-	--fg: CanvasText;
-	--muted: color-mix(in srgb, CanvasText 62%, Canvas 38%);
-	--panel: color-mix(in srgb, Canvas 94%, CanvasText 6%);
-	--panel-strong: color-mix(in srgb, Canvas 88%, CanvasText 12%);
-	--border: color-mix(in srgb, CanvasText 20%, Canvas 80%);
-	--accent: #2474d5;
-	--accent-strong: #1659a8;
-	--danger: #c7342f;
-	--focus: #d9a300;
+	color-scheme: dark;
+	--bg: #15202b;
+	--fg: #f5f8fa;
+	--muted: #c7d1d8;
+	--panel: #1c2a38;
+	--panel-strong: #223244;
+	--border: #42576b;
+	--accent: #38d9c8;
+	--accent-strong: #12a89a;
+	--success: #61d394;
+	--warning: #f2c66d;
+	--danger: #ff7b7b;
+	--focus: #f2c66d;
 }
 
 * { box-sizing: border-box; }
@@ -61,6 +63,15 @@ button, select, input[type="text"], input[type="number"], input[type="password"]
 	color: var(--fg);
 }
 
+select, input, textarea {
+	caret-color: var(--accent);
+}
+
+::placeholder {
+	color: var(--muted);
+	opacity: 1;
+}
+
 button {
 	min-height: 2rem;
 	padding: 0.35rem 0.65rem;
@@ -79,7 +90,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 button.primary {
 	background: var(--accent);
 	border-color: var(--accent-strong);
-	color: white;
+	color: #03100f;
+	font-weight: 650;
 }
 
 .icon-label {
@@ -122,7 +134,7 @@ button.primary {
 	min-height: 4rem;
 	padding: 0 1.25rem;
 	border-bottom: 1px solid var(--border);
-	background: color-mix(in srgb, var(--bg) 94%, transparent);
+	background: color-mix(in srgb, var(--bg) 92%, transparent);
 	backdrop-filter: blur(10px);
 }
 
@@ -164,6 +176,10 @@ button.primary {
 .tab.active {
 	color: var(--fg);
 	border-bottom-color: var(--accent);
+}
+
+a {
+	color: var(--accent);
 }
 
 .tab-content {
@@ -318,7 +334,7 @@ button.primary {
 }
 
 .card {
-	box-shadow: 0 1px 0 color-mix(in srgb, CanvasText 7%, transparent);
+	box-shadow: 0 1px 0 rgb(255 255 255 / 4%);
 }
 
 .source {
@@ -488,7 +504,7 @@ textarea.io {
 	max-height: min(60rem, 75vh);
 	border: 1px solid var(--border);
 	border-radius: 6px;
-	background: var(--bg);
+	background: var(--panel);
 	color: var(--fg);
 	font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 	font-size: 0.9rem;
@@ -505,7 +521,7 @@ textarea.io {
 	overflow: auto;
 	border: 1px solid var(--border);
 	border-radius: 6px;
-	background: var(--bg);
+	background: var(--panel);
 	color: var(--fg);
 	font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 	font-size: 0.9rem;
@@ -516,11 +532,11 @@ textarea.io {
 	overflow-wrap: anywhere;
 }
 
-.syntax-key { color: #2474d5; }
-.syntax-string { color: #0f9d58; }
-.syntax-number { color: #db4437; }
-.syntax-bool { color: #ab47bc; }
-.syntax-null { color: #8a6d00; }
+.syntax-key { color: #38d9c8; }
+.syntax-string { color: #61d394; }
+.syntax-number { color: #f2c66d; }
+.syntax-bool { color: #ffb085; }
+.syntax-null { color: #d7b6ff; }
 .syntax-punctuation { color: var(--muted); }
 
 .image-preview {
@@ -533,10 +549,10 @@ textarea.io {
 	border: 1px solid var(--border);
 	border-radius: 6px;
 	background:
-		linear-gradient(45deg, color-mix(in srgb, var(--panel) 85%, CanvasText 15%) 25%, transparent 25%),
-		linear-gradient(-45deg, color-mix(in srgb, var(--panel) 85%, CanvasText 15%) 25%, transparent 25%),
-		linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--panel) 85%, CanvasText 15%) 75%),
-		linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--panel) 85%, CanvasText 15%) 75%);
+		linear-gradient(45deg, color-mix(in srgb, var(--panel) 82%, var(--fg) 18%) 25%, transparent 25%),
+		linear-gradient(-45deg, color-mix(in srgb, var(--panel) 82%, var(--fg) 18%) 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--panel) 82%, var(--fg) 18%) 75%),
+		linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--panel) 82%, var(--fg) 18%) 75%);
 	background-color: var(--bg);
 	background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 	background-size: 16px 16px;
@@ -582,7 +598,7 @@ textarea.io {
 	align-items: center;
 	justify-content: center;
 	padding: 1rem;
-	background: color-mix(in srgb, CanvasText 35%, transparent);
+	background: rgb(0 0 0 / 48%);
 }
 
 .modal {
@@ -592,8 +608,8 @@ textarea.io {
 	flex-direction: column;
 	border: 1px solid var(--border);
 	border-radius: 8px;
-	background: var(--bg);
-	box-shadow: 0 1rem 3rem color-mix(in srgb, CanvasText 20%, transparent);
+	background: var(--panel);
+	box-shadow: 0 1rem 3rem rgb(0 0 0 / 32%);
 }
 
 .modal-header {

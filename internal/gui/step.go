@@ -18,7 +18,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -165,6 +164,27 @@ func (dg *DeenGUI) categorySelectors(current string, onPick func(name string)) *
 	}
 
 	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewGridWithColumns(2, categorySelect, transformerSelect))
+}
+
+func (dg *DeenGUI) addCategorySelectors() fyne.CanvasObject {
+	pickers := make([]fyne.CanvasObject, 0, len(plugins.PluginCategories))
+	for _, category := range plugins.PluginCategories {
+		category := category
+		labels, labelToName, _ := pluginSelectLabels(category)
+		selectBox := widget.NewSelect(labels, func(label string) {
+			name := labelToName[label]
+			if name == "" {
+				return
+			}
+			dg.pipe.AddStep(name, false)
+			dg.rebuild()
+		})
+		selectBox.PlaceHolder = plugins.CategorySelectLabel(category)
+
+		label := widget.NewLabelWithStyle(plugins.CategoryLabel(category), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		pickers = append(pickers, container.NewVBox(label, selectBox))
+	}
+	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewGridWithColumns(2, pickers...))
 }
 
 // newSourceCard builds the editable source-input card at the top of the chain.
@@ -469,38 +489,12 @@ func setImagePreview(img *canvas.Image, msg *widget.Label, data []byte) {
 // newAddSlot builds the compact category/transformer picker that appends a step.
 func (dg *DeenGUI) newAddSlot() fyne.CanvasObject {
 	actions := container.NewHBox(
-		widget.NewButtonWithIcon("Browse by category", theme.ListIcon(), dg.showCategoryBrowser),
 		widget.NewButtonWithIcon("Search transformers", theme.SearchIcon(), dg.showPluginSearch),
 		widget.NewButtonWithIcon("Detect next", theme.ContentAddIcon(), dg.showSuggestions),
 	)
 	subtitle := widget.NewLabel("Choose a transformer by category or search the catalog.")
 	subtitle.Importance = widget.LowImportance
-	return widget.NewCard("Add transformer step", "", container.NewVBox(subtitle, actions))
-}
-
-func (dg *DeenGUI) showCategoryBrowser() {
-	list := container.NewVBox()
-	var d dialog.Dialog
-	for _, category := range plugins.PluginCategories {
-		category := category
-		group := container.NewVBox()
-		for _, name := range plugins.InCategory(category) {
-			name := name
-			group.Add(widget.NewButton(plugins.PluginLabel(name), func() {
-				dg.pipe.AddStep(name, false)
-				dg.rebuild()
-				if d != nil {
-					d.Hide()
-				}
-			}))
-		}
-		list.Add(widget.NewCard(plugins.CategoryLabel(category), "", group))
-	}
-	scroll := container.NewVScroll(list)
-	scroll.SetMinSize(fyne.NewSize(520, 420))
-	d = dialog.NewCustom("Browse transformers", "Close", scroll, dg.window)
-	d.Resize(fyne.NewSize(620, 520))
-	d.Show()
+	return widget.NewCard("Add transformer step", "", container.NewVBox(subtitle, actions, dg.addCategorySelectors()))
 }
 
 var previewStyles = map[pipeline.SyntaxKind]widget.TextGridStyle{
