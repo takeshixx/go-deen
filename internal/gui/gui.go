@@ -51,6 +51,7 @@ type DeenGUI struct {
 	chainView          fyne.CanvasObject
 	tabButtons         []*navTab
 	tabContent         *fyne.Container
+	tabViews           [4]fyne.CanvasObject
 	workStatus         *widget.Label
 	activeTab          int
 	actionsOpen        bool
@@ -167,6 +168,14 @@ func (dg *DeenGUI) selectTab(index int) {
 		tab.setActive(i == index)
 	}
 
+	dg.tabContent.Objects = []fyne.CanvasObject{dg.cachedTab(index)}
+	dg.tabContent.Refresh()
+}
+
+func (dg *DeenGUI) cachedTab(index int) fyne.CanvasObject {
+	if dg.tabViews[index] != nil {
+		return dg.tabViews[index]
+	}
 	var content fyne.CanvasObject
 	switch index {
 	case 1:
@@ -178,8 +187,8 @@ func (dg *DeenGUI) selectTab(index int) {
 	default:
 		content = dg.homeTab()
 	}
-	dg.tabContent.Objects = []fyne.CanvasObject{compactMinWidth(content)}
-	dg.tabContent.Refresh()
+	dg.tabViews[index] = compactMinWidth(content)
+	return dg.tabViews[index]
 }
 
 func (dg *DeenGUI) setWorking(label string, working bool) {
@@ -465,26 +474,6 @@ func (dg *DeenGUI) exampleCard(example pipeline.Example) fyne.CanvasObject {
 	source.Importance = widget.LowImportance
 	source.Wrapping = fyne.TextWrapBreak
 
-	result, err := pipeline.ExampleResult(example)
-	outputSummary := widget.NewLabel("Output: " + pipeline.DataMetadata(result, len(example.Source)).Summary())
-	outputSummary.Importance = widget.LowImportance
-	outputSummary.Wrapping = fyne.TextWrapBreak
-	if err != nil {
-		outputSummary.SetText("Output error: " + err.Error())
-		outputSummary.Importance = widget.DangerImportance
-	}
-
-	inputEntry := multilineEntry(5)
-	inputEntry.SetText(exampleDataText(example.Source))
-	inputEntry.Disable()
-	outputEntry := multilineEntry(5)
-	outputEntry.SetText(exampleDataText(result))
-	outputEntry.Disable()
-	dataGrid := container.NewGridWithColumns(2,
-		widget.NewCard("Input data", "", exampleDataObject(example.Source, inputEntry)),
-		widget.NewCard("Output result", "", exampleDataObject(result, outputEntry)),
-	)
-
 	load := widget.NewButtonWithIcon("Load example", theme.MediaPlayIcon(), func() {
 		dg.runPipelineWork("Loading example", func() error {
 			dg.pipe.ApplyExample(example)
@@ -494,8 +483,39 @@ func (dg *DeenGUI) exampleCard(example pipeline.Example) fyne.CanvasObject {
 			dg.selectTab(0)
 		})
 	})
+	previewSlot := container.NewVBox()
+	var preview *widget.Button
+	preview = widget.NewButtonWithIcon("Preview data", theme.VisibilityIcon(), func() {
+		previewSlot.RemoveAll()
+		result, err := pipeline.ExampleResult(example)
+		if err != nil {
+			errLabel := widget.NewLabel("Output error: " + err.Error())
+			errLabel.Importance = widget.DangerImportance
+			errLabel.Wrapping = fyne.TextWrapBreak
+			previewSlot.Add(errLabel)
+			previewSlot.Refresh()
+			return
+		}
+		outputSummary := widget.NewLabel("Output: " + pipeline.DataMetadata(result, len(example.Source)).Summary())
+		outputSummary.Importance = widget.LowImportance
+		outputSummary.Wrapping = fyne.TextWrapBreak
+		inputEntry := multilineEntry(5)
+		inputEntry.SetText(exampleDataText(example.Source))
+		inputEntry.Disable()
+		outputEntry := multilineEntry(5)
+		outputEntry.SetText(exampleDataText(result))
+		outputEntry.Disable()
+		dataGrid := container.NewGridWithColumns(2,
+			widget.NewCard("Input data", "", exampleDataObject(example.Source, inputEntry)),
+			widget.NewCard("Output result", "", exampleDataObject(result, outputEntry)),
+		)
+		preview.Disable()
+		previewSlot.Add(outputSummary)
+		previewSlot.Add(dataGrid)
+		previewSlot.Refresh()
+	})
 
-	body := container.NewVBox(desc, source, outputSummary, chain)
+	body := container.NewVBox(desc, source, chain)
 	if example.WantContains != "" {
 		want := widget.NewLabel("Expected result contains: " + example.WantContains)
 		want.Importance = widget.LowImportance
@@ -503,7 +523,9 @@ func (dg *DeenGUI) exampleCard(example pipeline.Example) fyne.CanvasObject {
 		body.Add(want)
 	}
 	body.Add(load)
-	details := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(body, dataGrid))
+	body.Add(preview)
+	body.Add(previewSlot)
+	details := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, body)
 	accordion := widget.NewAccordion(widget.NewAccordionItem(example.Name, details))
 	accordion.CloseAll()
 	return container.NewPadded(accordion)
@@ -754,6 +776,9 @@ func (dg *DeenGUI) refreshFrom(from int) {
 	}
 	dg.refreshSourceFullControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
 	for i := from; i < len(dg.cards); i++ {
+		if dg.cards[i].collapsed {
+			continue
+		}
 		dg.cards[i].refresh()
 	}
 }

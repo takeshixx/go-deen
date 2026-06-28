@@ -558,11 +558,13 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 
 	c.rebuildOptions()
 	c.updateSummary()
-	c.refresh()
 	if !dg.stepsExpanded && i < len(dg.pipe.Steps())-1 {
 		c.collapsed = true
 		c.detail.Hide()
 		c.collapse.SetIcon(theme.NavigateNextIcon())
+	}
+	if !c.collapsed {
+		c.refresh()
 	}
 	return c
 }
@@ -574,6 +576,7 @@ func (c *stepCard) toggleCollapse() {
 		c.detail.Hide()
 		c.collapse.SetIcon(theme.NavigateNextIcon())
 	} else {
+		c.refresh()
 		c.detail.Show()
 		c.collapse.SetIcon(theme.MenuDropDownIcon())
 	}

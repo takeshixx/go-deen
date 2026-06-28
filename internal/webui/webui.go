@@ -37,6 +37,13 @@ var (
 	staticCBs         []js.Func
 	cards             []*cardRef
 	activeTab         = "home"
+	aboutPage         js.Value
+	aboutPageBuilt    bool
+	pluginsPage       js.Value
+	pluginsPageBuilt  bool
+	examplesPage      js.Value
+	examplesPageBuilt bool
+	examplePreviews   = map[string]examplePreview{}
 	sourceName        string
 	sourceFullRaw     bool
 	sourceFullHex     bool
@@ -74,6 +81,16 @@ type cardRef struct {
 	fullRaw           bool
 	fullHex           bool
 	fullStrings       bool
+}
+
+type examplePreview struct {
+	result []byte
+	err    error
+}
+
+type exampleCardRef struct {
+	example pipeline.Example
+	card    js.Value
 }
 
 // Run builds the UI and blocks so the event callbacks stay alive.
@@ -748,6 +765,10 @@ func commandGroup(title string, kids ...js.Value) js.Value {
 }
 
 func renderAbout() {
+	if aboutPageBuilt {
+		contentEl.Call("appendChild", aboutPage)
+		return
+	}
 	version := core.Version()
 	if b := core.Branch(); b != "" {
 		version += " (" + b + ")"
@@ -768,10 +789,16 @@ func renderAbout() {
 	docs := link("Documentation", "https://deen.adversec.com")
 	repo := link("Source", "https://github.com/takeshixx/go-deen")
 	appendChildren(page, h, desc, versionEl, built, privacy, local, docs, repo)
+	aboutPage = page
+	aboutPageBuilt = true
 	contentEl.Call("appendChild", page)
 }
 
 func renderExamples() {
+	if examplesPageBuilt {
+		contentEl.Call("appendChild", examplesPage)
+		return
+	}
 	page := div("catalog examples-page")
 	header := div("examples-header")
 	title := el("h2")
@@ -781,24 +808,38 @@ func renderExamples() {
 	results := div("examples-grid")
 	appendChildren(page, header, results)
 
+	refs := make([]exampleCardRef, 0, len(pipeline.BuiltinExamples()))
+	empty := div("empty")
+	empty.Set("textContent", "No examples found.")
+	empty.Get("style").Set("display", "none")
+	for _, example := range pipeline.BuiltinExamples() {
+		card := exampleCard(example)
+		refs = append(refs, exampleCardRef{example: example, card: card})
+		results.Call("appendChild", card)
+	}
+	results.Call("appendChild", empty)
+
 	render := func() {
-		results.Set("innerHTML", "")
+		q := query.Get("value").String()
 		matches := 0
-		for _, example := range pipeline.BuiltinExamples() {
-			if !pipeline.ExampleMatches(example, query.Get("value").String()) {
+		for _, ref := range refs {
+			if !pipeline.ExampleMatches(ref.example, q) {
+				ref.card.Get("style").Set("display", "none")
 				continue
 			}
+			ref.card.Get("style").Set("display", "")
 			matches++
-			results.Call("appendChild", exampleCard(example))
 		}
 		if matches == 0 {
-			empty := div("empty")
-			empty.Set("textContent", "No examples found.")
-			results.Call("appendChild", empty)
+			empty.Get("style").Set("display", "")
+		} else {
+			empty.Get("style").Set("display", "none")
 		}
 	}
-	on(query, "input", render)
+	onStatic(query, "input", render)
 	render()
+	examplesPage = page
+	examplesPageBuilt = true
 	contentEl.Call("appendChild", page)
 }
 
@@ -812,19 +853,32 @@ func exampleCard(example pipeline.Example) js.Value {
 
 	desc := el("p")
 	desc.Set("textContent", example.Description)
-	result, err := pipeline.ExampleResult(example)
 	chain := exampleChain(example.Steps)
 
 	data := div("example-data-grid")
-	inputPanel := exampleDataPanel("Input data", example.Source)
-	outputPanel := exampleDataPanel("Output result", result)
-	appendChildren(data, inputPanel, outputPanel)
+	previewLoaded := false
+	onStatic(card, "toggle", func() {
+		if previewLoaded || !card.Get("open").Bool() {
+			return
+		}
+		previewLoaded = true
+		preview := cachedExamplePreview(example)
+		if preview.err != nil {
+			output := div("error")
+			output.Set("textContent", "Output error: "+preview.err.Error())
+			data.Call("appendChild", output)
+			return
+		}
+		inputPanel := exampleDataPanel("Input data", example.Source)
+		outputPanel := exampleDataPanel("Output result", preview.result)
+		appendChildren(data, inputPanel, outputPanel)
+	})
 
 	actions := div("modal-actions")
 	load := el("button")
 	load.Set("type", "button")
 	load.Set("textContent", "Load example")
-	on(load, "click", func() {
+	onStatic(load, "click", func() {
 		runBusy("Loading example", func() {
 			sourceName = ""
 			pipe.ApplyExample(example)
@@ -834,11 +888,6 @@ func exampleCard(example pipeline.Example) js.Value {
 	})
 	actions.Call("appendChild", load)
 	appendChildren(card, summary, desc, chain)
-	if err != nil {
-		output := div("error")
-		output.Set("textContent", "Output error: "+err.Error())
-		card.Call("appendChild", output)
-	}
 	if example.WantContains != "" {
 		want := div("plugin-meta")
 		want.Set("textContent", "Expected result contains: "+example.WantContains)
@@ -847,6 +896,17 @@ func exampleCard(example pipeline.Example) js.Value {
 	card.Call("appendChild", data)
 	card.Call("appendChild", actions)
 	return card
+}
+
+func cachedExamplePreview(example pipeline.Example) examplePreview {
+	key := example.Name
+	if preview, ok := examplePreviews[key]; ok {
+		return preview
+	}
+	result, err := pipeline.ExampleResult(example)
+	preview := examplePreview{result: result, err: err}
+	examplePreviews[key] = preview
+	return preview
 }
 
 func exampleDataPanel(title string, data []byte) js.Value {
@@ -952,6 +1012,10 @@ func looksReadable(data []byte) bool {
 }
 
 func renderPlugins() {
+	if pluginsPageBuilt {
+		contentEl.Call("appendChild", pluginsPage)
+		return
+	}
 	page := div("catalog")
 	current := ""
 	for _, info := range plugins.UICatalog() {
@@ -963,6 +1027,8 @@ func renderPlugins() {
 		}
 		page.Call("appendChild", pluginCard(info))
 	}
+	pluginsPage = page
+	pluginsPageBuilt = true
 	contentEl.Call("appendChild", page)
 }
 
