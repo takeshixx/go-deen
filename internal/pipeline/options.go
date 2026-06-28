@@ -37,6 +37,9 @@ func PluginOptions(name string) []Option {
 
 	var opts []Option
 	fs.VisitAll(func(f *flag.Flag) {
+		if p.Name == "aes" && f.Name == "nonce" {
+			return
+		}
 		_, isBool := f.Value.(interface{ IsBoolFlag() bool })
 		kind := optionKind(p.Name, f.Name, f.DefValue, isBool)
 		opts = append(opts, Option{
@@ -153,6 +156,10 @@ func optionLabel(plugin, name string) string {
 		return "Text encoding"
 	case "unicode-normalize:form":
 		return "Normalization form"
+	case "aes:iv":
+		return "Nonce / IV"
+	case "aes:skip-aead-verify":
+		return "Skip AEAD verify"
 	case "ascii:mode":
 		return "Non-ASCII handling"
 	case "add:value":
@@ -173,13 +180,19 @@ func optionDescription(plugin, name, usage string) string {
 	case "aes:aad", "chacha20poly1305:aad":
 		return "Additional authenticated data required for GCM or AEAD verification."
 	case "aes:iv":
-		return "Initialization vector for CBC or CTR mode. Accepts hex or Base64."
+		return "Nonce or initialization vector as hex or Base64. GCM expects 12 bytes; CBC and CTR expect 16 bytes."
 	case "aes:key":
 		return "AES key as hex or Base64. Must be 16, 24, or 32 bytes."
 	case "aes:mode":
 		return "AES mode to use: GCM, CBC, or CTR."
 	case "aes:nonce":
-		return "GCM nonce as hex or Base64."
+		return "Alias for nonce or initialization vector as hex or Base64."
+	case "aes:padding":
+		return "CBC padding mode: PKCS#7 compatible padding or no padding for block-aligned data."
+	case "aes:skip-aead-verify":
+		return "Dangerous GCM decrypt mode: output unauthenticated plaintext even when tag verification fails."
+	case "aes:tag-len":
+		return "GCM authentication tag length in bytes. Must be between 12 and 16."
 	case "ascii:mode":
 		return "How to handle non-ASCII bytes."
 	case "base32:hex":
@@ -463,6 +476,10 @@ func optionChoices(plugin, name string) []string {
 		return []string{"table", "csv", "tsv", "semicolon"}
 	case "aes:mode":
 		return []string{"gcm", "cbc", "ctr"}
+	case "aes:padding":
+		return []string{"pkcs7", "none"}
+	case "aes:tag-len":
+		return []string{"16", "15", "14", "13", "12"}
 	case "sign:alg":
 		return []string{"ed25519", "rsa-pss", "ecdsa"}
 	default:

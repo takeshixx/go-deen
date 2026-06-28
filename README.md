@@ -29,7 +29,7 @@ Recent utility plugins add structured binary and security workflows:
 
 - `msgpack`, `cbor`, `protobuf`, `asn1`, `dns`, `magic` and `qr` inspect or decode common binary payloads.
 - `yaml`, `toml`, `csv`/`tsv`, `regex`, `uuid` and `entropy` cover day-to-day data cleanup and inspection.
-- `aes`, `chacha20poly1305` and `sign` support encryption, decryption, signing and verification. Binary keys, nonces and signatures can be supplied as hex or Base64.
+- `aes`, `chacha20poly1305` and `sign` support encryption, decryption, signing and verification. Binary keys, nonces and signatures can be supplied as hex or Base64; AES-GCM supports configurable tag lengths and an explicit unsafe verification bypass for research, and AES-CBC supports PKCS#7 or unpadded block data.
 
 ## Install
 

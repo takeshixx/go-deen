@@ -13,6 +13,7 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
 	"flag"
@@ -33,6 +34,32 @@ func bytesFlag(flags *flag.FlagSet, name string) ([]byte, error) {
 		return nil, fmt.Errorf("missing -%s", name)
 	}
 	return decodeHexOrBase64(value)
+}
+
+func bytesAliasFlag(flags *flag.FlagSet, primary, alias string) ([]byte, error) {
+	primaryValue := strings.TrimSpace(helpers.StringFlag(flags, primary))
+	aliasValue := strings.TrimSpace(helpers.StringFlag(flags, alias))
+	if primaryValue == "" && aliasValue == "" {
+		return nil, fmt.Errorf("missing -%s or -%s", primary, alias)
+	}
+	if primaryValue == "" {
+		return decodeHexOrBase64(aliasValue)
+	}
+	primaryBytes, err := decodeHexOrBase64(primaryValue)
+	if err != nil {
+		return nil, fmt.Errorf("invalid -%s: %w", primary, err)
+	}
+	if aliasValue == "" {
+		return primaryBytes, nil
+	}
+	aliasBytes, err := decodeHexOrBase64(aliasValue)
+	if err != nil {
+		return nil, fmt.Errorf("invalid -%s: %w", alias, err)
+	}
+	if !bytes.Equal(primaryBytes, aliasBytes) {
+		return nil, fmt.Errorf("conflicting -%s and -%s values", primary, alias)
+	}
+	return primaryBytes, nil
 }
 
 func decodeHexOrBase64(value string) ([]byte, error) {
@@ -88,6 +115,9 @@ func NewPluginAES() *types.DeenPlugin {
 		flags.String("nonce", "", "hex/base64 GCM nonce")
 		flags.String("iv", "", "hex/base64 CBC/CTR IV")
 		flags.String("aad", "", "additional authenticated data for GCM")
+		flags.Int("tag-len", 16, "GCM authentication tag length in bytes: 12-16")
+		flags.Bool("skip-aead-verify", false, "decrypt GCM ciphertext without verifying the authentication tag")
+		flags.String("padding", "pkcs7", "CBC padding: pkcs7 or none")
 	}
 	p.Process = aesTransform(false)
 	p.Unprocess = aesTransform(true)
@@ -110,11 +140,15 @@ func aesTransform(decrypt bool) types.TransformFunc {
 		}
 		switch strings.ToLower(helpers.StringFlag(flags, "mode")) {
 		case "", "gcm":
-			nonce, err := bytesFlag(flags, "nonce")
+			nonce, err := bytesAliasFlag(flags, "nonce", "iv")
 			if err != nil {
 				return err
 			}
-			aead, err := cipher.NewGCM(block)
+			tagLen := helpers.IntFlag(flags, "tag-len", 16)
+			if tagLen < 12 || tagLen > 16 {
+				return fmt.Errorf("GCM tag length must be between 12 and 16 bytes")
+			}
+			aead, err := cipher.NewGCMWithTagSize(block, tagLen)
 			if err != nil {
 				return err
 			}
@@ -122,7 +156,18 @@ func aesTransform(decrypt bool) types.TransformFunc {
 				return fmt.Errorf("nonce must be %d bytes", aead.NonceSize())
 			}
 			if decrypt {
-				input, err = aead.Open(nil, nonce, input, []byte(helpers.StringFlag(flags, "aad")))
+				ciphertext := input
+				input, err = aead.Open(nil, nonce, ciphertext, []byte(helpers.StringFlag(flags, "aad")))
+				if err != nil && helpers.IsBoolFlag(flags, "skip-aead-verify") {
+					plain, unsafeErr := unsafeGCMPlaintext(block, nonce, ciphertext, tagLen)
+					if unsafeErr != nil {
+						return unsafeErr
+					}
+					if _, writeErr := w.Write(plain); writeErr != nil {
+						return writeErr
+					}
+					return fmt.Errorf("%w; displayed unauthenticated plaintext because -skip-aead-verify is set", err)
+				}
 			} else {
 				input = aead.Seal(nil, nonce, input, []byte(helpers.StringFlag(flags, "aad")))
 			}
@@ -132,12 +177,21 @@ func aesTransform(decrypt bool) types.TransformFunc {
 			_, err = w.Write(input)
 			return err
 		case "cbc":
-			iv, err := bytesFlag(flags, "iv")
+			iv, err := bytesAliasFlag(flags, "iv", "nonce")
 			if err != nil {
 				return err
 			}
 			if len(iv) != block.BlockSize() {
 				return fmt.Errorf("iv must be %d bytes", block.BlockSize())
+			}
+			padding := strings.ToLower(strings.TrimSpace(helpers.StringFlag(flags, "padding")))
+			switch padding {
+			case "", "pkcs", "pkcs5", "pkcs7":
+				padding = "pkcs7"
+			case "none", "no":
+				padding = "none"
+			default:
+				return fmt.Errorf("unsupported CBC padding")
 			}
 			if decrypt {
 				if len(input)%block.BlockSize() != 0 {
@@ -145,19 +199,26 @@ func aesTransform(decrypt bool) types.TransformFunc {
 				}
 				out := append([]byte(nil), input...)
 				cipher.NewCBCDecrypter(block, iv).CryptBlocks(out, out)
-				out, err = pkcs7Unpad(out, block.BlockSize())
-				if err != nil {
-					return err
+				if padding == "pkcs7" {
+					out, err = pkcs7Unpad(out, block.BlockSize())
+					if err != nil {
+						return err
+					}
 				}
 				_, err = w.Write(out)
 				return err
 			}
-			out := pkcs7Pad(input, block.BlockSize())
+			out := append([]byte(nil), input...)
+			if padding == "pkcs7" {
+				out = pkcs7Pad(input, block.BlockSize())
+			} else if len(out)%block.BlockSize() != 0 {
+				return fmt.Errorf("plaintext is not a multiple of block size")
+			}
 			cipher.NewCBCEncrypter(block, iv).CryptBlocks(out, out)
 			_, err = w.Write(out)
 			return err
 		case "ctr":
-			iv, err := bytesFlag(flags, "iv")
+			iv, err := bytesAliasFlag(flags, "iv", "nonce")
 			if err != nil {
 				return err
 			}
@@ -172,6 +233,19 @@ func aesTransform(decrypt bool) types.TransformFunc {
 			return fmt.Errorf("unsupported AES mode")
 		}
 	}
+}
+
+func unsafeGCMPlaintext(block cipher.Block, nonce, ciphertext []byte, tagLen int) ([]byte, error) {
+	if len(ciphertext) < tagLen {
+		return nil, fmt.Errorf("ciphertext is shorter than GCM tag length")
+	}
+	ciphertext = ciphertext[:len(ciphertext)-tagLen]
+	counter := make([]byte, block.BlockSize())
+	copy(counter, nonce)
+	binary.BigEndian.PutUint32(counter[len(counter)-4:], 2)
+	plain := make([]byte, len(ciphertext))
+	cipher.NewCTR(block, counter).XORKeyStream(plain, ciphertext)
+	return plain, nil
 }
 
 // NewPluginChaCha20Poly1305 creates a ChaCha20-Poly1305 AEAD plugin.

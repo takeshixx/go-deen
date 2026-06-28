@@ -13,6 +13,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
 	"unicode"
@@ -276,7 +277,7 @@ func looksLikeMessagePack(data []byte) bool {
 	if err := msgpack.Unmarshal(data, &v); err != nil {
 		return false
 	}
-	return v != nil
+	return structuredBinaryValue(v)
 }
 
 func looksLikeCBOR(data []byte) bool {
@@ -284,7 +285,25 @@ func looksLikeCBOR(data []byte) bool {
 		return false
 	}
 	var v interface{}
-	return cbor.Unmarshal(data, &v) == nil && v != nil
+	return cbor.Unmarshal(data, &v) == nil && structuredBinaryValue(v)
+}
+
+func structuredBinaryValue(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Map:
+		return rv.Len() > 0
+	case reflect.Slice, reflect.Array:
+		if rv.Type().Elem().Kind() == reflect.Uint8 {
+			return false
+		}
+		return rv.Len() > 0
+	default:
+		return false
+	}
 }
 
 func magicType(data []byte) string {

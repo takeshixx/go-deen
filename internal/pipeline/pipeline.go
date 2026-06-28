@@ -178,10 +178,7 @@ func (p *Pipeline) ImportJSON(data []byte) error {
 			}
 			pluginName = plugin.Name
 		}
-		opts := make(map[string]string, len(step.Options))
-		for k, v := range step.Options {
-			opts[k] = v
-		}
+		opts := normalizeStepOptions(pluginName, step.Options)
 		unprocess := step.Unprocess && plugins.CanDecode(pluginName)
 		s.Steps = append(s.Steps, stepSnapshot{
 			Plugin:      pluginName,
@@ -229,13 +226,30 @@ func (p *Pipeline) AddStepWithOptions(plugin string, unprocess bool, options map
 	if unprocess && !plugins.CanDecode(plugin) {
 		unprocess = false
 	}
+	opts := normalizeStepOptions(plugin, options)
+	p.steps = append(p.steps, &Step{Plugin: plugin, Unprocess: unprocess, Options: opts})
+	p.Compute()
+	return len(p.steps) - 1
+}
+
+func normalizeStepOptions(plugin string, options map[string]string) map[string]string {
 	opts := make(map[string]string, len(options))
 	for k, v := range options {
 		opts[k] = v
 	}
-	p.steps = append(p.steps, &Step{Plugin: plugin, Unprocess: unprocess, Options: opts})
-	p.Compute()
-	return len(p.steps) - 1
+	if plugin != "aes" {
+		return opts
+	}
+	nonce, hasNonce := opts["nonce"]
+	iv, hasIV := opts["iv"]
+	switch {
+	case hasNonce && (!hasIV || iv == ""):
+		opts["iv"] = nonce
+		delete(opts, "nonce")
+	case hasNonce && hasIV && nonce == iv:
+		delete(opts, "nonce")
+	}
+	return opts
 }
 
 // RemoveStep removes the step at index i.
@@ -492,7 +506,7 @@ func runStep(s *Step, in []byte) ([]byte, error) {
 
 	var buf bytes.Buffer
 	if err := fn(bytes.NewReader(in), &buf, fs); err != nil {
-		return nil, err
+		return buf.Bytes(), err
 	}
 	return buf.Bytes(), nil
 }

@@ -58,21 +58,6 @@ func StructuredPreview(data []byte) (string, bool) {
 	if kind := magicType(trimmed); kind != "" {
 		return fmt.Sprintf("File type\n\ntype: %s\nmime: %s", kind, http.DetectContentType(trimmed)), true
 	}
-	if looksLikeDNSName(trimmed) {
-		return "DNS wire-format name\n\nUse .dns to decode this name.", true
-	}
-	if looksLikeASN1(trimmed) {
-		return "ASN.1 DER\n\nUse asn1 to inspect the tag/length/value tree.", true
-	}
-	if looksLikeMessagePack(trimmed) {
-		return "MessagePack\n\nUse .msgpack to decode to JSON.", true
-	}
-	if looksLikeCBOR(trimmed) {
-		return "CBOR\n\nUse .cbor to decode to JSON.", true
-	}
-	if looksLikeProtobuf(trimmed) {
-		return "Protocol Buffers\n\nUse protobuf to inspect schema-less fields.", true
-	}
 	return "", false
 }
 

@@ -12,9 +12,23 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"flag"
+	"io"
 	"os"
 	"testing"
 )
+
+func runMiscErrOutput(fn func(*flag.FlagSet), process func(io.Reader, io.Writer, *flag.FlagSet) error, input []byte, args ...string) ([]byte, error) {
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	if fn != nil {
+		fn(fs)
+	}
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	err := process(bytes.NewReader(input), &out, fs)
+	return out.Bytes(), err
+}
 
 func TestAESGCMRoundTrip(t *testing.T) {
 	p := NewPluginAES()
@@ -45,6 +59,96 @@ func TestAESGCMRejectsTamperedCiphertext(t *testing.T) {
 	ciphertext[len(ciphertext)-1] ^= 0xff
 	if err := runMiscErr(p.RegisterFlags, p.Unprocess, ciphertext, args...); err == nil {
 		t.Fatal("expected tampered ciphertext to fail")
+	}
+}
+
+func TestAESGCMSkipAEADVerifyOutputsUnauthenticatedPlaintext(t *testing.T) {
+	p := NewPluginAES()
+	encryptArgs := []string{"-mode", "gcm", "-key", "000102030405060708090a0b0c0d0e0f", "-nonce", "000102030405060708090a0b", "-aad", "expected"}
+	ciphertext := runMisc(t, p.RegisterFlags, p.Process, []byte("secret"), encryptArgs...)
+	decryptArgs := []string{"-mode", "gcm", "-key", "000102030405060708090a0b0c0d0e0f", "-nonce", "000102030405060708090a0b", "-aad", "wrong", "-skip-aead-verify"}
+	plain, err := runMiscErrOutput(p.RegisterFlags, p.Unprocess, ciphertext, decryptArgs...)
+	if err == nil {
+		t.Fatal("expected AES-GCM skip verify to still report authentication failure")
+	}
+	if !bytes.Equal(plain, []byte("secret")) {
+		t.Fatalf("AES-GCM skip verify plaintext = %q", string(plain))
+	}
+}
+
+func TestAESGCMTagLengthRoundTrip(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "gcm", "-key", "000102030405060708090a0b0c0d0e0f", "-nonce", "000102030405060708090a0b", "-tag-len", "12"}
+	ciphertext := runMisc(t, p.RegisterFlags, p.Process, []byte("secret"), args...)
+	if len(ciphertext) != len("secret")+12 {
+		t.Fatalf("AES-GCM ciphertext length = %d", len(ciphertext))
+	}
+	plain := runMisc(t, p.RegisterFlags, p.Unprocess, ciphertext, args...)
+	if string(plain) != "secret" {
+		t.Fatalf("AES-GCM shortened tag roundtrip = %q", string(plain))
+	}
+}
+
+func TestAESGCMAcceptsIVAlias(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "gcm", "-key", "000102030405060708090a0b0c0d0e0f", "-iv", "000102030405060708090a0b"}
+	ciphertext := runMisc(t, p.RegisterFlags, p.Process, []byte("secret"), args...)
+	plain := runMisc(t, p.RegisterFlags, p.Unprocess, ciphertext, args...)
+	if string(plain) != "secret" {
+		t.Fatalf("AES-GCM IV alias roundtrip = %q", string(plain))
+	}
+}
+
+func TestAESGCMRejectsInvalidTagLength(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "gcm", "-key", "000102030405060708090a0b0c0d0e0f", "-nonce", "000102030405060708090a0b", "-tag-len", "8"}
+	if err := runMiscErr(p.RegisterFlags, p.Process, []byte("secret"), args...); err == nil {
+		t.Fatal("expected invalid AES-GCM tag length to fail")
+	}
+}
+
+func TestAESCBCPKCSPaddingRoundTrip(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "cbc", "-key", "000102030405060708090a0b0c0d0e0f", "-iv", "101112131415161718191a1b1c1d1e1f", "-padding", "pkcs"}
+	ciphertext := runMisc(t, p.RegisterFlags, p.Process, []byte("secret"), args...)
+	if len(ciphertext) != 16 {
+		t.Fatalf("AES-CBC PKCS ciphertext length = %d", len(ciphertext))
+	}
+	plain := runMisc(t, p.RegisterFlags, p.Unprocess, ciphertext, args...)
+	if string(plain) != "secret" {
+		t.Fatalf("AES-CBC PKCS roundtrip = %q", string(plain))
+	}
+}
+
+func TestAESCBCNonceAlias(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "cbc", "-key", "000102030405060708090a0b0c0d0e0f", "-nonce", "101112131415161718191a1b1c1d1e1f"}
+	ciphertext := runMisc(t, p.RegisterFlags, p.Process, []byte("secret"), args...)
+	plain := runMisc(t, p.RegisterFlags, p.Unprocess, ciphertext, args...)
+	if string(plain) != "secret" {
+		t.Fatalf("AES-CBC nonce alias roundtrip = %q", string(plain))
+	}
+}
+
+func TestAESRejectsConflictingNonceAndIV(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "gcm", "-key", "000102030405060708090a0b0c0d0e0f", "-nonce", "000102030405060708090a0b", "-iv", "101112131415161718191a1b"}
+	if err := runMiscErr(p.RegisterFlags, p.Process, []byte("secret"), args...); err == nil {
+		t.Fatal("expected conflicting AES nonce and IV to fail")
+	}
+}
+
+func TestAESCBCNoPaddingRequiresFullBlocks(t *testing.T) {
+	p := NewPluginAES()
+	args := []string{"-mode", "cbc", "-key", "000102030405060708090a0b0c0d0e0f", "-iv", "101112131415161718191a1b1c1d1e1f", "-padding", "none"}
+	if err := runMiscErr(p.RegisterFlags, p.Process, []byte("secret"), args...); err == nil {
+		t.Fatal("expected AES-CBC without padding to require full blocks")
+	}
+	plain := []byte("sixteen byte msg")
+	ciphertext := runMisc(t, p.RegisterFlags, p.Process, plain, args...)
+	out := runMisc(t, p.RegisterFlags, p.Unprocess, ciphertext, args...)
+	if !bytes.Equal(out, plain) {
+		t.Fatalf("AES-CBC without padding roundtrip = %q", string(out))
 	}
 }
 

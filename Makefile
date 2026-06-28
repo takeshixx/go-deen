@@ -61,6 +61,14 @@ else
 	go build $(gomodflags) $(guildflags) --tags gui -o ./bin/deen ./cmd/deen
 endif
 
+.PHONY: full
+full: web-assets
+ifeq ($(OS),Windows_NT)
+	go build $(gomodflags) $(ldflagsstripped) --tags "gui webembed" -o ./bin/deen.exe ./cmd/deen
+else
+	go build $(gomodflags) $(guildflags) --tags "gui webembed" -o ./bin/deen ./cmd/deen
+endif
+
 .PHONY: fyne-cross
 fyne-cross:
 	fyne-cross linux $(ldflags) --tags gui --arch=* -output ./bin/linux-fyne/deen ./cmd/deen

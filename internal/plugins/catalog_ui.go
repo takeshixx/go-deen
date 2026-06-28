@@ -587,7 +587,7 @@ var catalogCopyByName = map[string]catalogCopy{
 	},
 	"aes": {
 		"Encrypts and decrypts with AES-GCM, AES-CBC, or AES-CTR.",
-		"Use it for lab payloads, fixtures, and protocol samples where you have the key and nonce or IV.",
+		"Use it for lab payloads, fixtures, and protocol samples where you have the key and nonce or IV. GCM supports configurable tag lengths; CBC supports PKCS#7 and unpadded block data.",
 		referenceSets["aes"],
 		[]Example{{"AES-GCM", "secret", "ciphertext plus authentication tag"}},
 	},

@@ -41,6 +41,7 @@ func ParseFlags() {
 	versionPtr = flag.Bool("version", false, "print version")
 	filePtr = flag.String("file", "", "read input from file")
 	newlinePtr = flag.Bool("N", false, "append a trailing newline to the output")
+	flag.Usage = printCLIUsage
 	flag.Parse()
 
 	switch {
@@ -60,11 +61,48 @@ func ParseFlags() {
 	}
 }
 
+func printCLIUsage() {
+	out := flag.CommandLine.Output()
+	fmt.Fprintln(out, "deen - encode, decode, hash, compress and inspect data")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Usage:")
+	fmt.Fprintln(out, "  deen [global flags] <plugin> [plugin flags] [input]")
+	fmt.Fprintln(out, "  deen [global flags] .<plugin> [plugin flags] [input]")
+	fmt.Fprintln(out, "  deen chain [chain flags] <chain.json> [input]")
+	fmt.Fprintln(out, "  deen serve [serve flags]")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Run a plugin by name to transform data. Prefix a reversible plugin with '.'")
+	fmt.Fprintln(out, "to run its decode/unprocess direction, for example '.base64' or '.gzip'.")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Input:")
+	fmt.Fprintln(out, "  Input is read from remaining arguments, stdin, or -file.")
+	fmt.Fprintln(out, "  Output is raw by default, without a trailing newline; pass -N for terminals.")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Common commands:")
+	fmt.Fprintln(out, "  deen -l                         list plugins by category")
+	fmt.Fprintln(out, "  deen -lj                        list plugins as JSON")
+	fmt.Fprintln(out, "  deen base64 test                encode text as Base64")
+	fmt.Fprintln(out, "  deen .base64 dGVzdA==           decode Base64")
+	fmt.Fprintln(out, "  deen chain saved.json           run a saved Web/GUI chain")
+	fmt.Fprintln(out, "  printf secret | deen sha256     hash stdin")
+	fmt.Fprintln(out, "  deen base64 -h                  show plugin-specific flags")
+	fmt.Fprintln(out, "  deen serve --port 9090          serve the WebAssembly UI")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Global flags:")
+	flag.PrintDefaults()
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Use 'deen <plugin> -h' for plugin flags, 'deen chain -h' for saved chains,")
+	fmt.Fprintln(out, "or 'deen serve -h' for web server flags.")
+}
+
 // RunCLI dispatches the requested plugin and returns a process exit code.
 func RunCLI() int {
 	cmd := flag.Arg(0)
 	if cmd == "serve" {
 		return runServe()
+	}
+	if cmd == "chain" {
+		return runChain()
 	}
 	plugin, unprocess, ok := plugins.Resolve(cmd)
 	if !ok {
@@ -103,6 +141,10 @@ func runPlugin(plugin *types.DeenPlugin, unprocess bool, cmd string) int {
 
 	out := bufio.NewWriter(os.Stdout)
 	if err := transform(reader, out, fs); err != nil {
+		if flushErr := out.Flush(); flushErr != nil {
+			fmt.Fprintln(os.Stderr, "deen:", flushErr)
+			return 1
+		}
 		fmt.Fprintf(os.Stderr, "deen: %s: %s\n", plugin.Name, err)
 		return 1
 	}

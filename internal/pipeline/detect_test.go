@@ -56,6 +56,23 @@ func TestSuggestionsDetectBinaryStructuredFormats(t *testing.T) {
 	}
 }
 
+func TestSuggestionsIgnoreBinaryStructuredScalars(t *testing.T) {
+	msg, err := msgpack.Marshal([]byte{0x01, 0x02, 0x03})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasSuggestion(Suggestions(msg), "msgpack", true) {
+		t.Fatalf("unexpected msgpack suggestion for scalar binary: %#v", Suggestions(msg))
+	}
+	cb, err := cbor.Marshal([]byte{0x01, 0x02, 0x03})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasSuggestion(Suggestions(cb), "cbor", true) {
+		t.Fatalf("unexpected cbor suggestion for scalar binary: %#v", Suggestions(cb))
+	}
+}
+
 func TestSuggestionsDetectTextEncodings(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -118,12 +135,46 @@ func TestStructuredPreview(t *testing.T) {
 		{"csv", []byte("name,ok\ndeen,true\n"), "CSV"},
 		{"jwt", []byte("eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjMifQ."), "JWT"},
 		{"uuid", []byte("550e8400-e29b-41d4-a716-446655440000"), "UUID"},
-		{"asn1", []byte{0x30, 0x03, 0x02, 0x01, 0x2a}, "ASN.1 DER"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, ok := StructuredPreview(tt.in)
 			if !ok || !strings.Contains(got, tt.want) {
 				t.Fatalf("preview = %q/%v, want %q", got, ok, tt.want)
+			}
+		})
+	}
+}
+
+func TestStructuredPreviewSkipsDecoderHints(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []byte
+	}{
+		{"asn1", []byte{0x30, 0x03, 0x02, 0x01, 0x2a}},
+		{"dns", []byte{3, 'w', 'w', 'w', 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0}},
+		{"protobuf", []byte{0x08, 0x96, 0x01}},
+	}
+	msg, err := msgpack.Marshal(map[string]any{"ok": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests = append(tests, struct {
+		name string
+		in   []byte
+	}{"msgpack", msg})
+	cb, err := cbor.Marshal(map[string]any{"ok": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests = append(tests, struct {
+		name string
+		in   []byte
+	}{"cbor", cb})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, ok := StructuredPreview(tt.in); ok {
+				t.Fatalf("StructuredPreview() = %q/%v, want no decoder hint preview", got, ok)
 			}
 		})
 	}

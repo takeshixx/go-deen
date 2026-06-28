@@ -247,6 +247,52 @@ func TestImportNormalizesOneWayDecodeSteps(t *testing.T) {
 	}
 }
 
+func TestImportNormalizesAESNonceOption(t *testing.T) {
+	p := New()
+	err := p.ImportJSON([]byte(`{"version":1,"steps":[{"plugin":"aes","options":{"mode":"gcm","nonce":"000102030405060708090a0b"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := p.Steps()[0].Options
+	if opts["iv"] != "000102030405060708090a0b" {
+		t.Fatalf("imported AES iv option = %q", opts["iv"])
+	}
+	if _, ok := opts["nonce"]; ok {
+		t.Fatal("imported AES nonce option should be folded into iv")
+	}
+}
+
+func TestPipelineKeepsUnsafeAESGCMPlaintextOnAuthError(t *testing.T) {
+	p := New()
+	p.SetSource([]byte("secret"))
+	i := p.AddStepWithOptions("aes", false, map[string]string{
+		"mode": "gcm",
+		"key":  "000102030405060708090a0b0c0d0e0f",
+		"iv":   "000102030405060708090a0b",
+		"aad":  "expected",
+	})
+	if p.Err(i) != nil {
+		t.Fatalf("AES-GCM encrypt step failed: %v", p.Err(i))
+	}
+	ciphertext := append([]byte(nil), p.Output(i)...)
+
+	p.Clear()
+	p.SetSource(ciphertext)
+	i = p.AddStepWithOptions("aes", true, map[string]string{
+		"mode":             "gcm",
+		"key":              "000102030405060708090a0b0c0d0e0f",
+		"iv":               "000102030405060708090a0b",
+		"aad":              "wrong",
+		"skip-aead-verify": "true",
+	})
+	if p.Err(i) == nil {
+		t.Fatal("expected AES-GCM skip verify step to keep authentication error")
+	}
+	if got := string(p.Output(i)); got != "secret" {
+		t.Fatalf("AES-GCM skip verify pipeline output = %q", got)
+	}
+}
+
 func TestPluginOptionsMetadata(t *testing.T) {
 	find := func(plugin, name string) Option {
 		t.Helper()
@@ -315,6 +361,17 @@ func TestPluginOptionsMetadata(t *testing.T) {
 	}
 	if got := find("aes", "aad").Label; got != "AAD" {
 		t.Fatalf("aes aad label = %q", got)
+	}
+	if got := find("aes", "iv").Label; got != "Nonce / IV" {
+		t.Fatalf("aes iv label = %q", got)
+	}
+	if got := find("aes", "skip-aead-verify").Label; got != "Skip AEAD verify" {
+		t.Fatalf("aes skip-aead-verify label = %q", got)
+	}
+	for _, opt := range PluginOptions("aes") {
+		if opt.Name == "nonce" {
+			t.Fatal("aes nonce should be hidden from merged UI options")
+		}
 	}
 }
 
