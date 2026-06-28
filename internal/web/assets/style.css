@@ -231,6 +231,96 @@ button.primary {
 	border-bottom-color: var(--accent);
 }
 
+.menu-bar {
+	display: flex;
+	align-items: center;
+	background: color-mix(in srgb, var(--panel) 88%, var(--bg) 12%);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	gap: 0.15rem;
+	margin-bottom: 0.85rem;
+	min-width: 0;
+	padding: 0.35rem;
+}
+
+.menu {
+	position: relative;
+}
+
+.menu-trigger {
+	align-items: center;
+	background: transparent;
+	border: 0;
+	border-radius: 5px;
+	color: var(--fg);
+	display: inline-flex;
+	gap: 0.25rem;
+	min-height: 2rem;
+	padding: 0.35rem 0.55rem;
+}
+
+.menu-trigger:hover,
+.menu:focus-within .menu-trigger,
+.menu:hover .menu-trigger {
+	background: var(--panel-strong);
+}
+
+.menu-trigger .button-icon {
+	width: 0.85rem;
+	height: 0.85rem;
+	color: var(--muted);
+}
+
+.menu-dropdown {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	box-shadow: 0 12px 32px rgb(0 0 0 / 0.32);
+	display: none;
+	left: 0;
+	min-width: 13rem;
+	padding: 0.35rem;
+	position: absolute;
+	top: calc(100% + 0.25rem);
+	z-index: 30;
+}
+
+.menu:hover .menu-dropdown,
+.menu:focus-within .menu-dropdown {
+	display: block;
+}
+
+.menu-file-item {
+	display: contents;
+}
+
+.menu-item {
+	align-items: center;
+	background: transparent;
+	border: 0;
+	border-radius: 5px;
+	color: var(--fg);
+	display: flex;
+	gap: 0.5rem;
+	justify-content: flex-start;
+	min-height: 2rem;
+	padding: 0.4rem 0.55rem;
+	text-align: left;
+	width: 100%;
+}
+
+.menu-item:hover,
+.menu-item:focus,
+.menu-item.active {
+	background: color-mix(in srgb, var(--accent) 16%, transparent);
+	color: var(--fg);
+}
+
+.menu-item .button-icon {
+	color: var(--accent);
+	flex: 0 0 auto;
+}
+
 a {
 	color: var(--accent);
 }
@@ -605,6 +695,19 @@ a {
 
 .viewer-panel.hidden {
 	display: none;
+}
+
+.full-view-controls {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+	margin-top: 0.45rem;
+}
+
+.full-view-warning {
+	color: var(--warning);
+	font-size: 0.85rem;
 }
 
 textarea.io {
@@ -1065,6 +1168,19 @@ a {
 	.tabs {
 		width: 100%;
 		overflow-x: auto;
+	}
+
+	.menu-bar {
+		width: 100%;
+		overflow-x: auto;
+	}
+
+	.menu-dropdown {
+		position: fixed;
+		left: 1rem;
+		right: 1rem;
+		top: auto;
+		width: auto;
 	}
 
 	.tab-content {

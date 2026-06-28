@@ -36,21 +36,26 @@ type DeenGUI struct {
 	pipe        *pipeline.Pipeline
 	pluginNames []string
 
-	sourceEntry   *widget.Entry
-	sourceHex     *widget.Entry
-	sourceMeta    *widget.Label
-	sourceName    string
-	stepsBox      *fyne.Container // holds the source card, step cards and add-slot
-	cards         []*stepCard     // parallel to pipe.Steps()
-	history       *fyne.Container // horizontal transformer-chain overview
-	chainView     fyne.CanvasObject
-	tabButtons    []*navTab
-	tabContent    *fyne.Container
-	workStatus    *widget.Label
-	activeTab     int
-	actionsOpen   bool
-	stepsExpanded bool
-	working       bool
+	sourceEntry        *widget.Entry
+	sourceHex          *widget.Entry
+	sourceStrings      *widget.Entry
+	sourceMeta         *widget.Label
+	sourceFullControls *fyne.Container
+	sourceName         string
+	sourceFullRaw      bool
+	sourceFullHex      bool
+	sourceFullStrings  bool
+	stepsBox           *fyne.Container // holds the source card, step cards and add-slot
+	cards              []*stepCard     // parallel to pipe.Steps()
+	history            *fyne.Container // horizontal transformer-chain overview
+	chainView          fyne.CanvasObject
+	tabButtons         []*navTab
+	tabContent         *fyne.Container
+	workStatus         *widget.Label
+	activeTab          int
+	actionsOpen        bool
+	stepsExpanded      bool
+	working            bool
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
 	updating bool
@@ -114,6 +119,43 @@ func (dg *DeenGUI) tabHeader() fyne.CanvasObject {
 		nav = append(nav, tab)
 	}
 	return container.NewPadded(container.NewHBox(nav...))
+}
+
+func (dg *DeenGUI) homeMenuBar() fyne.CanvasObject {
+	menuBar := container.NewHBox(
+		dg.menuButton("File", theme.FolderIcon(), fyne.NewMenu("File",
+			fyne.NewMenuItemWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile),
+			fyne.NewMenuItemWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult),
+		)),
+		dg.menuButton("Navigate", theme.MenuIcon(), fyne.NewMenu("Navigate",
+			fyne.NewMenuItemWithIcon("Home", theme.HomeIcon(), func() { dg.selectTab(0) }),
+			fyne.NewMenuItemWithIcon("Examples", theme.HistoryIcon(), func() { dg.selectTab(1) }),
+			fyne.NewMenuItemWithIcon("Plugins", theme.SearchIcon(), func() { dg.selectTab(2) }),
+			fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
+		)),
+		dg.menuButton("Chain", theme.FileTextIcon(), fyne.NewMenu("Chain",
+			fyne.NewMenuItemWithIcon("Open chain", theme.FileTextIcon(), dg.openChain),
+			fyne.NewMenuItemWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain),
+			fyne.NewMenuItemWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand),
+		)),
+		dg.menuButton("Workflow", theme.HistoryIcon(), fyne.NewMenu("Workflow",
+			fyne.NewMenuItemWithIcon("Presets", theme.HistoryIcon(), dg.showPresets),
+			fyne.NewMenuItemWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare),
+			fyne.NewMenuItemWithIcon("Undo", theme.NavigateBackIcon(), dg.undo),
+			fyne.NewMenuItemWithIcon("Redo", theme.NavigateNextIcon(), dg.redo),
+			fyne.NewMenuItemWithIcon("Clear", theme.ContentClearIcon(), dg.clear),
+		)),
+	)
+	return widget.NewCard("", "", container.NewPadded(menuBar))
+}
+
+func (dg *DeenGUI) menuButton(label string, icon fyne.Resource, menu *fyne.Menu) fyne.CanvasObject {
+	btn := widget.NewButtonWithIcon(label, icon, nil)
+	btn.Importance = widget.LowImportance
+	btn.OnTapped = func() {
+		widget.ShowPopUpMenuAtRelativePosition(menu, dg.window.Canvas(), fyne.NewPos(0, btn.Size().Height), btn)
+	}
+	return btn
 }
 
 func (dg *DeenGUI) selectTab(index int) {
@@ -281,23 +323,40 @@ func (dg *DeenGUI) newActionBar() fyne.CanvasObject {
 // mainMenu builds the window menu (theme switching).
 func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 	setTheme := func(t fyne.Theme) func() { return func() { dg.app.Settings().SetTheme(t) } }
+	fileMenu := fyne.NewMenu("File",
+		fyne.NewMenuItemWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile),
+		fyne.NewMenuItemWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult),
+	)
+	navigateMenu := fyne.NewMenu("Navigate",
+		fyne.NewMenuItemWithIcon("Home", theme.HomeIcon(), func() { dg.selectTab(0) }),
+		fyne.NewMenuItemWithIcon("Examples", theme.HistoryIcon(), func() { dg.selectTab(1) }),
+		fyne.NewMenuItemWithIcon("Plugins", theme.SearchIcon(), func() { dg.selectTab(2) }),
+		fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
+	)
 	chainMenu := fyne.NewMenu("Chain",
-		fyne.NewMenuItem("Open chain", dg.openChain),
-		fyne.NewMenuItem("Save chain", dg.saveChain),
-		fyne.NewMenuItem("Presets", dg.showPresets),
+		fyne.NewMenuItemWithIcon("Open chain", theme.FileTextIcon(), dg.openChain),
+		fyne.NewMenuItemWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain),
+		fyne.NewMenuItemWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand),
+	)
+	workflowMenu := fyne.NewMenu("Workflow",
+		fyne.NewMenuItemWithIcon("Presets", theme.HistoryIcon(), dg.showPresets),
+		fyne.NewMenuItemWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare),
+		fyne.NewMenuItemWithIcon("Undo", theme.NavigateBackIcon(), dg.undo),
+		fyne.NewMenuItemWithIcon("Redo", theme.NavigateNextIcon(), dg.redo),
+		fyne.NewMenuItemWithIcon("Clear", theme.ContentClearIcon(), dg.clear),
 	)
 	themeMenu := fyne.NewMenu("Theme",
-		fyne.NewMenuItem("Dark", setTheme(newAdversecTheme(theme.VariantDark))),
-		fyne.NewMenuItem("Light", setTheme(newAdversecTheme(theme.VariantLight))),
-		fyne.NewMenuItem("System", setTheme(theme.DefaultTheme())),
+		fyne.NewMenuItemWithIcon("Dark", theme.VisibilityIcon(), setTheme(newAdversecTheme(theme.VariantDark))),
+		fyne.NewMenuItemWithIcon("Light", theme.VisibilityOffIcon(), setTheme(newAdversecTheme(theme.VariantLight))),
+		fyne.NewMenuItemWithIcon("System", theme.SettingsIcon(), setTheme(theme.DefaultTheme())),
 	)
 	help := fyne.NewMenu("Help",
-		fyne.NewMenuItem("How to use", dg.showHelp),
-		fyne.NewMenuItem("Examples", func() { dg.selectTab(1) }),
-		fyne.NewMenuItem("Plugin catalog", func() { dg.selectTab(2) }),
-		fyne.NewMenuItem("About", func() { dg.selectTab(3) }),
+		fyne.NewMenuItemWithIcon("How to use", theme.HelpIcon(), dg.showHelp),
+		fyne.NewMenuItemWithIcon("Examples", theme.HistoryIcon(), func() { dg.selectTab(1) }),
+		fyne.NewMenuItemWithIcon("Plugin catalog", theme.SearchIcon(), func() { dg.selectTab(2) }),
+		fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
 	)
-	return fyne.NewMainMenu(chainMenu, themeMenu, help)
+	return fyne.NewMainMenu(fileMenu, navigateMenu, chainMenu, workflowMenu, themeMenu, help)
 }
 
 func (dg *DeenGUI) homeTab() fyne.CanvasObject {
@@ -567,7 +626,7 @@ func (dg *DeenGUI) rebuild() {
 	dg.stepsBox.RemoveAll()
 	dg.cards = dg.cards[:0]
 
-	dg.stepsBox.Add(dg.newActionBar())
+	dg.stepsBox.Add(dg.homeMenuBar())
 	dg.stepsBox.Add(dg.newSourceCard())
 	dg.stepsBox.Add(dg.newChainOverview())
 	for i := range dg.pipe.Steps() {
@@ -666,10 +725,34 @@ func (dg *DeenGUI) refreshFrom(from int) {
 	if dg.sourceMeta != nil {
 		dg.sourceMeta.SetText(dg.sourceMetadataSummary())
 	}
+	rawNeedsFull, hexNeedsFull, stringsNeedsFull := dg.sourceNeedsFull()
+	if !rawNeedsFull {
+		dg.sourceFullRaw = false
+	}
+	if !hexNeedsFull {
+		dg.sourceFullHex = false
+	}
+	if !stringsNeedsFull {
+		dg.sourceFullStrings = false
+	}
+	if dg.sourceEntry != nil {
+		text, textCapped := guiTextDisplayMode(dg.pipe.Source(), dg.sourceFullRaw)
+		dg.setText(dg.sourceEntry, text)
+		if textCapped {
+			dg.sourceEntry.Disable()
+		} else {
+			dg.sourceEntry.Enable()
+		}
+	}
 	if dg.sourceHex != nil {
-		hexText, _ := guiHexDisplay(dg.pipe.Source())
+		hexText, _ := guiHexDisplayMode(dg.pipe.Source(), dg.sourceFullHex)
 		dg.setText(dg.sourceHex, hexText)
 	}
+	if dg.sourceStrings != nil {
+		stringsText, _ := guiStringsDisplayMode(dg.pipe.Source(), dg.sourceFullStrings)
+		dg.setText(dg.sourceStrings, stringsText)
+	}
+	dg.refreshSourceFullControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
 	for i := from; i < len(dg.cards); i++ {
 		dg.cards[i].refresh()
 	}
@@ -691,6 +774,7 @@ func (dg *DeenGUI) openFile() {
 		}
 		name := rc.URI().Name()
 		dg.sourceName = name
+		dg.clearSourceFullViews()
 		dg.runPipelineWork("Processing file", func() error {
 			defer rc.Close()
 			data, err := io.ReadAll(rc)
@@ -743,6 +827,7 @@ func (dg *DeenGUI) openChain() {
 			if err != nil {
 				return err
 			}
+			dg.clearSourceFullViews()
 			return dg.pipe.ImportJSON(data)
 		}, dg.rebuild)
 	}, dg.window)

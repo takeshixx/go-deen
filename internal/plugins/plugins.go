@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/takeshixx/deen/pkg/arithmetic"
 	"github.com/takeshixx/deen/pkg/codecs"
 	"github.com/takeshixx/deen/pkg/compressions"
 	"github.com/takeshixx/deen/pkg/formatters"
@@ -99,12 +100,16 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	misc.NewPluginSign,
 	misc.NewPluginCertCloner,
 	misc.NewPluginCertPrinter,
+	arithmetic.NewPluginXOR,
+	arithmetic.NewPluginAdd,
+	arithmetic.NewPluginSub,
+	arithmetic.NewPluginNot,
 }
 
 // PluginCategories is a list of plugin categories that
 // should be available accross all modules. The order
 // determines how plugins are grouped in listings.
-var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "misc"}
+var PluginCategories = []string{"codecs", "compressions", "hashs", "formatters", "misc", "arithmetic"}
 
 // constructorByKey maps every plugin name and alias (with any leading "."
 // stripped) to the constructor of the owning plugin. It is built once at

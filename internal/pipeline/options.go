@@ -155,6 +155,12 @@ func optionLabel(plugin, name string) string {
 		return "Normalization form"
 	case "ascii:mode":
 		return "Non-ASCII handling"
+	case "add:value":
+		return "Add value"
+	case "sub:value":
+		return "Subtract value"
+	case "xor:value":
+		return "XOR value"
 	default:
 		return prettyOptionLabel(name)
 	}
@@ -162,6 +168,8 @@ func optionLabel(plugin, name string) string {
 
 func optionDescription(plugin, name, usage string) string {
 	switch plugin + ":" + name {
+	case "add:value", "sub:value", "xor:value":
+		return "Byte value as decimal, hex such as 0x2a, or a single character."
 	case "aes:aad", "chacha20poly1305:aad":
 		return "Additional authenticated data required for GCM or AEAD verification."
 	case "aes:iv":

@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -116,6 +117,13 @@ func sourceInputHeight(data []byte) float32 {
 }
 
 func guiTextDisplay(data []byte) (string, bool) {
+	return guiTextDisplayMode(data, false)
+}
+
+func guiTextDisplayMode(data []byte, full bool) (string, bool) {
+	if full {
+		return pipeline.TextDisplayFull(data), true
+	}
 	if pipeline.IsLargeData(data) {
 		return pipeline.LargeDataPlaceholder(data) + "\n\nPreview disabled in the desktop GUI for large data.", true
 	}
@@ -123,10 +131,31 @@ func guiTextDisplay(data []byte) (string, bool) {
 }
 
 func guiHexDisplay(data []byte) (string, bool) {
+	return guiHexDisplayMode(data, false)
+}
+
+func guiHexDisplayMode(data []byte, full bool) (string, bool) {
+	if full {
+		return pipeline.HexDisplayFull(data), true
+	}
 	if pipeline.IsLargeData(data) {
 		return pipeline.LargeDataPlaceholder(data) + "\n\nHex preview disabled in the desktop GUI for large data.", true
 	}
 	return pipeline.HexDisplay(data)
+}
+
+func guiStringsDisplay(data []byte) (string, bool) {
+	return guiStringsDisplayMode(data, false)
+}
+
+func guiStringsDisplayMode(data []byte, full bool) (string, bool) {
+	if full {
+		return pipeline.StringsDisplayFull(data), true
+	}
+	if pipeline.IsLargeData(data) {
+		return pipeline.LargeDataPlaceholder(data) + "\n\nStrings preview disabled in the desktop GUI for large data.", true
+	}
+	return pipeline.StringsDisplay(data)
 }
 
 func pluginSelectLabels(category string) (labels []string, labelToName, nameToLabel map[string]string) {
@@ -229,7 +258,18 @@ func (dg *DeenGUI) addCategorySelectors() fyne.CanvasObject {
 func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 	dg.sourceEntry = multilineEntry(sourceInputRows)
 	dg.sourceHex = nil
-	sourceText, sourceCapped := guiTextDisplay(dg.pipe.Source())
+	dg.sourceStrings = nil
+	rawNeedsFull, hexNeedsFull, stringsNeedsFull := dg.sourceNeedsFull()
+	if !rawNeedsFull {
+		dg.sourceFullRaw = false
+	}
+	if !hexNeedsFull {
+		dg.sourceFullHex = false
+	}
+	if !stringsNeedsFull {
+		dg.sourceFullStrings = false
+	}
+	sourceText, sourceCapped := guiTextDisplayMode(dg.pipe.Source(), dg.sourceFullRaw)
 	dg.sourceEntry.SetText(sourceText)
 	if sourceCapped {
 		dg.sourceEntry.Disable()
@@ -246,26 +286,91 @@ func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 			return
 		}
 		dg.sourceName = ""
+		dg.clearSourceFullViews()
 		dg.pipe.SetSourceOwned([]byte(s))
 		dg.refreshFrom(0)
 	}
 	var sourceView fyne.CanvasObject = dg.sourceEntry
 	if pipeline.IsBinaryData(dg.pipe.Source()) {
 		dg.sourceHex = multilineEntry(sourceInputRows)
-		hexText, _ := guiHexDisplay(dg.pipe.Source())
+		hexText, _ := guiHexDisplayMode(dg.pipe.Source(), dg.sourceFullHex)
 		dg.sourceHex.SetText(hexText)
 		dg.sourceHex.Disable()
+		dg.sourceStrings = multilineEntry(sourceInputRows)
+		stringsText, _ := guiStringsDisplayMode(dg.pipe.Source(), dg.sourceFullStrings)
+		dg.sourceStrings.SetText(stringsText)
+		dg.sourceStrings.Disable()
 		viewer := container.NewAppTabs(
 			container.NewTabItem("Raw", dg.sourceEntry),
 			container.NewTabItem("Hex", dg.sourceHex),
+			container.NewTabItem("Strings", dg.sourceStrings),
 		)
 		viewer.SetTabLocation(container.TabLocationTop)
 		viewer.SelectIndex(1)
 		sourceView = viewer
 	}
 	sourceBox := container.New(fixedHeightLayout{height: sourceInputHeight(dg.pipe.Source())}, sourceView)
-	content := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(sourceBox, dg.sourceMeta))
+	dg.sourceFullControls = container.NewHBox()
+	dg.refreshSourceFullControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
+	content := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(sourceBox, dg.sourceFullControls, dg.sourceMeta))
 	return widget.NewCard("Input", "", container.NewPadded(content))
+}
+
+func (dg *DeenGUI) sourceNeedsFull() (raw, hexView, stringsView bool) {
+	_, raw = guiTextDisplayMode(dg.pipe.Source(), false)
+	_, hexView = guiHexDisplayMode(dg.pipe.Source(), false)
+	_, stringsView = guiStringsDisplayMode(dg.pipe.Source(), false)
+	return raw, hexView, stringsView
+}
+
+func (dg *DeenGUI) clearSourceFullViews() {
+	dg.sourceFullRaw = false
+	dg.sourceFullHex = false
+	dg.sourceFullStrings = false
+}
+
+func (dg *DeenGUI) refreshSourceFullControls(rawCapped, hexCapped, stringsCapped bool) {
+	if dg.sourceFullControls == nil {
+		return
+	}
+	dg.sourceFullControls.RemoveAll()
+	add := func(label string, enabled bool, setFull func()) {
+		if !enabled {
+			return
+		}
+		button := widget.NewButton(label, func() {
+			dialog.ShowConfirm(
+				label+"?",
+				"Rendering the full input view can use a lot of memory and may make the interface slow for large files.",
+				func(ok bool) {
+					if !ok {
+						return
+					}
+					setFull()
+					dg.refreshFrom(0)
+				},
+				dg.window,
+			)
+		})
+		button.Importance = widget.LowImportance
+		dg.sourceFullControls.Add(button)
+	}
+	add("Show full Raw", rawCapped && !dg.sourceFullRaw, func() { dg.sourceFullRaw = true })
+	if pipeline.IsBinaryData(dg.pipe.Source()) {
+		add("Show full Hex", hexCapped && !dg.sourceFullHex, func() { dg.sourceFullHex = true })
+		add("Show full Strings", stringsCapped && !dg.sourceFullStrings, func() { dg.sourceFullStrings = true })
+	}
+	if dg.sourceFullRaw || dg.sourceFullHex || dg.sourceFullStrings {
+		notice := widget.NewLabel("Full input view enabled; input is read-only.")
+		notice.Importance = widget.WarningImportance
+		dg.sourceFullControls.Add(notice)
+	}
+	if len(dg.sourceFullControls.Objects) == 0 {
+		dg.sourceFullControls.Hide()
+	} else {
+		dg.sourceFullControls.Show()
+	}
+	dg.sourceFullControls.Refresh()
 }
 
 // stepCard is the view for a single pipeline step.
@@ -275,24 +380,30 @@ type stepCard struct {
 	pluginName string
 	collapsed  bool
 
-	decode     *widget.Check
-	enabled    *widget.Check
-	summary    *canvas.Text
-	collapse   *widget.Button
-	detail     *fyne.Container
-	options    *fyne.Container
-	body       *widget.Entry
-	hexBody    *widget.Entry
-	viewer     *container.AppTabs
-	rawTab     *container.TabItem
-	hexTab     *container.TabItem
-	previewTab *container.TabItem
-	preview    *widget.TextGrid
-	image      *canvas.Image
-	imageMsg   *widget.Label
-	meta       *widget.Label
-	status     *widget.Label
-	container  fyne.CanvasObject
+	decode       *widget.Check
+	enabled      *widget.Check
+	summary      *canvas.Text
+	collapse     *widget.Button
+	detail       *fyne.Container
+	options      *fyne.Container
+	fullControls *fyne.Container
+	body         *widget.Entry
+	hexBody      *widget.Entry
+	stringsBody  *widget.Entry
+	viewer       *container.AppTabs
+	rawTab       *container.TabItem
+	hexTab       *container.TabItem
+	stringsTab   *container.TabItem
+	previewTab   *container.TabItem
+	preview      *widget.TextGrid
+	image        *canvas.Image
+	imageMsg     *widget.Label
+	meta         *widget.Label
+	status       *widget.Label
+	container    fyne.CanvasObject
+	fullRaw      bool
+	fullHex      bool
+	fullStrings  bool
 }
 
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
@@ -386,11 +497,17 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	}
 	c.hexBody = multilineEntry(6)
 	c.hexBody.Disable()
+	c.stringsBody = multilineEntry(6)
+	c.stringsBody.Disable()
 	c.rawTab = container.NewTabItem("Raw", c.body)
 	c.hexTab = container.NewTabItem("Hex", c.hexBody)
 	viewerTabs := []*container.TabItem{
 		c.rawTab,
 		c.hexTab,
+	}
+	if pipeline.IsBinaryData(dg.pipe.Output(i)) {
+		c.stringsTab = container.NewTabItem("Strings", c.stringsBody)
+		viewerTabs = append(viewerTabs, c.stringsTab)
 	}
 	if pipeline.HasStructuredPreview(dg.pipe.Output(i)) {
 		c.preview = newPreviewGrid()
@@ -417,6 +534,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 		viewer.Select(viewerTabs[len(viewerTabs)-1])
 	}
 	viewerBox := container.New(fixedHeightLayout{height: outputViewerHeight}, viewer)
+	c.fullControls = container.NewHBox()
 	c.meta = widget.NewLabel("")
 	c.meta.Importance = widget.LowImportance
 	c.meta.Wrapping = fyne.TextWrapBreak
@@ -429,7 +547,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	if canDecode {
 		toggles.Add(stepToggleControl(c.decode, "Mode", col))
 	}
-	c.detail = container.NewVBox(selectors, toggles, c.options, viewerBox, c.meta, c.status)
+	c.detail = container.NewVBox(selectors, toggles, c.options, viewerBox, c.fullControls, c.meta, c.status)
 
 	bg := canvas.NewRectangle(tint(displayCol))
 	bg.StrokeColor = displayCol
@@ -645,6 +763,64 @@ func (c *stepCard) syncPreviewTab(out []byte) {
 	}
 }
 
+func (c *stepCard) syncStringsTab(out []byte) {
+	if c.viewer == nil {
+		return
+	}
+	hasStrings := pipeline.IsBinaryData(out)
+	if hasStrings && c.stringsTab == nil {
+		c.stringsTab = container.NewTabItem("Strings", c.stringsBody)
+		c.viewer.Append(c.stringsTab)
+		return
+	}
+	if !hasStrings && c.stringsTab != nil {
+		if c.viewer.Selected() == c.stringsTab {
+			c.viewer.Select(c.rawTab)
+		}
+		c.viewer.Remove(c.stringsTab)
+		c.stringsTab = nil
+	}
+}
+
+func (c *stepCard) refreshFullControls(rawCapped, hexCapped, stringsCapped bool) {
+	c.fullControls.RemoveAll()
+	add := func(label string, enabled bool, setFull func()) {
+		if !enabled {
+			return
+		}
+		button := widget.NewButton(label, func() {
+			dialog.ShowConfirm(
+				label+"?",
+				"Rendering the full view can use a lot of memory and may make the interface slow for large binary data.",
+				func(ok bool) {
+					if !ok {
+						return
+					}
+					setFull()
+					c.refresh()
+				},
+				c.gui.window,
+			)
+		})
+		button.Importance = widget.LowImportance
+		c.fullControls.Add(button)
+	}
+	add("Show full Raw", rawCapped && !c.fullRaw, func() { c.fullRaw = true })
+	add("Show full Hex", hexCapped && !c.fullHex, func() { c.fullHex = true })
+	add("Show full Strings", stringsCapped && !c.fullStrings, func() { c.fullStrings = true })
+	if c.fullRaw || c.fullHex || c.fullStrings {
+		notice := widget.NewLabel("Full view enabled; output is read-only.")
+		notice.Importance = widget.WarningImportance
+		c.fullControls.Add(notice)
+	}
+	if len(c.fullControls.Objects) == 0 {
+		c.fullControls.Hide()
+	} else {
+		c.fullControls.Show()
+	}
+	c.fullControls.Refresh()
+}
+
 func stepToggleControl(check *widget.Check, label string, accent color.NRGBA) fyne.CanvasObject {
 	title := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	title.Importance = widget.LowImportance
@@ -667,24 +843,41 @@ func (c *stepCard) refresh() {
 	} else {
 		c.status.Hide()
 	}
-	text, textCapped := guiTextDisplay(out)
+	_, rawNeedsFull := guiTextDisplayMode(out, false)
+	_, hexNeedsFull := guiHexDisplayMode(out, false)
+	_, stringsNeedsFull := guiStringsDisplayMode(out, false)
+	if !rawNeedsFull {
+		c.fullRaw = false
+	}
+	if !hexNeedsFull {
+		c.fullHex = false
+	}
+	if !stringsNeedsFull {
+		c.fullStrings = false
+	}
+	text, textCapped := guiTextDisplayMode(out, c.fullRaw)
 	if textCapped {
 		c.body.Disable()
 	} else {
 		c.body.Enable()
 	}
 	c.gui.setText(c.body, text)
-	hexText, _ := guiHexDisplay(out)
+	hexText, _ := guiHexDisplayMode(out, c.fullHex)
 	c.gui.setText(c.hexBody, hexText)
+	stringsText, _ := guiStringsDisplayMode(out, c.fullStrings)
+	c.gui.setText(c.stringsBody, stringsText)
 	if c.image != nil {
 		setImagePreview(c.image, c.imageMsg, out)
 	}
+	c.syncStringsTab(out)
 	c.syncPreviewTab(out)
 	if c.preview != nil {
 		preview, spans, _ := pipeline.HighlightedPreview(out)
 		setPreviewText(c.preview, preview, spans)
 	}
 	c.hexBody.Disable()
+	c.stringsBody.Disable()
+	c.refreshFullControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
 }
 
 func setImagePreview(img *canvas.Image, msg *widget.Label, data []byte) {

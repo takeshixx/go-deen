@@ -23,6 +23,7 @@ It is a Go reimplementation of the original Python/PyQt5
 | **hashs** | sha1, sha2 (224/256/384/512, 512/224, 512/256), sha3 (224/256/384/512), md4, md5, ripemd160, blake2s/2b/2x, blake3, bcrypt, scrypt, hmac, adler32, crc32/crc32c/crc32k, crc64/crc64-ecma, fnv (32/64/128 and a-variants) |
 | **formatters** | json, xml, json2xml, toml, jwt, jwk, jq, protobuf, msgpack, cbor, yaml, csv/tsv, qr, saml, timestamp |
 | **misc** | asn1, dns, uuid, entropy, magic, regex, aes, chacha20poly1305, sign/verify, certPrinter, certCloner |
+| **arithmetic** | xor, add, sub, not |
 
 Recent utility plugins add structured binary and security workflows:
 

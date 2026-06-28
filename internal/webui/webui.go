@@ -24,42 +24,56 @@ var palette = []string{"#4285f4", "#0f9d58", "#f4b400", "#db4437", "#ab47bc", "#
 func accent(i int) string { return palette[i%len(palette)] }
 
 var (
-	doc        js.Value
-	pipe       *pipeline.Pipeline
-	contentEl  js.Value
-	tabBtns    []js.Value
-	stepsEl    js.Value
-	historyEl  js.Value
-	sourceEl   js.Value
-	busyEl     js.Value
-	updating   bool
-	callbacks  []js.Func
-	staticCBs  []js.Func
-	cards      []*cardRef
-	activeTab  = "home"
-	sourceName string
+	doc               js.Value
+	pipe              *pipeline.Pipeline
+	contentEl         js.Value
+	tabBtns           []js.Value
+	stepsEl           js.Value
+	historyEl         js.Value
+	sourceEl          js.Value
+	busyEl            js.Value
+	updating          bool
+	callbacks         []js.Func
+	staticCBs         []js.Func
+	cards             []*cardRef
+	activeTab         = "home"
+	sourceName        string
+	sourceFullRaw     bool
+	sourceFullHex     bool
+	sourceFullStrings bool
 )
 
 type cardRef struct {
-	index            int
-	output           js.Value
-	hexOutput        js.Value
-	preview          js.Value
-	rawButton        js.Value
-	hexButton        js.Value
-	previewButton    js.Value
-	rawPanel         js.Value
-	hexPanel         js.Value
-	previewPanel     js.Value
-	activeOutputView string
-	activateOutput   func(string)
-	imageEnabled     bool
-	imageButton      js.Value
-	imagePanel       js.Value
-	image            js.Value
-	imageMsg         js.Value
-	meta             js.Value
-	errEl            js.Value
+	index             int
+	output            js.Value
+	hexOutput         js.Value
+	stringsOutput     js.Value
+	preview           js.Value
+	rawButton         js.Value
+	hexButton         js.Value
+	stringsButton     js.Value
+	previewButton     js.Value
+	rawPanel          js.Value
+	hexPanel          js.Value
+	stringsPanel      js.Value
+	previewPanel      js.Value
+	activeOutputView  string
+	activateOutput    func(string)
+	imageEnabled      bool
+	imageButton       js.Value
+	imagePanel        js.Value
+	image             js.Value
+	imageMsg          js.Value
+	fullControls      js.Value
+	rawFullButton     js.Value
+	hexFullButton     js.Value
+	stringsFullButton js.Value
+	fullWarning       js.Value
+	meta              js.Value
+	errEl             js.Value
+	fullRaw           bool
+	fullHex           bool
+	fullStrings       bool
 }
 
 // Run builds the UI and blocks so the event callbacks stay alive.
@@ -204,6 +218,7 @@ func autoSizeSourceTextareasSoon() {
 func autoSizeOutputTextareas(c *cardRef) {
 	autoSizeTextareaSoon(c.output)
 	autoSizeTextareaSoon(c.hexOutput)
+	autoSizeTextareaSoon(c.stringsOutput)
 }
 
 func previewBox() js.Value {
@@ -345,23 +360,29 @@ func iconGraphic(name string) js.Value {
 }
 
 var iconPaths = map[string][]string{
-	"copy":       {"M8 8h11v11H8z", "M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"},
-	"download":   {"M12 3v12", "M7 10l5 5 5-5", "M5 21h14"},
-	"upload":     {"M12 21V9", "M7 14l5-5 5 5", "M5 3h14"},
-	"link":       {"M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.2 1.2", "M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.2-1.2"},
-	"terminal":   {"M4 17l6-5-6-5", "M12 19h8"},
-	"star":       {"M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9z"},
-	"compare":    {"M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"},
-	"undo":       {"M9 14l-5-5 5-5", "M4 9h10a6 6 0 0 1 0 12h-1"},
-	"redo":       {"M15 14l5-5-5-5", "M20 9H10a6 6 0 0 0 0 12h1"},
-	"clear":      {"M18 6L6 18", "M6 6l12 12"},
-	"collapse":   {"M15 18l-6-6 6-6"},
-	"expand":     {"M9 18l6-6-6-6"},
-	"visible":    {"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z", "M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"},
-	"hidden":     {"M3 3l18 18", "M10.6 10.6a2 2 0 0 0 2.8 2.8", "M9.9 4.2A10.7 10.7 0 0 1 12 4c6.5 0 10 8 10 8a18.4 18.4 0 0 1-3.2 4.4", "M6.1 6.1C3.5 8 2 12 2 12s3.5 8 10 8a9.8 9.8 0 0 0 4.1-.9"},
-	"arrow-up":   {"M12 19V5", "M5 12l7-7 7 7"},
-	"arrow-down": {"M12 5v14", "M19 12l-7 7-7-7"},
-	"trash":      {"M3 6h18", "M8 6V4h8v2", "M6 6l1 15h10l1-15"},
+	"copy":         {"M8 8h11v11H8z", "M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"},
+	"download":     {"M12 3v12", "M7 10l5 5 5-5", "M5 21h14"},
+	"upload":       {"M12 21V9", "M7 14l5-5 5 5", "M5 3h14"},
+	"link":         {"M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.2 1.2", "M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.2-1.2"},
+	"terminal":     {"M4 17l6-5-6-5", "M12 19h8"},
+	"star":         {"M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9z"},
+	"compare":      {"M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"},
+	"undo":         {"M9 14l-5-5 5-5", "M4 9h10a6 6 0 0 1 0 12h-1"},
+	"redo":         {"M15 14l5-5-5-5", "M20 9H10a6 6 0 0 0 0 12h1"},
+	"clear":        {"M18 6L6 18", "M6 6l12 12"},
+	"collapse":     {"M15 18l-6-6 6-6"},
+	"expand":       {"M9 18l6-6-6-6"},
+	"visible":      {"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z", "M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"},
+	"hidden":       {"M3 3l18 18", "M10.6 10.6a2 2 0 0 0 2.8 2.8", "M9.9 4.2A10.7 10.7 0 0 1 12 4c6.5 0 10 8 10 8a18.4 18.4 0 0 1-3.2 4.4", "M6.1 6.1C3.5 8 2 12 2 12s3.5 8 10 8a9.8 9.8 0 0 0 4.1-.9"},
+	"arrow-up":     {"M12 19V5", "M5 12l7-7 7 7"},
+	"arrow-down":   {"M12 5v14", "M19 12l-7 7-7-7"},
+	"trash":        {"M3 6h18", "M8 6V4h8v2", "M6 6l1 15h10l1-15"},
+	"chevron-down": {"M6 9l6 6 6-6"},
+	"folder":       {"M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"},
+	"home":         {"M3 11l9-8 9 8", "M5 10v10h14V10", "M9 20v-6h6v6"},
+	"examples":     {"M4 19.5A2.5 2.5 0 0 1 6.5 17H20", "M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"},
+	"plugins":      {"M9 3v5", "M15 3v5", "M6 8h12", "M7 8v4a5 5 0 0 0 10 0V8", "M12 17v4"},
+	"info":         {"M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 16v-4", "M12 8h.01"},
 }
 
 func toolbarGroup(kids ...js.Value) js.Value {
@@ -503,6 +524,43 @@ func afterPaint(fn func()) {
 	raf.Invoke(first)
 }
 
+func menuBar() js.Value {
+	bar := div("menu-bar")
+	appendChildren(bar,
+		menu("File",
+			menuFilePicker("folder", "Open file"),
+			menuItem("download", "Download result", downloadResult),
+		),
+		menu("Chain",
+			menuChainPicker("upload", "Import chain"),
+			menuItem("download", "Export chain", exportChain),
+			menuItem("link", "Copy link", copyShareLink),
+			menuItem("terminal", "Copy command", copyCommand),
+		),
+		menu("Workflow",
+			menuItem("star", "Presets", showPresets),
+			menuItem("compare", "Compare", showCompare),
+			menuItem("undo", "Undo", func() {
+				if pipe.Undo() {
+					rebuild()
+				}
+			}),
+			menuItem("redo", "Redo", func() {
+				if pipe.Redo() {
+					rebuild()
+				}
+			}),
+			menuItem("clear", "Clear", func() {
+				sourceName = ""
+				clearSourceFullViews()
+				pipe.Clear()
+				rebuild()
+			}),
+		),
+	)
+	return bar
+}
+
 func tabButton(tab, label string) js.Value {
 	b := el("button")
 	b.Set("type", "button")
@@ -514,6 +572,77 @@ func tabButton(tab, label string) js.Value {
 		renderActiveTab()
 	})
 	return b
+}
+
+func menu(label string, items ...js.Value) js.Value {
+	wrap := div("menu")
+	trigger := el("button")
+	trigger.Set("type", "button")
+	trigger.Set("className", "menu-trigger")
+	appendChildren(trigger, textNode(label), iconGraphic("chevron-down"))
+	dropdown := div("menu-dropdown")
+	dropdown.Set("role", "menu")
+	appendChildren(dropdown, items...)
+	appendChildren(wrap, trigger, dropdown)
+	return wrap
+}
+
+func menuItem(icon, label string, fn func()) js.Value {
+	b := el("button")
+	b.Set("type", "button")
+	b.Set("className", "menu-item")
+	b.Set("role", "menuitem")
+	appendChildren(b, iconGraphic(icon), textNode(label))
+	if fn != nil {
+		on(b, "click", fn)
+	}
+	return b
+}
+
+func menuTabItem(icon, label, tab string) js.Value {
+	b := menuItem(icon, label, func() {
+		activeTab = tab
+		renderActiveTab()
+	})
+	b.Call("setAttribute", "data-tab", tab)
+	return b
+}
+
+func menuFilePicker(icon, label string) js.Value {
+	wrap := div("menu-file-item")
+	item := menuItem(icon, label, nil)
+	input := el("input")
+	input.Set("type", "file")
+	input.Get("style").Set("display", "none")
+	on(item, "click", func() { input.Call("click") })
+	on(input, "change", func() {
+		files := input.Get("files")
+		if files.Get("length").Int() == 0 {
+			return
+		}
+		loadSourceFile(files.Call("item", 0))
+	})
+	appendChildren(wrap, item, input)
+	return wrap
+}
+
+func menuChainPicker(icon, label string) js.Value {
+	wrap := div("menu-file-item")
+	item := menuItem(icon, label, nil)
+	input := el("input")
+	input.Set("type", "file")
+	input.Set("accept", "application/json,.json")
+	input.Get("style").Set("display", "none")
+	on(item, "click", func() { input.Call("click") })
+	on(input, "change", func() {
+		files := input.Get("files")
+		if files.Get("length").Int() == 0 {
+			return
+		}
+		loadChainFile(files.Call("item", 0))
+	})
+	appendChildren(wrap, item, input)
+	return wrap
 }
 
 func renderActiveTab() {
@@ -553,7 +682,7 @@ func renderHome() {
 
 	stepsEl = div("steps")
 
-	stepsEl.Call("appendChild", commandBar())
+	stepsEl.Call("appendChild", menuBar())
 	stepsEl.Call("appendChild", sourceCard())
 	historyEl = div("history chain-overview")
 	stepsEl.Call("appendChild", historyEl)
@@ -631,10 +760,14 @@ func renderAbout() {
 	versionEl := el("p")
 	versionEl.Set("textContent", "Version: "+version)
 	built := el("p")
-	built.Set("textContent", "Built with Go, Fyne for desktop, and WebAssembly for this browser interface. Processing runs locally in the current app surface.")
+	built.Set("textContent", "This web interface runs deen as WebAssembly in your browser. Transform chains process data client side, so pasted text and loaded files do not need to be sent back to the server.")
+	privacy := el("p")
+	privacy.Set("textContent", "That client-side model is privacy focused for sensitive payloads: you can inspect tokens, logs, binaries, certificates and encoded data without handing the raw content to a hosted decoding service.")
+	local := el("p")
+	local.Set("textContent", "For fully local workflows, run the deen web server on your own machine, or use the native GUI and CLI builds. The CLI is also useful for repeatable processing, shell pipelines and workflow automation.")
 	docs := link("Documentation", "https://deen.adversec.com")
 	repo := link("Source", "https://github.com/takeshixx/go-deen")
-	appendChildren(page, h, desc, versionEl, built, docs, repo)
+	appendChildren(page, h, desc, versionEl, built, privacy, local, docs, repo)
 	contentEl.Call("appendChild", page)
 }
 
@@ -1250,6 +1383,7 @@ func loadSourceFile(file js.Value) {
 		name := file.Get("name").String()
 		runBusy("Processing file", func() {
 			sourceName = name
+			clearSourceFullViews()
 			pipe.SetSourceOwned(buf)
 			rebuild()
 		})
@@ -1283,6 +1417,27 @@ func filePicker() js.Value {
 	return wrap
 }
 
+func loadChainFile(file js.Value) {
+	reader := js.Global().Get("FileReader").New()
+	var loadCB js.Func
+	loadCB = js.FuncOf(func(js.Value, []js.Value) any {
+		data := []byte(reader.Get("result").String())
+		runBusy("Importing chain", func() {
+			if err := pipe.ImportJSON(data); err != nil {
+				alert(err.Error())
+			} else {
+				sourceName = ""
+				clearSourceFullViews()
+				rebuild()
+			}
+		})
+		loadCB.Release()
+		return nil
+	})
+	reader.Call("addEventListener", "load", loadCB)
+	reader.Call("readAsText", file)
+}
+
 func chainPicker() js.Value {
 	wrap := div("file-action")
 	openBtn := el("button")
@@ -1301,24 +1456,7 @@ func chainPicker() js.Value {
 		if files.Get("length").Int() == 0 {
 			return
 		}
-		file := files.Call("item", 0)
-		reader := js.Global().Get("FileReader").New()
-		var loadCB js.Func
-		loadCB = js.FuncOf(func(js.Value, []js.Value) any {
-			data := []byte(reader.Get("result").String())
-			runBusy("Importing chain", func() {
-				if err := pipe.ImportJSON(data); err != nil {
-					alert(err.Error())
-				} else {
-					sourceName = ""
-					rebuild()
-				}
-			})
-			loadCB.Release()
-			return nil
-		})
-		reader.Call("addEventListener", "load", loadCB)
-		reader.Call("readAsText", file)
+		loadChainFile(files.Call("item", 0))
 	})
 	appendChildren(wrap, openBtn, input)
 	return wrap
@@ -1330,28 +1468,40 @@ func sourceCard() js.Value {
 	label.Set("className", "card-title")
 	label.Set("textContent", "Input")
 
-	sourceLarge := pipeline.IsLargeData(pipe.Source())
-	sourceText := string(pipe.Source())
-	if sourceLarge {
-		sourceText, _ = pipeline.TextDisplay(pipe.Source())
+	rawNeedsFull, hexNeedsFull, stringsNeedsFull := sourceNeedsFull()
+	if !rawNeedsFull {
+		sourceFullRaw = false
 	}
+	if !hexNeedsFull {
+		sourceFullHex = false
+	}
+	if !stringsNeedsFull {
+		sourceFullStrings = false
+	}
+	sourceText, textCapped := webTextDisplay(pipe.Source(), sourceFullRaw)
 	ta := sourceTextarea(sourceText)
-	if sourceLarge {
+	if textCapped || sourceFullRaw {
 		ta.Set("readOnly", true)
 		ta.Set("title", pipeline.LargeDataPlaceholder(pipe.Source()))
 	}
 	sourceEl = ta
 	var sourceHex js.Value
+	var sourceStrings js.Value
 	sourceHasHex := false
 	var sourceView js.Value = ta
 	if pipeline.IsBinaryData(pipe.Source()) {
 		sourceHasHex = true
 		sourceHex = sourceTextarea("")
 		sourceHex.Set("readOnly", true)
-		hexText, _ := pipeline.HexDisplay(pipe.Source())
+		hexText, _ := webHexDisplay(pipe.Source(), sourceFullHex)
 		sourceHex.Set("value", hexText)
-		sourceView = sourceInputViewer(ta, sourceHex, "hex")
+		sourceStrings = sourceTextarea("")
+		sourceStrings.Set("readOnly", true)
+		stringsText, _ := webStringsDisplay(pipe.Source(), sourceFullStrings)
+		sourceStrings.Set("value", stringsText)
+		sourceView = sourceInputViewer(ta, sourceHex, sourceStrings, "hex")
 	}
+	fullControls := sourceFullViewControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
 	meta := div("meta")
 	renderMetadata(meta, sourceName, pipeline.DataMetadata(pipe.Source(), 0))
 	on(ta, "input", func() {
@@ -1361,12 +1511,16 @@ func sourceCard() js.Value {
 		value := ta.Get("value").String()
 		runMaybeBusy("Processing", pipe.Len() > 0, func() {
 			sourceName = ""
+			clearSourceFullViews()
 			pipe.SetSourceOwned([]byte(value))
 			renderMetadata(meta, sourceName, pipeline.DataMetadata(pipe.Source(), 0))
 			if sourceHasHex {
-				hexText, _ := pipeline.HexDisplay(pipe.Source())
+				hexText, _ := webHexDisplay(pipe.Source(), false)
 				sourceHex.Set("value", hexText)
 				autoSizeTextareaSoon(sourceHex)
+				stringsText, _ := webStringsDisplay(pipe.Source(), false)
+				sourceStrings.Set("value", stringsText)
+				autoSizeTextareaSoon(sourceStrings)
 			}
 			refreshOutputs(0)
 		})
@@ -1388,15 +1542,61 @@ func sourceCard() js.Value {
 		}
 		loadSourceFile(files.Call("item", 0))
 	})
-	appendChildren(card, label, sourceView, meta)
+	appendChildren(card, label, sourceView, fullControls, meta)
 	autoSizeTextarea(ta)
 	if sourceHasHex {
 		autoSizeTextarea(sourceHex)
+		autoSizeTextarea(sourceStrings)
 	}
 	return card
 }
 
-func sourceInputViewer(textInput, hexInput js.Value, activeView string) js.Value {
+func sourceNeedsFull() (raw, hexView, stringsView bool) {
+	_, raw = webTextDisplay(pipe.Source(), false)
+	_, hexView = webHexDisplay(pipe.Source(), false)
+	_, stringsView = webStringsDisplay(pipe.Source(), false)
+	return raw, hexView, stringsView
+}
+
+func clearSourceFullViews() {
+	sourceFullRaw = false
+	sourceFullHex = false
+	sourceFullStrings = false
+}
+
+func sourceFullViewControls(rawCapped, hexCapped, stringsCapped bool) js.Value {
+	controls := div("full-view-controls")
+	add := func(label string, visible bool, setFull func()) {
+		if !visible {
+			return
+		}
+		controls.Call("appendChild", button("", label, func() {
+			ok := js.Global().Call("confirm", label+"?\n\nRendering the full input view can use a lot of memory and may make the interface slow for large files.").Bool()
+			if !ok {
+				return
+			}
+			setFull()
+			rebuild()
+		}))
+	}
+	add("Show full Raw", rawCapped && !sourceFullRaw, func() { sourceFullRaw = true })
+	if pipeline.IsBinaryData(pipe.Source()) {
+		add("Show full Hex", hexCapped && !sourceFullHex, func() { sourceFullHex = true })
+		add("Show full Strings", stringsCapped && !sourceFullStrings, func() { sourceFullStrings = true })
+	}
+	if sourceFullRaw || sourceFullHex || sourceFullStrings {
+		notice := el("span")
+		notice.Set("className", "full-view-warning")
+		notice.Set("textContent", "Full input view enabled; input is read-only.")
+		controls.Call("appendChild", notice)
+	}
+	if controls.Get("childNodes").Get("length").Int() == 0 {
+		controls.Get("style").Set("display", "none")
+	}
+	return controls
+}
+
+func sourceInputViewer(textInput, hexInput, stringsInput js.Value, activeView string) js.Value {
 	if activeView == "" {
 		activeView = "raw"
 	}
@@ -1410,6 +1610,7 @@ func sourceInputViewer(textInput, hexInput js.Value, activeView string) js.Value
 	}{
 		{"Raw", "raw", textInput},
 		{"Hex", "hex", hexInput},
+		{"Strings", "strings", stringsInput},
 	}
 	buttons := make([]js.Value, 0, len(items))
 	panelEls := make([]js.Value, 0, len(items))
@@ -1447,6 +1648,7 @@ func sourceInputViewer(textInput, hexInput js.Value, activeView string) js.Value
 		}
 		autoSizeTextareaSoon(textInput)
 		autoSizeTextareaSoon(hexInput)
+		autoSizeTextareaSoon(stringsInput)
 	}
 	appendChildren(viewer, tabs, panels)
 	return viewer
@@ -1606,6 +1808,8 @@ func stepCard(i int) js.Value {
 	})
 	ref.hexOutput = textareaWithMax("", 960)
 	ref.hexOutput.Set("readOnly", true)
+	ref.stringsOutput = textareaWithMax("", 960)
+	ref.stringsOutput.Set("readOnly", true)
 	ref.preview = previewBox()
 	ref.imageEnabled = stepGeneratesImage(step)
 	if ref.imageEnabled {
@@ -1613,11 +1817,13 @@ func stepCard(i int) js.Value {
 	}
 	viewer := outputViewer(ref)
 
+	ref.fullControls = div("full-view-controls")
+	buildFullViewControls(ref)
 	ref.meta = div("meta")
 	ref.errEl = div("error")
 	ref.errEl.Get("style").Set("display", "none")
 
-	appendChildren(detail, selRow, toggles, options, viewer, ref.meta, ref.errEl)
+	appendChildren(detail, selRow, toggles, options, viewer, ref.fullControls, ref.meta, ref.errEl)
 	on(collapse, "click", func() {
 		if detail.Get("style").Get("display").String() == "none" {
 			detail.Get("style").Set("display", "block")
@@ -1647,6 +1853,7 @@ func outputViewer(ref *cardRef) js.Value {
 	panelItems := []panelItem{
 		{"Raw", "raw", ref.output},
 		{"Hex", "hex", ref.hexOutput},
+		{"Strings", "strings", ref.stringsOutput},
 		{"Preview", "preview", ref.preview},
 	}
 	if ref.imageEnabled {
@@ -1661,6 +1868,7 @@ func outputViewer(ref *cardRef) js.Value {
 	buttons := map[string]js.Value{}
 	panelEls := map[string]js.Value{}
 	hasPreview := pipeline.HasStructuredPreview(pipe.Output(ref.index))
+	hasStrings := pipeline.IsBinaryData(pipe.Output(ref.index))
 	if hasPreview {
 		activeView = "preview"
 	}
@@ -1689,6 +1897,9 @@ func outputViewer(ref *cardRef) js.Value {
 			ref.rawButton, ref.rawPanel = btn, panel
 		case "hex":
 			ref.hexButton, ref.hexPanel = btn, panel
+		case "strings":
+			ref.stringsButton, ref.stringsPanel = btn, panel
+			setOutputTabVisible(btn, panel, hasStrings)
 		case "preview":
 			ref.previewButton, ref.previewPanel = btn, panel
 			setOutputTabVisible(btn, panel, hasPreview)
@@ -1699,6 +1910,9 @@ func outputViewer(ref *cardRef) js.Value {
 		panels.Call("appendChild", panel)
 	}
 	activate = func(active string) {
+		if active == "strings" && !pipeline.IsBinaryData(pipe.Output(ref.index)) {
+			return
+		}
 		if active == "preview" && !pipeline.HasStructuredPreview(pipe.Output(ref.index)) {
 			return
 		}
@@ -1989,21 +2203,41 @@ func renderOutput(c *cardRef) {
 		c.errEl.Get("style").Set("display", "none")
 	}
 	updating = true
-	text, textCapped := pipeline.TextDisplay(out)
+	_, rawNeedsFull := webTextDisplay(out, false)
+	_, hexNeedsFull := webHexDisplay(out, false)
+	_, stringsNeedsFull := webStringsDisplay(out, false)
+	if !rawNeedsFull {
+		c.fullRaw = false
+	}
+	if !hexNeedsFull {
+		c.fullHex = false
+	}
+	if !stringsNeedsFull {
+		c.fullStrings = false
+	}
+	text, textCapped := webTextDisplay(out, c.fullRaw)
 	c.output.Set("value", text)
-	c.output.Set("readOnly", textCapped)
+	c.output.Set("readOnly", textCapped || c.fullRaw)
 	if textCapped {
 		c.output.Set("title", pipeline.LargeDataPlaceholder(out))
 	} else {
 		c.output.Set("title", "")
 	}
-	hexText, _ := pipeline.HexDisplay(out)
+	hexText, _ := webHexDisplay(out, c.fullHex)
 	c.hexOutput.Set("value", hexText)
+	stringsText, _ := webStringsDisplay(out, c.fullStrings)
+	c.stringsOutput.Set("value", stringsText)
 	autoSizeOutputTextareas(c)
 	if c.imageEnabled {
 		renderImageOutput(c, out)
 	}
 	hasPreview := pipeline.HasStructuredPreview(out)
+	hasStrings := pipeline.IsBinaryData(out)
+	setOutputTabVisible(c.stringsButton, c.stringsPanel, hasStrings)
+	if !hasStrings && c.activeOutputView == "strings" && c.activateOutput != nil {
+		c.activateOutput("raw")
+	}
+	renderFullViewControls(c, rawNeedsFull, hexNeedsFull, stringsNeedsFull)
 	previewWasVisible := c.previewButton.Get("style").Get("display").String() != "none"
 	setOutputTabVisible(c.previewButton, c.previewPanel, hasPreview)
 	if hasPreview {
@@ -2020,6 +2254,70 @@ func renderOutput(c *cardRef) {
 		}
 	}
 	updating = false
+}
+
+func webTextDisplay(data []byte, full bool) (string, bool) {
+	if full {
+		return pipeline.TextDisplayFull(data), true
+	}
+	return pipeline.TextDisplay(data)
+}
+
+func webHexDisplay(data []byte, full bool) (string, bool) {
+	if full {
+		return pipeline.HexDisplayFull(data), true
+	}
+	return pipeline.HexDisplay(data)
+}
+
+func webStringsDisplay(data []byte, full bool) (string, bool) {
+	if full {
+		return pipeline.StringsDisplayFull(data), true
+	}
+	return pipeline.StringsDisplay(data)
+}
+
+func renderFullViewControls(c *cardRef, rawCapped, hexCapped, stringsCapped bool) {
+	setVisible := func(node js.Value, visible bool) {
+		if visible {
+			node.Get("style").Set("display", "")
+		} else {
+			node.Get("style").Set("display", "none")
+		}
+	}
+	showRaw := rawCapped && !c.fullRaw
+	showHex := hexCapped && !c.fullHex
+	showStrings := stringsCapped && !c.fullStrings
+	showWarning := c.fullRaw || c.fullHex || c.fullStrings
+	setVisible(c.rawFullButton, showRaw)
+	setVisible(c.hexFullButton, showHex)
+	setVisible(c.stringsFullButton, showStrings)
+	setVisible(c.fullWarning, showWarning)
+	if !showRaw && !showHex && !showStrings && !showWarning {
+		c.fullControls.Get("style").Set("display", "none")
+	} else {
+		c.fullControls.Get("style").Set("display", "flex")
+	}
+}
+
+func buildFullViewControls(c *cardRef) {
+	warnAndSet := func(label string, setFull func()) func() {
+		return func() {
+			ok := js.Global().Call("confirm", label+"?\n\nRendering the full view can use a lot of memory and may make the interface slow for large binary data.").Bool()
+			if !ok {
+				return
+			}
+			setFull()
+			renderOutput(c)
+		}
+	}
+	c.rawFullButton = button("", "Show full Raw", warnAndSet("Show full Raw", func() { c.fullRaw = true }))
+	c.hexFullButton = button("", "Show full Hex", warnAndSet("Show full Hex", func() { c.fullHex = true }))
+	c.stringsFullButton = button("", "Show full Strings", warnAndSet("Show full Strings", func() { c.fullStrings = true }))
+	c.fullWarning = el("span")
+	c.fullWarning.Set("className", "full-view-warning")
+	c.fullWarning.Set("textContent", "Full view enabled; output is read-only.")
+	appendChildren(c.fullControls, c.rawFullButton, c.hexFullButton, c.stringsFullButton, c.fullWarning)
 }
 
 func imagePreviewBox() (wrap, img, msg js.Value) {

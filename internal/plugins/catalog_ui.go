@@ -48,6 +48,8 @@ func CategoryLabel(category string) string {
 		return "Formatters"
 	case "misc":
 		return "Misc"
+	case "arithmetic":
+		return "Arithmetic"
 	default:
 		return category
 	}
@@ -67,6 +69,8 @@ func CategorySelectLabel(category string) string {
 		return "Select formatter"
 	case "misc":
 		return "Select misc tool"
+	case "arithmetic":
+		return "Select arithmetic"
 	default:
 		return "Select transformer"
 	}
@@ -144,6 +148,8 @@ var pluginLabels = map[string]string{
 	"md5":               "MD5",
 	"lzma":              "LZMA",
 	"lzma2":             "LZMA2",
+	"xor":               "XOR",
+	"not":               "NOT",
 }
 
 var referenceSets = map[string][]Reference{

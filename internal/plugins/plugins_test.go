@@ -20,6 +20,9 @@ func TestCmdAvailable(t *testing.T) {
 	if !CmdAvailable("b85") {
 		t.Error("Did not find plugin with aliases")
 	}
+	if !CmdAvailable("xor") {
+		t.Error("Arithmetic plugin not found")
+	}
 }
 
 /* func TestGetForCmd(t *testing.T) {
@@ -75,6 +78,21 @@ func TestInCategorySorted(t *testing.T) {
 	}
 }
 
+func TestArithmeticCategory(t *testing.T) {
+	names := InCategory("arithmetic")
+	want := map[string]bool{"add": false, "not": false, "sub": false, "xor": false}
+	for _, name := range names {
+		if _, ok := want[name]; ok {
+			want[name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Fatalf("arithmetic category missing %q in %#v", name, names)
+		}
+	}
+}
+
 func TestCanDecode(t *testing.T) {
 	if !CanDecode("base64") {
 		t.Fatal("base64 should support decoding")
@@ -84,5 +102,8 @@ func TestCanDecode(t *testing.T) {
 	}
 	if CanDecode("doesnotexist") {
 		t.Fatal("unknown plugin should not support decoding")
+	}
+	if !CanDecode("xor") {
+		t.Fatal("xor should support decoding")
 	}
 }
