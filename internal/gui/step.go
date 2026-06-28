@@ -45,7 +45,7 @@ const outputViewerHeight float32 = 260
 const compactControlMinWidth float32 = 360
 const sourceInputRows = 14
 const sourceInputMinHeight float32 = 160
-const sourceInputMaxHeight float32 = 360
+const sourceInputMaxHeight float32 = 306
 
 type fixedHeightLayout struct {
 	height float32
@@ -409,7 +409,9 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	viewer := container.NewAppTabs(viewerTabs...)
 	viewer.SetTabLocation(container.TabLocationTop)
 	c.viewer = viewer
-	if pipeline.IsBinaryData(dg.pipe.Output(i)) {
+	if c.previewTab != nil {
+		viewer.Select(c.previewTab)
+	} else if pipeline.IsBinaryData(dg.pipe.Output(i)) {
 		viewer.Select(c.hexTab)
 	} else if stepGeneratesImage(step) {
 		viewer.Select(viewerTabs[len(viewerTabs)-1])
@@ -626,6 +628,7 @@ func (c *stepCard) syncPreviewTab(out []byte) {
 		c.preview = newPreviewGrid()
 		c.previewTab = container.NewTabItem("Preview", c.preview)
 		c.viewer.Append(c.previewTab)
+		c.viewer.Select(c.previewTab)
 		return
 	}
 	if !hasPreview && c.previewTab != nil {

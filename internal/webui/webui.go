@@ -155,7 +155,7 @@ func autoSizeTextarea(t js.Value) {
 		if attr.String() == "window" {
 			rect := t.Call("getBoundingClientRect")
 			top := rect.Get("top").Float()
-			available := js.Global().Get("innerHeight").Float() - top - 24
+			available := (js.Global().Get("innerHeight").Float() - top - 24) * 0.85
 			if available < 160 {
 				available = 160
 			}
@@ -1663,10 +1663,13 @@ func outputViewer(ref *cardRef) js.Value {
 	} else if ref.imageEnabled {
 		activeView = "image"
 	}
-	ref.activeOutputView = activeView
 	buttons := map[string]js.Value{}
 	panelEls := map[string]js.Value{}
 	hasPreview := pipeline.HasStructuredPreview(pipe.Output(ref.index))
+	if hasPreview {
+		activeView = "preview"
+	}
+	ref.activeOutputView = activeView
 	var activate func(string)
 	for _, item := range panelItems {
 		panel := div("viewer-panel")
@@ -2006,10 +2009,14 @@ func renderOutput(c *cardRef) {
 		renderImageOutput(c, out)
 	}
 	hasPreview := pipeline.HasStructuredPreview(out)
+	previewWasVisible := c.previewButton.Get("style").Get("display").String() != "none"
 	setOutputTabVisible(c.previewButton, c.previewPanel, hasPreview)
 	if hasPreview {
 		preview, spans, _ := pipeline.HighlightedPreview(out)
 		renderHighlightedText(c.preview, preview, spans)
+		if !previewWasVisible && c.activateOutput != nil {
+			c.activateOutput("preview")
+		}
 	} else if c.activeOutputView == "preview" && c.activateOutput != nil {
 		if pipeline.IsBinaryData(out) {
 			c.activateOutput("hex")

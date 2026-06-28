@@ -112,6 +112,10 @@ func TestStructuredPreview(t *testing.T) {
 		want string
 	}{
 		{"json", []byte(`{"ok":true}`), "JSON"},
+		{"xml", []byte(`<root><ok>true</ok></root>`), "XML"},
+		{"yaml", []byte("ok: true\nname: deen\n"), "YAML"},
+		{"toml", []byte("ok = true\nname = \"deen\"\n"), "TOML"},
+		{"csv", []byte("name,ok\ndeen,true\n"), "CSV"},
 		{"jwt", []byte("eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjMifQ."), "JWT"},
 		{"uuid", []byte("550e8400-e29b-41d4-a716-446655440000"), "UUID"},
 		{"asn1", []byte{0x30, 0x03, 0x02, 0x01, 0x2a}, "ASN.1 DER"},
@@ -125,20 +129,64 @@ func TestStructuredPreview(t *testing.T) {
 	}
 }
 
+func TestHighlightedPreviewStructuredFormats(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []byte
+		want []SyntaxKind
+	}{
+		{
+			name: "xml",
+			in:   []byte(`<root id="1"><ok>true</ok></root>`),
+			want: []SyntaxKind{SyntaxKey, SyntaxString, SyntaxPunctuation},
+		},
+		{
+			name: "yaml",
+			in:   []byte("ok: true\nn: 12\nname: deen\n"),
+			want: []SyntaxKind{SyntaxKey, SyntaxBool, SyntaxNumber, SyntaxString, SyntaxPunctuation},
+		},
+		{
+			name: "toml",
+			in:   []byte("ok = true\nn = 12\nname = \"deen\"\n"),
+			want: []SyntaxKind{SyntaxKey, SyntaxBool, SyntaxNumber, SyntaxString, SyntaxPunctuation},
+		},
+		{
+			name: "csv",
+			in:   []byte("name,ok\ndeen,true\n"),
+			want: []SyntaxKind{SyntaxKey, SyntaxPunctuation},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			preview, spans, ok := HighlightedPreview(tt.in)
+			if !ok {
+				t.Fatalf("HighlightedPreview(%s) ok = false", tt.name)
+			}
+			for _, want := range tt.want {
+				if !hasSyntaxKind(spans, want) {
+					t.Fatalf("preview %q missing span kind %s in %#v", preview, want, spans)
+				}
+			}
+		})
+	}
+}
+
 func TestJSONSyntaxSpans(t *testing.T) {
 	spans := JSONSyntaxSpans(`{"ok":true,"n":12,"s":"x","nil":null}`)
 	for _, want := range []SyntaxKind{SyntaxKey, SyntaxBool, SyntaxNumber, SyntaxString, SyntaxNull, SyntaxPunctuation} {
-		found := false
-		for _, span := range spans {
-			if span.Kind == want {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !hasSyntaxKind(spans, want) {
 			t.Fatalf("missing span kind %s in %#v", want, spans)
 		}
 	}
+}
+
+func hasSyntaxKind(spans []SyntaxSpan, want SyntaxKind) bool {
+	for _, span := range spans {
+		if span.Kind == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSuggestionsDetectJWT(t *testing.T) {

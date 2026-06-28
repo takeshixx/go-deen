@@ -625,7 +625,7 @@ textarea.io {
 
 textarea.io.source-io {
 	min-height: 8rem;
-	max-height: calc(100vh - 1.5rem);
+	max-height: calc(85vh - 1.5rem);
 	overflow-y: auto;
 }
 
