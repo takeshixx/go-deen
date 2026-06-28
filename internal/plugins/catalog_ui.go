@@ -553,7 +553,10 @@ var catalogCopyByName = map[string]catalogCopy{
 		"Parses ASN.1 DER or PEM input into a readable tag/length/value tree.",
 		"Use it to inspect certificates, keys, CSRs, signatures, and other DER-encoded structures when you need the raw TLV layout.",
 		referenceSets["asn1"],
-		[]Example{{"Inspect sequence", "300302012a", "SEQUENCE\n    INTEGER = 42"}},
+		[]Example{
+			{"Inspect sequence", "300302012a", "SEQUENCE\n    INTEGER = 42"},
+			{"Inspect PEM certificate", "-----BEGIN CERTIFICATE-----...", ".pem -> asn1 prints the DER structure"},
+		},
 	},
 	"dns": {
 		"Encodes and decodes DNS names in wire format.",
@@ -607,13 +610,13 @@ var catalogCopyByName = map[string]catalogCopy{
 		"Parses and prints X.509 certificate details.",
 		"Use it to inspect certificate subjects, issuers, validity dates, SANs, key usage, and fingerprints.",
 		referenceSets["x509"],
-		nil,
+		[]Example{{"Print certificate", "-----BEGIN CERTIFICATE-----...", "Certificate:\n    Data:\n        Version: 3"}},
 	},
 	"certCloner": {
 		"Builds a new certificate based on fields from an existing certificate.",
 		"Use it for lab, testing, and proxy workflows where a certificate shape must be reproduced.",
 		referenceSets["x509"],
-		nil,
+		[]Example{{"Clone certificate", "-----BEGIN CERTIFICATE-----...", "-----BEGIN CERTIFICATE-----\n...\n-----BEGIN PRIVATE KEY-----"}},
 	},
 }
 

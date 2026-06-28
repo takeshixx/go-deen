@@ -6,10 +6,17 @@ import (
 	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/pem"
+	"math/big"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Example is a runnable sample that loads both input data and a transform chain.
@@ -159,6 +166,30 @@ func BuiltinExamples() []Example {
 			},
 		},
 		{
+			Name:         "Print X.509 certificate details",
+			Description:  "Inspect a PEM certificate and print the subject, issuer, validity, public key, extensions, and signature material.",
+			Source:       sampleCertificatePEM(),
+			Steps:        []PresetStep{{Plugin: "certPrinter"}},
+			WantContains: "www.example.test",
+		},
+		{
+			Name:         "Clone an X.509 certificate shape",
+			Description:  "Clone a PEM certificate into a new self-signed certificate with a freshly generated matching private key.",
+			Source:       sampleCertificatePEM(),
+			Steps:        []PresetStep{{Plugin: "certCloner"}},
+			WantContains: "BEGIN PRIVATE KEY",
+		},
+		{
+			Name:        "Print X.509 certificate ASN.1",
+			Description: "PEM-decode an X.509 certificate into DER, then print its ASN.1 tag/length/value structure.",
+			Source:      sampleCertificatePEM(),
+			Steps: []PresetStep{
+				{Plugin: "pem", Unprocess: true},
+				{Plugin: "asn1"},
+			},
+			WantContains: "SEQUENCE",
+		},
+		{
 			Name:        "QR payload fixture",
 			Description: "Extract an incident handoff URL from JSON and create a QR PNG for mobile handoff.",
 			Source:      []byte(`{"case":"SEC-1842","url":"https://deen.adversec.com/cases/SEC-1842","expires":"2024-01-16T10:23:54Z"}`),
@@ -174,6 +205,31 @@ func BuiltinExamples() []Example {
 			},
 		},
 	}
+}
+
+func sampleCertificatePEM() []byte {
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		return nil
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(0x5eed),
+		Subject: pkix.Name{
+			CommonName:   "www.example.test",
+			Organization: []string{"Example Security"},
+		},
+		DNSNames:              []string{"www.example.test", "api.example.test"},
+		NotBefore:             time.Date(2024, 1, 15, 10, 23, 54, 0, time.UTC),
+		NotAfter:              time.Date(2025, 1, 15, 10, 23, 54, 0, time.UTC),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return nil
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
 func base64Input(data []byte) []byte {
