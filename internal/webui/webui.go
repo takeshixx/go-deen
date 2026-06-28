@@ -7,7 +7,6 @@ package webui
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -731,17 +730,13 @@ func exampleDataPanel(title string, data []byte) js.Value {
 	}
 	body := el("pre")
 	body.Set("className", "syntax-preview example-data-code")
-	text := exampleDataText(data)
-	renderHighlightedText(body, text, exampleSyntaxSpans(text))
+	if preview, spans, ok := pipeline.HighlightedPreview(data); ok {
+		renderHighlightedText(body, preview, spans)
+	} else {
+		renderHighlightedText(body, exampleDataText(data), nil)
+	}
 	appendChildren(panel, label, body)
 	return panel
-}
-
-func exampleSyntaxSpans(text string) []pipeline.SyntaxSpan {
-	if !json.Valid([]byte(strings.TrimSpace(text))) {
-		return nil
-	}
-	return pipeline.JSONSyntaxSpans(text)
 }
 
 func exampleChain(steps []pipeline.PresetStep) js.Value {

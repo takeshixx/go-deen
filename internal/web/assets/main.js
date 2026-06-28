@@ -12,7 +12,7 @@ function showStartupError(message) {
 }
 
 async function instantiateWasm(go) {
-	const response = await fetch("deen.wasm");
+	const response = await fetch("deen.wasm", { cache: "no-cache" });
 	if (!response.ok) {
 		throw new Error(`failed to download deen.wasm: HTTP ${response.status}`);
 	}
@@ -20,7 +20,7 @@ async function instantiateWasm(go) {
 		try {
 			return await WebAssembly.instantiateStreaming(response, go.importObject);
 		} catch (err) {
-			const bytes = await (await fetch("deen.wasm")).arrayBuffer();
+			const bytes = await (await fetch("deen.wasm", { cache: "no-cache" })).arrayBuffer();
 			return await WebAssembly.instantiate(bytes, go.importObject);
 		}
 	}

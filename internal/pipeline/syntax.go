@@ -199,9 +199,8 @@ func XMLSyntaxSpans(text string) []SyntaxSpan {
 			break
 		}
 		spans = append(spans, SyntaxSpan{Start: i, End: i + 1, Kind: SyntaxPunctuation})
-		spans = append(spans, SyntaxSpan{Start: end, End: end + 1, Kind: SyntaxPunctuation})
 		j := i + 1
-		if j < end && text[j] == '/' {
+		if j < end && (text[j] == '/' || text[j] == '?' || text[j] == '!') {
 			spans = append(spans, SyntaxSpan{Start: j, End: j + 1, Kind: SyntaxPunctuation})
 			j++
 		}
@@ -217,7 +216,10 @@ func XMLSyntaxSpans(text string) []SyntaxSpan {
 		}
 		for j < end {
 			switch {
-			case isASCIIWhitespace(text[j]) || text[j] == '/':
+			case isASCIIWhitespace(text[j]):
+				j++
+			case text[j] == '/' || text[j] == '?':
+				spans = append(spans, SyntaxSpan{Start: j, End: j + 1, Kind: SyntaxPunctuation})
 				j++
 			case isXMLNameByte(text[j]):
 				attrStart := j
@@ -243,6 +245,7 @@ func XMLSyntaxSpans(text string) []SyntaxSpan {
 				j++
 			}
 		}
+		spans = append(spans, SyntaxSpan{Start: end, End: end + 1, Kind: SyntaxPunctuation})
 		i = end + 1
 	}
 	return spans

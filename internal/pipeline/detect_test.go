@@ -162,12 +162,27 @@ func TestHighlightedPreviewStructuredFormats(t *testing.T) {
 			if !ok {
 				t.Fatalf("HighlightedPreview(%s) ok = false", tt.name)
 			}
+			assertSortedNonOverlappingSpans(t, spans)
 			for _, want := range tt.want {
 				if !hasSyntaxKind(spans, want) {
 					t.Fatalf("preview %q missing span kind %s in %#v", preview, want, spans)
 				}
 			}
 		})
+	}
+}
+
+func assertSortedNonOverlappingSpans(t *testing.T, spans []SyntaxSpan) {
+	t.Helper()
+	lastEnd := 0
+	for _, span := range spans {
+		if span.Start < lastEnd {
+			t.Fatalf("spans are not sorted and non-overlapping: %#v", spans)
+		}
+		if span.Start < 0 || span.End <= span.Start {
+			t.Fatalf("invalid span range: %#v", span)
+		}
+		lastEnd = span.End
 	}
 }
 

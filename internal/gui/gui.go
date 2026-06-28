@@ -479,6 +479,11 @@ func exampleDataText(data []byte) string {
 func exampleDataObject(data []byte, fallback fyne.CanvasObject) fyne.CanvasObject {
 	img := canvas.NewImageFromReader(bytes.NewReader(data), "example-output")
 	if img == nil || img.Image == nil {
+		if preview, spans, ok := pipeline.HighlightedPreview(data); ok {
+			grid := newPreviewGrid()
+			setPreviewText(grid, preview, spans)
+			return grid
+		}
 		return fallback
 	}
 	img.FillMode = canvas.ImageFillContain
