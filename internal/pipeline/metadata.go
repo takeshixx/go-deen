@@ -53,6 +53,18 @@ func DataMetadata(data []byte, inputBytes int) Metadata {
 	return m
 }
 
+// IsBinaryData reports whether data should be treated as binary for UI views.
+func IsBinaryData(data []byte) bool {
+	if len(data) == 0 {
+		return false
+	}
+	sample := data
+	if len(sample) > LargeDataThreshold {
+		sample = sample[:LargeDataThreshold]
+	}
+	return likelyTextEncoding(sample) == "binary"
+}
+
 // Summary returns a compact human-readable metadata line.
 func (m Metadata) Summary() string {
 	fields := m.Fields()

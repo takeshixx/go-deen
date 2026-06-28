@@ -45,6 +45,15 @@ func TestDataMetadataBinary(t *testing.T) {
 	if !strings.Contains(m.Summary(), "binary") {
 		t.Fatalf("summary should describe binary data: %s", m.Summary())
 	}
+	if !IsBinaryData([]byte{0xff, 0x00, 0x01}) {
+		t.Fatal("expected binary detector to classify invalid UTF-8 as binary")
+	}
+	if IsBinaryData([]byte("hello\nworld")) {
+		t.Fatal("expected binary detector to classify text as non-binary")
+	}
+	if IsBinaryData(nil) {
+		t.Fatal("expected empty data to be non-binary")
+	}
 }
 
 func TestDataMetadataSummaryIncludesLargeUnits(t *testing.T) {

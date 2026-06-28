@@ -56,6 +56,15 @@ func StructuredPreview(data []byte) (string, bool) {
 	return "", false
 }
 
+// HasStructuredPreview reports whether data can produce a structured preview.
+func HasStructuredPreview(data []byte) bool {
+	if IsLargeData(data) {
+		return false
+	}
+	_, ok := StructuredPreview(data)
+	return ok
+}
+
 func prettyJSON(data []byte) string {
 	var v interface{}
 	if err := json.Unmarshal(data, &v); err != nil {

@@ -36,20 +36,21 @@ type DeenGUI struct {
 	pipe        *pipeline.Pipeline
 	pluginNames []string
 
-	sourceEntry *widget.Entry
-	sourceMeta  *widget.Label
-	sourceName  string
-	stepsBox    *fyne.Container // holds the source card, step cards and add-slot
-	cards       []*stepCard     // parallel to pipe.Steps()
-	history     *fyne.Container // horizontal transformer-chain overview
-	chainView   fyne.CanvasObject
-	split       *container.Split
-	tabButtons  []*navTab
-	tabContent  *fyne.Container
-	workStatus  *widget.Label
-	activeTab   int
-	historyOpen bool
-	working     bool
+	sourceEntry   *widget.Entry
+	sourceHex     *widget.Entry
+	sourceMeta    *widget.Label
+	sourceName    string
+	stepsBox      *fyne.Container // holds the source card, step cards and add-slot
+	cards         []*stepCard     // parallel to pipe.Steps()
+	history       *fyne.Container // horizontal transformer-chain overview
+	chainView     fyne.CanvasObject
+	tabButtons    []*navTab
+	tabContent    *fyne.Container
+	workStatus    *widget.Label
+	activeTab     int
+	actionsOpen   bool
+	stepsExpanded bool
+	working       bool
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
 	updating bool
@@ -68,9 +69,9 @@ func NewDeenGUI() (*DeenGUI, error) {
 	dg.window.SetIcon(deenLogoResource)
 
 	dg.stepsBox = container.NewVBox()
-	dg.history = container.NewHBox()
-	dg.historyOpen = true
+	dg.history = fyne.NewContainerWithLayout(chainRowLayout{})
 	dg.activeTab = -1
+	dg.actionsOpen = false
 	dg.tabContent = container.NewMax()
 	dg.workStatus = widget.NewLabel("")
 	dg.workStatus.Importance = widget.LowImportance
@@ -187,6 +188,16 @@ func (dg *DeenGUI) homeActions() fyne.CanvasObject {
 	undo := widget.NewButtonWithIcon("Undo", theme.NavigateBackIcon(), dg.undo)
 	redo := widget.NewButtonWithIcon("Redo", theme.NavigateNextIcon(), dg.redo)
 	clear := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), dg.clear)
+	stepLayoutLabel := "Expand steps"
+	stepLayoutIcon := theme.MenuExpandIcon()
+	if dg.stepsExpanded {
+		stepLayoutLabel = "Compact steps"
+		stepLayoutIcon = theme.ViewRestoreIcon()
+	}
+	stepLayout := widget.NewButtonWithIcon(stepLayoutLabel, stepLayoutIcon, func() {
+		dg.stepsExpanded = !dg.stepsExpanded
+		dg.rebuild()
+	})
 
 	openChain := widget.NewButtonWithIcon("Open chain", theme.FileTextIcon(), dg.openChain)
 	saveChain := widget.NewButtonWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain)
@@ -194,29 +205,77 @@ func (dg *DeenGUI) homeActions() fyne.CanvasObject {
 	copyCommand := widget.NewButtonWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand)
 
 	compare := widget.NewButtonWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare)
-	toggle := widget.NewButtonWithIcon("Toggle actions", theme.ListIcon(), dg.toggleHistory)
 
 	return container.NewVBox(
 		actionGroup("Result", copyResult, save, open),
 		actionGroup("Chain", openChain, saveChain, copyCommand),
-		actionGroup("Workflow", presets, compare, undo, redo, clear, toggle),
+		actionGroup("Workflow", presets, compare, stepLayout, undo, redo, clear),
 	)
 }
 
 func actionGroup(title string, objects ...fyne.CanvasObject) fyne.CanvasObject {
 	label := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	label.TextStyle.Monospace = false
-	return container.NewVBox(label, container.NewGridWithColumns(1, objects...))
+	label.Importance = widget.LowImportance
+	return container.NewVBox(label, container.NewGridWithColumns(3, objects...))
 }
 
-// toggleHistory collapses or expands the actions side panel.
-func (dg *DeenGUI) toggleHistory() {
-	dg.historyOpen = !dg.historyOpen
-	if dg.historyOpen {
-		dg.split.SetOffset(0.78)
-	} else {
-		dg.split.SetOffset(1.0)
+type chainRowLayout struct{}
+
+func (chainRowLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	x := float32(0)
+	for _, obj := range objects {
+		if !obj.Visible() {
+			continue
+		}
+		min := obj.MinSize()
+		y := float32(0)
+		if size.Height > min.Height {
+			y = (size.Height - min.Height) / 2
+		}
+		obj.Move(fyne.NewPos(x, y))
+		obj.Resize(min)
+		x += min.Width + theme.Padding()
 	}
+}
+
+func (chainRowLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	width, height := float32(0), float32(0)
+	visible := 0
+	for _, obj := range objects {
+		if !obj.Visible() {
+			continue
+		}
+		min := obj.MinSize()
+		width += min.Width
+		if min.Height > height {
+			height = min.Height
+		}
+		visible++
+	}
+	if visible > 1 {
+		width += theme.Padding() * float32(visible-1)
+	}
+	return fyne.NewSize(width, height)
+}
+
+func (dg *DeenGUI) newActionBar() fyne.CanvasObject {
+	title := widget.NewLabelWithStyle("Actions", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	toggleLabel := "Hide"
+	toggleIcon := theme.MenuDropUpIcon()
+	if !dg.actionsOpen {
+		toggleLabel = "Show"
+		toggleIcon = theme.MenuDropDownIcon()
+	}
+	toggle := widget.NewButtonWithIcon(toggleLabel, toggleIcon, func() {
+		dg.actionsOpen = !dg.actionsOpen
+		dg.rebuild()
+	})
+	toggle.Importance = widget.LowImportance
+	header := container.NewBorder(nil, nil, title, toggle)
+	if !dg.actionsOpen {
+		return widget.NewCard("", "", header)
+	}
+	return widget.NewCard("", "", container.NewVBox(header, dg.homeActions()))
 }
 
 // mainMenu builds the window menu (theme switching).
@@ -242,11 +301,7 @@ func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
 }
 
 func (dg *DeenGUI) homeTab() fyne.CanvasObject {
-	chain := container.NewVScroll(dg.stepsBox)
-	actionPanel := widget.NewCard("Actions", "", dg.homeActions())
-	dg.split = container.NewHSplit(chain, container.New(cappedMinWidthLayout{width: 220}, actionPanel))
-	dg.split.SetOffset(0.72)
-	return dg.split
+	return container.NewVScroll(dg.stepsBox)
 }
 
 // showHelp displays a usage/info page describing the GUI.
@@ -507,6 +562,7 @@ func (dg *DeenGUI) rebuild() {
 	dg.stepsBox.RemoveAll()
 	dg.cards = dg.cards[:0]
 
+	dg.stepsBox.Add(dg.newActionBar())
 	dg.stepsBox.Add(dg.newSourceCard())
 	dg.stepsBox.Add(dg.newChainOverview())
 	for i := range dg.pipe.Steps() {
@@ -521,9 +577,9 @@ func (dg *DeenGUI) rebuild() {
 
 func (dg *DeenGUI) newChainOverview() fyne.CanvasObject {
 	scroll := container.NewHScroll(dg.history)
-	scroll.SetMinSize(fyne.NewSize(compactControlMinWidth, 70))
+	scroll.SetMinSize(fyne.NewSize(compactControlMinWidth, 54))
 	dg.chainView = scroll
-	return scroll
+	return container.NewMax(scroll)
 }
 
 // updateHistory redraws the horizontal transformer chain overview.
@@ -538,7 +594,7 @@ func (dg *DeenGUI) updateHistory() {
 			arrow := canvas.NewText("→", theme.Color(theme.ColorNamePlaceHolder))
 			arrow.TextStyle = fyne.TextStyle{Bold: true}
 			arrow.TextSize = 18
-			dg.history.Add(container.NewCenter(arrow))
+			dg.history.Add(arrow)
 		}
 		dg.history.Add(guiChainStepPill(i, s))
 		shown++
@@ -574,10 +630,10 @@ func guiChainStepPill(i int, step *pipeline.Step) fyne.CanvasObject {
 	sort.Strings(metaParts)
 	var meta fyne.CanvasObject
 	if len(metaParts) > 0 {
-		label := widget.NewLabel(strings.Join(metaParts, ", "))
-		label.Importance = widget.LowImportance
-		label.Wrapping = fyne.TextWrapBreak
-		meta = label
+		text := canvas.NewText(strings.Join(metaParts, ", "), theme.Color(theme.ColorNamePlaceHolder))
+		text.TextStyle = fyne.TextStyle{Monospace: true}
+		text.TextSize = 12
+		meta = text
 	}
 	return guiChainPill(title, meta, displayCol, step.Disabled)
 }
@@ -604,6 +660,10 @@ func (dg *DeenGUI) refreshFrom(from int) {
 	defer dg.setWorking("", false)
 	if dg.sourceMeta != nil {
 		dg.sourceMeta.SetText(dg.sourceMetadataSummary())
+	}
+	if dg.sourceHex != nil {
+		hexText, _ := guiHexDisplay(dg.pipe.Source())
+		dg.setText(dg.sourceHex, hexText)
 	}
 	for i := from; i < len(dg.cards); i++ {
 		dg.cards[i].refresh()

@@ -43,6 +43,9 @@ func disabledAccent() color.NRGBA { return color.NRGBA{R: 0x8c, G: 0x96, B: 0x9b
 
 const outputViewerHeight float32 = 260
 const compactControlMinWidth float32 = 360
+const sourceInputRows = 14
+const sourceInputMinHeight float32 = 160
+const sourceInputMaxHeight float32 = 360
 
 type fixedHeightLayout struct {
 	height float32
@@ -92,6 +95,24 @@ func multilineEntry(rows int) *widget.Entry {
 	e.Wrapping = fyne.TextWrapBreak
 	e.SetMinRowsVisible(rows)
 	return e
+}
+
+func sourceInputHeight(data []byte) float32 {
+	if len(data) == 0 {
+		return sourceInputMinHeight
+	}
+	if pipeline.IsLargeData(data) || pipeline.IsBinaryData(data) || len(data) > 4096 {
+		return sourceInputMaxHeight
+	}
+	lines := bytes.Count(data, []byte{'\n'}) + 1
+	switch {
+	case lines <= 3:
+		return sourceInputMinHeight
+	case lines <= 8:
+		return 240
+	default:
+		return sourceInputMaxHeight
+	}
 }
 
 func guiTextDisplay(data []byte) (string, bool) {
@@ -206,7 +227,8 @@ func (dg *DeenGUI) addCategorySelectors() fyne.CanvasObject {
 
 // newSourceCard builds the editable source-input card at the top of the chain.
 func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
-	dg.sourceEntry = multilineEntry(6)
+	dg.sourceEntry = multilineEntry(sourceInputRows)
+	dg.sourceHex = nil
 	sourceText, sourceCapped := guiTextDisplay(dg.pipe.Source())
 	dg.sourceEntry.SetText(sourceText)
 	if sourceCapped {
@@ -227,7 +249,22 @@ func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 		dg.pipe.SetSourceOwned([]byte(s))
 		dg.refreshFrom(0)
 	}
-	content := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(dg.sourceEntry, dg.sourceMeta))
+	var sourceView fyne.CanvasObject = dg.sourceEntry
+	if pipeline.IsBinaryData(dg.pipe.Source()) {
+		dg.sourceHex = multilineEntry(sourceInputRows)
+		hexText, _ := guiHexDisplay(dg.pipe.Source())
+		dg.sourceHex.SetText(hexText)
+		dg.sourceHex.Disable()
+		viewer := container.NewAppTabs(
+			container.NewTabItem("Raw", dg.sourceEntry),
+			container.NewTabItem("Hex", dg.sourceHex),
+		)
+		viewer.SetTabLocation(container.TabLocationTop)
+		viewer.SelectIndex(1)
+		sourceView = viewer
+	}
+	sourceBox := container.New(fixedHeightLayout{height: sourceInputHeight(dg.pipe.Source())}, sourceView)
+	content := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(sourceBox, dg.sourceMeta))
 	return widget.NewCard("Input", "", container.NewPadded(content))
 }
 
@@ -238,20 +275,24 @@ type stepCard struct {
 	pluginName string
 	collapsed  bool
 
-	decode    *widget.Check
-	enabled   *widget.Check
-	summary   *canvas.Text
-	collapse  *widget.Button
-	detail    *fyne.Container
-	options   *fyne.Container
-	body      *widget.Entry
-	hexBody   *widget.Entry
-	preview   *widget.TextGrid
-	image     *canvas.Image
-	imageMsg  *widget.Label
-	meta      *widget.Label
-	status    *widget.Label
-	container fyne.CanvasObject
+	decode     *widget.Check
+	enabled    *widget.Check
+	summary    *canvas.Text
+	collapse   *widget.Button
+	detail     *fyne.Container
+	options    *fyne.Container
+	body       *widget.Entry
+	hexBody    *widget.Entry
+	viewer     *container.AppTabs
+	rawTab     *container.TabItem
+	hexTab     *container.TabItem
+	previewTab *container.TabItem
+	preview    *widget.TextGrid
+	image      *canvas.Image
+	imageMsg   *widget.Label
+	meta       *widget.Label
+	status     *widget.Label
+	container  fyne.CanvasObject
 }
 
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
@@ -345,13 +386,16 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	}
 	c.hexBody = multilineEntry(6)
 	c.hexBody.Disable()
-	c.preview = widget.NewTextGrid()
-	c.preview.ShowLineNumbers = false
-	c.preview.Scroll = fyne.ScrollBoth
+	c.rawTab = container.NewTabItem("Raw", c.body)
+	c.hexTab = container.NewTabItem("Hex", c.hexBody)
 	viewerTabs := []*container.TabItem{
-		container.NewTabItem("Text", c.body),
-		container.NewTabItem("Hex", c.hexBody),
-		container.NewTabItem("Preview", c.preview),
+		c.rawTab,
+		c.hexTab,
+	}
+	if pipeline.HasStructuredPreview(dg.pipe.Output(i)) {
+		c.preview = newPreviewGrid()
+		c.previewTab = container.NewTabItem("Preview", c.preview)
+		viewerTabs = append(viewerTabs, c.previewTab)
 	}
 	if stepGeneratesImage(step) {
 		c.image = canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 1, 1)))
@@ -364,7 +408,10 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	}
 	viewer := container.NewAppTabs(viewerTabs...)
 	viewer.SetTabLocation(container.TabLocationTop)
-	if stepGeneratesImage(step) {
+	c.viewer = viewer
+	if pipeline.IsBinaryData(dg.pipe.Output(i)) {
+		viewer.Select(c.hexTab)
+	} else if stepGeneratesImage(step) {
 		viewer.Select(viewerTabs[len(viewerTabs)-1])
 	}
 	viewerBox := container.New(fixedHeightLayout{height: outputViewerHeight}, viewer)
@@ -392,6 +439,11 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.rebuildOptions()
 	c.updateSummary()
 	c.refresh()
+	if !dg.stepsExpanded && i < len(dg.pipe.Steps())-1 {
+		c.collapsed = true
+		c.detail.Hide()
+		c.collapse.SetIcon(theme.NavigateNextIcon())
+	}
 	return c
 }
 
@@ -558,6 +610,38 @@ func stepGeneratesImage(step *pipeline.Step) bool {
 	return step.Plugin == "qr" && !step.Unprocess
 }
 
+func newPreviewGrid() *widget.TextGrid {
+	preview := widget.NewTextGrid()
+	preview.ShowLineNumbers = false
+	preview.Scroll = fyne.ScrollBoth
+	return preview
+}
+
+func (c *stepCard) syncPreviewTab(out []byte) {
+	if c.viewer == nil {
+		return
+	}
+	hasPreview := pipeline.HasStructuredPreview(out)
+	if hasPreview && c.previewTab == nil {
+		c.preview = newPreviewGrid()
+		c.previewTab = container.NewTabItem("Preview", c.preview)
+		c.viewer.Append(c.previewTab)
+		return
+	}
+	if !hasPreview && c.previewTab != nil {
+		if c.viewer.Selected() == c.previewTab {
+			if pipeline.IsBinaryData(out) {
+				c.viewer.Select(c.hexTab)
+			} else {
+				c.viewer.Select(c.rawTab)
+			}
+		}
+		c.viewer.Remove(c.previewTab)
+		c.previewTab = nil
+		c.preview = nil
+	}
+}
+
 func stepToggleControl(check *widget.Check, label string, accent color.NRGBA) fyne.CanvasObject {
 	title := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	title.Importance = widget.LowImportance
@@ -592,16 +676,11 @@ func (c *stepCard) refresh() {
 	if c.image != nil {
 		setImagePreview(c.image, c.imageMsg, out)
 	}
-	var preview string
-	var spans []pipeline.SyntaxSpan
-	if pipeline.IsLargeData(out) {
-		preview = "No structured preview available for large data."
-	} else if p, s, ok := pipeline.HighlightedPreview(out); ok {
-		preview, spans = p, s
-	} else {
-		preview = "No structured preview available."
+	c.syncPreviewTab(out)
+	if c.preview != nil {
+		preview, spans, _ := pipeline.HighlightedPreview(out)
+		setPreviewText(c.preview, preview, spans)
 	}
-	setPreviewText(c.preview, preview, spans)
 	c.hexBody.Disable()
 }
 

@@ -25,34 +25,42 @@ var palette = []string{"#4285f4", "#0f9d58", "#f4b400", "#db4437", "#ab47bc", "#
 func accent(i int) string { return palette[i%len(palette)] }
 
 var (
-	doc          js.Value
-	pipe         *pipeline.Pipeline
-	contentEl    js.Value
-	tabBtns      []js.Value
-	stepsEl      js.Value
-	historyEl    js.Value
-	sourceEl     js.Value
-	busyEl       js.Value
-	updating     bool
-	callbacks    []js.Func
-	staticCBs    []js.Func
-	cards        []*cardRef
-	activeTab    = "home"
-	sourceName   string
-	navCollapsed bool
+	doc        js.Value
+	pipe       *pipeline.Pipeline
+	contentEl  js.Value
+	tabBtns    []js.Value
+	stepsEl    js.Value
+	historyEl  js.Value
+	sourceEl   js.Value
+	busyEl     js.Value
+	updating   bool
+	callbacks  []js.Func
+	staticCBs  []js.Func
+	cards      []*cardRef
+	activeTab  = "home"
+	sourceName string
 )
 
 type cardRef struct {
-	index        int
-	output       js.Value
-	hexOutput    js.Value
-	preview      js.Value
-	imageEnabled bool
-	imagePanel   js.Value
-	image        js.Value
-	imageMsg     js.Value
-	meta         js.Value
-	errEl        js.Value
+	index            int
+	output           js.Value
+	hexOutput        js.Value
+	preview          js.Value
+	rawButton        js.Value
+	hexButton        js.Value
+	previewButton    js.Value
+	rawPanel         js.Value
+	hexPanel         js.Value
+	previewPanel     js.Value
+	activeOutputView string
+	activateOutput   func(string)
+	imageEnabled     bool
+	imageButton      js.Value
+	imagePanel       js.Value
+	image            js.Value
+	imageMsg         js.Value
+	meta             js.Value
+	errEl            js.Value
 }
 
 // Run builds the UI and blocks so the event callbacks stay alive.
@@ -121,10 +129,20 @@ func textarea(value string) js.Value {
 }
 
 func textareaWithMax(value string, maxHeight int) js.Value {
+	return textareaWithMaxAttr(value, strconv.Itoa(maxHeight))
+}
+
+func sourceTextarea(value string) js.Value {
+	t := textareaWithMaxAttr(value, "window")
+	t.Get("classList").Call("add", "source-io")
+	return t
+}
+
+func textareaWithMaxAttr(value, maxHeight string) js.Value {
 	t := el("textarea")
 	t.Set("className", "io")
 	t.Set("value", value)
-	t.Call("setAttribute", "data-max-height", strconv.Itoa(maxHeight))
+	t.Call("setAttribute", "data-max-height", maxHeight)
 	autoSizeTextarea(t)
 	on(t, "input", func() { autoSizeTextarea(t) })
 	return t
@@ -134,7 +152,15 @@ func autoSizeTextarea(t js.Value) {
 	t.Get("style").Set("height", "auto")
 	maxHeight := 512
 	if attr := t.Call("getAttribute", "data-max-height"); attr.Truthy() {
-		if n, err := strconv.Atoi(attr.String()); err == nil && n > 0 {
+		if attr.String() == "window" {
+			rect := t.Call("getBoundingClientRect")
+			top := rect.Get("top").Float()
+			available := js.Global().Get("innerHeight").Float() - top - 24
+			if available < 160 {
+				available = 160
+			}
+			maxHeight = int(available)
+		} else if n, err := strconv.Atoi(attr.String()); err == nil && n > 0 {
 			maxHeight = n
 		}
 	}
@@ -145,6 +171,8 @@ func autoSizeTextarea(t js.Value) {
 	height := scrollHeight
 	if height > maxHeight {
 		height = maxHeight
+		t.Get("style").Set("overflowY", "auto")
+	} else if t.Get("classList").Call("contains", "source-io").Bool() {
 		t.Get("style").Set("overflowY", "auto")
 	} else {
 		t.Get("style").Set("overflowY", "hidden")
@@ -165,6 +193,13 @@ func autoSizeTextareaSoon(t js.Value) {
 		return nil
 	})
 	raf.Invoke(cb)
+}
+
+func autoSizeSourceTextareasSoon() {
+	areas := contentEl.Call("querySelectorAll", ".source textarea.source-io")
+	for i := 0; i < areas.Get("length").Int(); i++ {
+		autoSizeTextareaSoon(areas.Call("item", i))
+	}
 }
 
 func autoSizeOutputTextareas(c *cardRef) {
@@ -515,14 +550,11 @@ func rebuild() {
 
 func renderHome() {
 	app := div("app")
-	if navCollapsed {
-		app.Set("className", "app nav-collapsed")
-	}
 	main := div("main")
-	side := div("side")
 
 	stepsEl = div("steps")
 
+	stepsEl.Call("appendChild", commandBar())
 	stepsEl.Call("appendChild", sourceCard())
 	historyEl = div("history chain-overview")
 	stepsEl.Call("appendChild", historyEl)
@@ -531,34 +563,28 @@ func renderHome() {
 	}
 	stepsEl.Call("appendChild", addCard())
 
-	sideHeader := div("side-header")
-	sideTitle := el("h2")
-	sideTitle.Set("textContent", "Navigation")
-	toggleLabel := "Collapse navigation"
-	toggleIcon := "collapse"
-	if navCollapsed {
-		toggleLabel = "Expand navigation"
-		toggleIcon = "expand"
-	}
-	toggleNav := iconButton("nav-toggle", toggleIcon, toggleLabel, func() {
-		navCollapsed = !navCollapsed
-		rebuild()
-	})
-	appendChildren(sideHeader, sideTitle, toggleNav)
-	sideActions := div("side-actions")
-	appendChildren(sideActions,
-		sideActionGroup("Result",
+	appendChildren(main, stepsEl)
+	appendChildren(app, main)
+	contentEl.Call("appendChild", app)
+	updateHistory()
+	autoSizeSourceTextareasSoon()
+}
+
+func commandBar() js.Value {
+	bar := div("command-bar")
+	appendChildren(bar,
+		commandGroup("Result",
 			iconButton("primary", "copy", "Copy result", copyResult),
 			iconButton("", "download", "Download", downloadResult),
 			filePicker(),
 		),
-		sideActionGroup("Chain",
+		commandGroup("Chain",
 			chainPicker(),
 			iconButton("", "upload", "Export chain", exportChain),
 			iconButton("", "link", "Copy link", copyShareLink),
 			iconButton("", "terminal", "Copy command", copyCommand),
 		),
-		sideActionGroup("Workflow",
+		commandGroup("Workflow",
 			iconButton("", "star", "Presets", showPresets),
 			iconButton("", "compare", "Compare", showCompare),
 			iconButton("", "undo", "Undo", func() {
@@ -578,18 +604,13 @@ func renderHome() {
 			}),
 		),
 	)
-
-	appendChildren(main, stepsEl)
-	appendChildren(side, sideHeader, sideActions)
-	appendChildren(app, main, side)
-	contentEl.Call("appendChild", app)
-	updateHistory()
+	return bar
 }
 
-func sideActionGroup(title string, kids ...js.Value) js.Value {
-	group := div("side-action-group")
+func commandGroup(title string, kids ...js.Value) js.Value {
+	group := div("command-group")
 	label := el("div")
-	label.Set("className", "side-action-title")
+	label.Set("className", "command-title")
 	label.Set("textContent", title)
 	appendChildren(group, label)
 	for _, kid := range kids {
@@ -1319,12 +1340,23 @@ func sourceCard() js.Value {
 	if sourceLarge {
 		sourceText, _ = pipeline.TextDisplay(pipe.Source())
 	}
-	ta := textarea(sourceText)
+	ta := sourceTextarea(sourceText)
 	if sourceLarge {
 		ta.Set("readOnly", true)
 		ta.Set("title", pipeline.LargeDataPlaceholder(pipe.Source()))
 	}
 	sourceEl = ta
+	var sourceHex js.Value
+	sourceHasHex := false
+	var sourceView js.Value = ta
+	if pipeline.IsBinaryData(pipe.Source()) {
+		sourceHasHex = true
+		sourceHex = sourceTextarea("")
+		sourceHex.Set("readOnly", true)
+		hexText, _ := pipeline.HexDisplay(pipe.Source())
+		sourceHex.Set("value", hexText)
+		sourceView = sourceInputViewer(ta, sourceHex, "hex")
+	}
 	meta := div("meta")
 	renderMetadata(meta, sourceName, pipeline.DataMetadata(pipe.Source(), 0))
 	on(ta, "input", func() {
@@ -1336,6 +1368,11 @@ func sourceCard() js.Value {
 			sourceName = ""
 			pipe.SetSourceOwned([]byte(value))
 			renderMetadata(meta, sourceName, pipeline.DataMetadata(pipe.Source(), 0))
+			if sourceHasHex {
+				hexText, _ := pipeline.HexDisplay(pipe.Source())
+				sourceHex.Set("value", hexText)
+				autoSizeTextareaSoon(sourceHex)
+			}
 			refreshOutputs(0)
 		})
 	})
@@ -1356,9 +1393,68 @@ func sourceCard() js.Value {
 		}
 		loadSourceFile(files.Call("item", 0))
 	})
-	appendChildren(card, label, ta, meta)
+	appendChildren(card, label, sourceView, meta)
 	autoSizeTextarea(ta)
+	if sourceHasHex {
+		autoSizeTextarea(sourceHex)
+	}
 	return card
+}
+
+func sourceInputViewer(textInput, hexInput js.Value, activeView string) js.Value {
+	if activeView == "" {
+		activeView = "raw"
+	}
+	viewer := div("viewer")
+	tabs := div("viewer-tabs")
+	panels := div("viewer-panels")
+	items := []struct {
+		label string
+		name  string
+		node  js.Value
+	}{
+		{"Raw", "raw", textInput},
+		{"Hex", "hex", hexInput},
+	}
+	buttons := make([]js.Value, 0, len(items))
+	panelEls := make([]js.Value, 0, len(items))
+	var activate func(int)
+	for idx, item := range items {
+		panel := div("viewer-panel")
+		if item.name != activeView {
+			panel.Set("className", "viewer-panel hidden")
+		}
+		panel.Call("appendChild", item.node)
+		panelEls = append(panelEls, panel)
+		btn := el("button")
+		btn.Set("type", "button")
+		if item.name == activeView {
+			btn.Set("className", "viewer-tab active")
+		} else {
+			btn.Set("className", "viewer-tab")
+		}
+		btn.Set("textContent", item.label)
+		i := idx
+		on(btn, "click", func() { activate(i) })
+		buttons = append(buttons, btn)
+		tabs.Call("appendChild", btn)
+		panels.Call("appendChild", panel)
+	}
+	activate = func(active int) {
+		for i, panel := range panelEls {
+			if i == active {
+				panel.Set("className", "viewer-panel")
+				buttons[i].Set("className", "viewer-tab active")
+			} else {
+				panel.Set("className", "viewer-panel hidden")
+				buttons[i].Set("className", "viewer-tab")
+			}
+		}
+		autoSizeTextareaSoon(textInput)
+		autoSizeTextareaSoon(hexInput)
+	}
+	appendChildren(viewer, tabs, panels)
+	return viewer
 }
 
 func sourceMetadataSummary() string {
@@ -1548,63 +1644,91 @@ func outputViewer(ref *cardRef) js.Value {
 	tabs := div("viewer-tabs")
 	panels := div("viewer-panels")
 
-	panelItems := []struct {
+	type panelItem struct {
 		label string
+		name  string
 		node  js.Value
-	}{
-		{"Text", ref.output},
-		{"Hex", ref.hexOutput},
-		{"Preview", ref.preview},
+	}
+	panelItems := []panelItem{
+		{"Raw", "raw", ref.output},
+		{"Hex", "hex", ref.hexOutput},
+		{"Preview", "preview", ref.preview},
 	}
 	if ref.imageEnabled {
-		panelItems = append(panelItems, struct {
-			label string
-			node  js.Value
-		}{"Image", ref.imagePanel})
+		panelItems = append(panelItems, panelItem{"Image", "image", ref.imagePanel})
 	}
-	activeIndex := 0
-	if ref.imageEnabled {
-		activeIndex = len(panelItems) - 1
+	activeView := "raw"
+	if pipeline.IsBinaryData(pipe.Output(ref.index)) {
+		activeView = "hex"
+	} else if ref.imageEnabled {
+		activeView = "image"
 	}
-	buttons := make([]js.Value, 0, len(panelItems))
-	panelEls := make([]js.Value, 0, len(panelItems))
-	var activate func(int)
-	for idx, item := range panelItems {
+	ref.activeOutputView = activeView
+	buttons := map[string]js.Value{}
+	panelEls := map[string]js.Value{}
+	hasPreview := pipeline.HasStructuredPreview(pipe.Output(ref.index))
+	var activate func(string)
+	for _, item := range panelItems {
 		panel := div("viewer-panel")
-		if idx != activeIndex {
+		if item.name != activeView {
 			panel.Set("className", "viewer-panel hidden")
 		}
 		panel.Call("appendChild", item.node)
-		panelEls = append(panelEls, panel)
 		btn := el("button")
 		btn.Set("type", "button")
-		if idx == activeIndex {
+		if item.name == activeView {
 			btn.Set("className", "viewer-tab active")
 		} else {
 			btn.Set("className", "viewer-tab")
 		}
 		btn.Set("textContent", item.label)
-		i := idx
-		on(btn, "click", func() { activate(i) })
-		buttons = append(buttons, btn)
+		name := item.name
+		on(btn, "click", func() { activate(name) })
+		buttons[name] = btn
+		panelEls[name] = panel
+		switch item.name {
+		case "raw":
+			ref.rawButton, ref.rawPanel = btn, panel
+		case "hex":
+			ref.hexButton, ref.hexPanel = btn, panel
+		case "preview":
+			ref.previewButton, ref.previewPanel = btn, panel
+			setOutputTabVisible(btn, panel, hasPreview)
+		case "image":
+			ref.imageButton = btn
+		}
 		tabs.Call("appendChild", btn)
 		panels.Call("appendChild", panel)
 	}
-	activate = func(active int) {
-		for i, btn := range buttons {
-			if i == active {
+	activate = func(active string) {
+		if active == "preview" && !pipeline.HasStructuredPreview(pipe.Output(ref.index)) {
+			return
+		}
+		for name, btn := range buttons {
+			if name == active {
 				btn.Set("className", "viewer-tab active")
-				panelEls[i].Set("className", "viewer-panel")
-				autoSizeViewerPanel(panelEls[i])
+				panelEls[name].Set("className", "viewer-panel")
+				ref.activeOutputView = name
+				autoSizeViewerPanel(panelEls[name])
 			} else {
 				btn.Set("className", "viewer-tab")
-				panelEls[i].Set("className", "viewer-panel hidden")
+				panelEls[name].Set("className", "viewer-panel hidden")
 			}
 		}
 	}
+	ref.activateOutput = activate
 
 	appendChildren(viewer, tabs, panels)
 	return viewer
+}
+
+func setOutputTabVisible(button, panel js.Value, visible bool) {
+	if visible {
+		button.Get("style").Set("display", "")
+		return
+	}
+	button.Get("style").Set("display", "none")
+	panel.Set("className", "viewer-panel hidden")
 }
 
 func styleStepToggle(wrap, input js.Value, baseClass, title string, active bool) {
@@ -1881,16 +2005,16 @@ func renderOutput(c *cardRef) {
 	if c.imageEnabled {
 		renderImageOutput(c, out)
 	}
-	if pipeline.IsLargeData(out) {
-		renderHighlightedText(c.preview, "No structured preview available for large data.", nil)
-	} else {
-		preview, ok := pipeline.StructuredPreview(out)
-		if !ok {
-			preview = "No structured preview available."
-			renderHighlightedText(c.preview, preview, nil)
+	hasPreview := pipeline.HasStructuredPreview(out)
+	setOutputTabVisible(c.previewButton, c.previewPanel, hasPreview)
+	if hasPreview {
+		preview, spans, _ := pipeline.HighlightedPreview(out)
+		renderHighlightedText(c.preview, preview, spans)
+	} else if c.activeOutputView == "preview" && c.activateOutput != nil {
+		if pipeline.IsBinaryData(out) {
+			c.activateOutput("hex")
 		} else {
-			preview, spans, _ := pipeline.HighlightedPreview(out)
-			renderHighlightedText(c.preview, preview, spans)
+			c.activateOutput("raw")
 		}
 	}
 	updating = false
