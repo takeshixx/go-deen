@@ -28,6 +28,10 @@ func TestDataMetadataText(t *testing.T) {
 			t.Fatalf("summary missing %q: %s", want, summary)
 		}
 	}
+	fields := m.Fields()
+	if fields[0].Label != "size" || fields[0].Value != "11 bytes" {
+		t.Fatalf("unexpected first field: %#v", fields[0])
+	}
 }
 
 func TestDataMetadataBinary(t *testing.T) {
@@ -40,6 +44,30 @@ func TestDataMetadataBinary(t *testing.T) {
 	}
 	if !strings.Contains(m.Summary(), "binary") {
 		t.Fatalf("summary should describe binary data: %s", m.Summary())
+	}
+}
+
+func TestDataMetadataSummaryIncludesLargeUnits(t *testing.T) {
+	m := DataMetadata(make([]byte, LargeDataThreshold+1), 0)
+	summary := m.Summary()
+	for _, want := range []string{"1048577 bytes", "1.00 MB"} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("summary missing %q: %s", want, summary)
+		}
+	}
+	if strings.Contains(summary, "GB") {
+		t.Fatalf("summary should not include GB below 1 GiB: %s", summary)
+	}
+}
+
+func TestDataMetadataSummaryUsesGBForGigabyte(t *testing.T) {
+	m := Metadata{Bytes: 1 << 30}
+	summary := m.Summary()
+	if !strings.Contains(summary, "1.00 GB") {
+		t.Fatalf("summary should include GB: %s", summary)
+	}
+	if strings.Contains(summary, "MB") {
+		t.Fatalf("summary should not include MB at 1 GiB: %s", summary)
 	}
 }
 

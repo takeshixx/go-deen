@@ -160,7 +160,7 @@ func BuiltinExamples() []Example {
 		},
 		{
 			Name:        "QR payload fixture",
-			Description: "Format an incident handoff URL as a compact JSON object, create a QR PNG, then Base64-encode it for embedding.",
+			Description: "Extract an incident handoff URL from JSON and create a QR PNG for mobile handoff.",
 			Source:      []byte(`{"case":"SEC-1842","url":"https://deen.adversec.com/cases/SEC-1842","expires":"2024-01-16T10:23:54Z"}`),
 			Steps: []PresetStep{
 				{Plugin: "jq", Options: map[string]string{
@@ -171,9 +171,7 @@ func BuiltinExamples() []Example {
 					Plugin:  "qr",
 					Options: map[string]string{"size": "192"},
 				},
-				{Plugin: "base64"},
 			},
-			WantContains: "iVBOR",
 		},
 	}
 }

@@ -35,6 +35,9 @@ type Suggestion struct {
 // Suggestions returns likely next transforms for a byte slice. It is heuristic:
 // suggestions should be helpful shortcuts, not declarations of file type.
 func Suggestions(data []byte) []Suggestion {
+	if len(data) > LargeDataThreshold {
+		data = data[:LargeDataThreshold]
+	}
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 {
 		return nil

@@ -149,12 +149,36 @@ func TestDisableStep(t *testing.T) {
 	p.SetSource([]byte("test"))
 	p.AddStep("base64", false)
 	p.SetStepDisabled(0, true)
+	if got := string(p.Output(0)); got != "dGVzdA==" {
+		t.Fatalf("disabled displayed output = %q, want dGVzdA==", got)
+	}
 	if got := string(p.Result()); got != "test" {
 		t.Fatalf("disabled result = %q, want test", got)
 	}
 	p.SetStepDisabled(0, false)
 	if got := string(p.Result()); got != "dGVzdA==" {
 		t.Fatalf("enabled result = %q, want dGVzdA==", got)
+	}
+}
+
+func TestDisabledStepDisplaysTransformWhileDownstreamBypasses(t *testing.T) {
+	p := New()
+	p.SetSource([]byte("test"))
+	p.AddStep("base64", false)
+	p.AddStep("hex", false)
+	p.SetStepDisabled(0, true)
+
+	if got := string(p.Output(0)); got != "dGVzdA==" {
+		t.Fatalf("disabled displayed output = %q, want dGVzdA==", got)
+	}
+	if got := string(p.Output(1)); got != "74657374" {
+		t.Fatalf("downstream output = %q, want hex of original input", got)
+	}
+	if got := string(p.Result()); got != "74657374" {
+		t.Fatalf("result = %q, want downstream bypass result", got)
+	}
+	if got := string(p.Input(1)); got != "test" {
+		t.Fatalf("step 1 input = %q, want original input", got)
 	}
 }
 

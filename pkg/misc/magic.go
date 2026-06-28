@@ -37,7 +37,7 @@ func NewPluginMagic() *types.DeenPlugin {
 	p.Category = "misc"
 	p.Description = "Detect common file types from magic bytes and content sniffing."
 	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
-		data, err := io.ReadAll(r)
+		data, err := io.ReadAll(io.LimitReader(r, 512))
 		if err != nil {
 			return err
 		}

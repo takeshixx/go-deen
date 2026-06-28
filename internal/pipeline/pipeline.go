@@ -23,6 +23,7 @@ type Step struct {
 	override    []byte // user-edited content that replaces the computed output
 	hasOverride bool
 	output      []byte
+	effective   []byte
 	err         error
 }
 
@@ -86,8 +87,20 @@ func (p *Pipeline) Clear() {
 	p.Compute()
 }
 
-// Output returns the output of step i.
+// Output returns the displayed output of step i. Disabled steps still compute
+// their transform for display, but their effective chain output is bypassed.
 func (p *Pipeline) Output(i int) []byte { return p.steps[i].output }
+
+// Input returns the bytes used as input for step i.
+func (p *Pipeline) Input(i int) []byte {
+	if i <= 0 {
+		return p.source
+	}
+	if i > len(p.steps) {
+		return nil
+	}
+	return p.steps[i-1].effective
+}
 
 // Err returns the error (if any) produced by step i.
 func (p *Pipeline) Err(i int) error { return p.steps[i].err }
@@ -97,7 +110,7 @@ func (p *Pipeline) Result() []byte {
 	if len(p.steps) == 0 {
 		return p.source
 	}
-	return p.steps[len(p.steps)-1].output
+	return p.steps[len(p.steps)-1].effective
 }
 
 // ExportJSON serializes the editable pipeline state, including binary source
@@ -188,6 +201,16 @@ func (p *Pipeline) ImportJSON(data []byte) error {
 // SetSource sets the source input. Editing the source invalidates any
 // downstream manual edits.
 func (p *Pipeline) SetSource(b []byte) {
+	p.setSource(append([]byte(nil), b...))
+}
+
+// SetSourceOwned sets the source input without copying b. Callers must not
+// mutate b after handing it to the pipeline.
+func (p *Pipeline) SetSourceOwned(b []byte) {
+	p.setSource(b)
+}
+
+func (p *Pipeline) setSource(b []byte) {
 	p.record()
 	p.source = b
 	p.clearOverrides(0)
@@ -250,14 +273,15 @@ func (p *Pipeline) DuplicateStep(i int) {
 }
 
 // SetStepDisabled enables or disables a step. Disabled steps pass their input
-// through unchanged.
+// through unchanged for the chain, while still keeping their transform output
+// visible on the step itself.
 func (p *Pipeline) SetStepDisabled(i int, disabled bool) {
 	if i < 0 || i >= len(p.steps) || p.steps[i].Disabled == disabled {
 		return
 	}
 	p.record()
 	p.steps[i].Disabled = disabled
-	p.clearOverrides(i)
+	p.clearOverrides(i + 1)
 	p.Compute()
 }
 
@@ -354,7 +378,7 @@ func appendLimited(history []snapshot, s snapshot) []snapshot {
 
 func (p *Pipeline) snapshot() snapshot {
 	s := snapshot{
-		Source: append([]byte(nil), p.source...),
+		Source: p.source,
 		Steps:  make([]stepSnapshot, 0, len(p.steps)),
 	}
 	for _, step := range p.steps {
@@ -375,7 +399,7 @@ func (p *Pipeline) snapshot() snapshot {
 }
 
 func (p *Pipeline) restore(s snapshot) {
-	p.source = append([]byte(nil), s.Source...)
+	p.source = s.Source
 	p.steps = make([]*Step, 0, len(s.Steps))
 	for _, ss := range s.Steps {
 		opts := make(map[string]string, len(ss.Options))
@@ -409,14 +433,17 @@ func (p *Pipeline) Compute() {
 		switch {
 		case s.hasOverride:
 			s.output, s.err = s.override, nil
-		case s.Disabled:
-			s.output, s.err = prev, nil
 		case s.Plugin == "":
 			s.output, s.err = prev, nil // passthrough until a transform is chosen
 		default:
 			s.output, s.err = runStep(s, prev)
 		}
-		prev = s.output
+		if s.Disabled {
+			s.effective = prev
+		} else {
+			s.effective = s.output
+		}
+		prev = s.effective
 	}
 }
 

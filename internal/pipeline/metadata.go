@@ -17,43 +17,116 @@ type Metadata struct {
 	Printable  int
 	Entropy    float64
 	InputBytes int
+	Sampled    bool
+}
+
+// MetadataField is a single labeled metadata value for UI presentation.
+type MetadataField struct {
+	Label string
+	Value string
 }
 
 // DataMetadata returns byte-level metadata for data. inputBytes can be zero
 // when no ratio should be displayed; otherwise it is used for compression or
 // expansion ratio against the previous pipeline value.
 func DataMetadata(data []byte, inputBytes int) Metadata {
+	sample := data
+	sampled := false
+	if len(sample) > LargeDataThreshold {
+		sample = sample[:LargeDataThreshold]
+		sampled = true
+	}
 	m := Metadata{
 		Bytes:      len(data),
-		UTF8:       utf8.Valid(data),
-		Encoding:   likelyTextEncoding(data),
-		BOM:        textBOM(data),
-		Entropy:    entropy(data),
+		UTF8:       utf8.Valid(sample),
+		Encoding:   likelyTextEncoding(sample),
+		BOM:        textBOM(sample),
+		Entropy:    entropy(sample),
 		InputBytes: inputBytes,
+		Sampled:    sampled,
 	}
 	if len(data) == 0 {
 		return m
 	}
-	m.Lines = bytes.Count(data, []byte{'\n'}) + 1
-	m.Printable = printablePercent(data)
+	m.Lines = bytes.Count(sample, []byte{'\n'}) + 1
+	m.Printable = printablePercent(sample)
 	return m
 }
 
 // Summary returns a compact human-readable metadata line.
 func (m Metadata) Summary() string {
+	fields := m.Fields()
+	if len(fields) == 0 {
+		return ""
+	}
+	parts := fields[0].Value
+	for _, field := range fields[1:] {
+		if field.Label == "sample" {
+			continue
+		}
+		if field.Label == "lines" {
+			parts += " · " + field.Value + " lines"
+			continue
+		}
+		if field.Label == "BOM" {
+			parts += " · BOM " + field.Value
+			continue
+		}
+		if field.Label == "printable" {
+			parts += " · " + field.Value + " printable"
+			continue
+		}
+		if field.Label == "entropy" {
+			parts += " · " + field.Value + " entropy"
+			continue
+		}
+		if field.Label == "ratio" {
+			parts += " · " + field.Value + " input"
+			continue
+		}
+		parts += " · " + field.Value
+	}
+	if m.Sampled {
+		parts += " · metadata sampled"
+	}
+	return parts
+}
+
+// Fields returns metadata as labeled UI-ready values.
+func (m Metadata) Fields() []MetadataField {
 	encoding := m.Encoding
 	if encoding == "" {
 		encoding = "binary"
 	}
-	parts := fmt.Sprintf("%d bytes · %d lines · %s", m.Bytes, m.Lines, encoding)
+	fields := []MetadataField{
+		{"size", fmt.Sprintf("%d bytes%s", m.Bytes, sizeUnits(m.Bytes))},
+		{"lines", fmt.Sprintf("%d", m.Lines)},
+		{"encoding", encoding},
+	}
 	if m.BOM != "" && m.BOM != "none" {
-		parts += " · BOM " + m.BOM
+		fields = append(fields, MetadataField{"BOM", m.BOM})
 	}
-	parts += fmt.Sprintf(" · %d%% printable · %.2f bits/byte entropy", m.Printable, m.Entropy)
+	fields = append(fields,
+		MetadataField{"printable", fmt.Sprintf("%d%%", m.Printable)},
+		MetadataField{"entropy", fmt.Sprintf("%.2f bits/byte", m.Entropy)},
+	)
 	if m.InputBytes > 0 {
-		parts += fmt.Sprintf(" · %.2fx input", float64(m.Bytes)/float64(m.InputBytes))
+		fields = append(fields, MetadataField{"ratio", fmt.Sprintf("%.2fx", float64(m.Bytes)/float64(m.InputBytes))})
 	}
-	return parts
+	if m.Sampled {
+		fields = append(fields, MetadataField{"sample", "sampled"})
+	}
+	return fields
+}
+
+func sizeUnits(bytes int) string {
+	if bytes <= LargeDataThreshold {
+		return ""
+	}
+	if bytes >= 1<<30 {
+		return fmt.Sprintf(" (%.2f GB)", float64(bytes)/(1<<30))
+	}
+	return fmt.Sprintf(" (%.2f MB)", float64(bytes)/(1<<20))
 }
 
 func textBOM(data []byte) string {
