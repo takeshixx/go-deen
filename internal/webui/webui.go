@@ -1748,7 +1748,9 @@ func alert(message string) {
 func loadSourceFile(file js.Value) {
 	reader := js.Global().Get("FileReader").New()
 	var loadCB js.Func
+	var errorCB js.Func
 	loadCB = js.FuncOf(func(js.Value, []js.Value) any {
+		setBusy("", false)
 		array := js.Global().Get("Uint8Array").New(reader.Get("result"))
 		buf := make([]byte, array.Get("byteLength").Int())
 		js.CopyBytesToGo(buf, array)
@@ -1760,9 +1762,19 @@ func loadSourceFile(file js.Value) {
 			rebuild()
 		})
 		loadCB.Release()
+		errorCB.Release()
+		return nil
+	})
+	errorCB = js.FuncOf(func(js.Value, []js.Value) any {
+		setBusy("", false)
+		alert("Could not read file.")
+		loadCB.Release()
+		errorCB.Release()
 		return nil
 	})
 	reader.Call("addEventListener", "load", loadCB)
+	reader.Call("addEventListener", "error", errorCB)
+	setBusy("Reading file", true)
 	reader.Call("readAsArrayBuffer", file)
 }
 
@@ -1839,6 +1851,22 @@ func sourceCard() js.Value {
 	label := el("div")
 	label.Set("className", "card-title")
 	label.Set("textContent", "Input")
+	dropMessage := div("source-drop-message")
+	dropMessage.Set("role", "status")
+	dropMessage.Set("aria-live", "polite")
+
+	setDropState := func(className, message string) {
+		card.Set("className", className)
+		dropMessage.Set("textContent", message)
+		if message == "" {
+			dropMessage.Set("className", "source-drop-message")
+		} else {
+			dropMessage.Set("className", "source-drop-message visible")
+		}
+	}
+	rejectDrop := func(message string) {
+		setDropState("card source drop-error", message)
+	}
 
 	rawNeedsFull, hexNeedsFull, stringsNeedsFull := sourceNeedsFull()
 	if !rawNeedsFull {
@@ -1899,22 +1927,41 @@ func sourceCard() js.Value {
 	})
 	onEvent(card, "dragover", func(ev js.Value) {
 		ev.Call("preventDefault")
-		card.Set("className", "card source drag-over")
+		setDropState("card source drag-over", "")
 	})
 	onEvent(card, "dragleave", func(ev js.Value) {
 		ev.Call("preventDefault")
-		card.Set("className", "card source")
+		setDropState("card source", "")
 	})
 	onEvent(card, "drop", func(ev js.Value) {
 		ev.Call("preventDefault")
-		card.Set("className", "card source")
-		files := ev.Get("dataTransfer").Get("files")
-		if files.Get("length").Int() == 0 {
+		dataTransfer := ev.Get("dataTransfer")
+		items := dataTransfer.Get("items")
+		for i := 0; items.Truthy() && i < items.Get("length").Int(); i++ {
+			item := items.Index(i)
+			entryFn := item.Get("webkitGetAsEntry")
+			if entryFn.Truthy() {
+				entry := item.Call("webkitGetAsEntry")
+				if entry.Truthy() && entry.Get("isDirectory").Bool() {
+					rejectDrop("Directories are not supported. Drop a single file instead.")
+					return
+				}
+			}
+		}
+		files := dataTransfer.Get("files")
+		count := files.Get("length").Int()
+		if count == 0 {
+			rejectDrop("Drop a file to use it as input.")
 			return
 		}
+		if count > 1 {
+			rejectDrop("Drop one file at a time.")
+			return
+		}
+		setDropState("card source", "")
 		loadSourceFile(files.Call("item", 0))
 	})
-	appendChildren(card, label, sourceView, fullControls, meta)
+	appendChildren(card, label, dropMessage, sourceView, fullControls, meta)
 	autoSizeTextarea(ta)
 	if sourceHasHex {
 		autoSizeTextarea(sourceHex)

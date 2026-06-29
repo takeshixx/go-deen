@@ -448,6 +448,24 @@ a {
 	background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
 }
 
+.source.drop-error {
+	border-color: var(--danger);
+	background: color-mix(in srgb, var(--panel) 86%, var(--danger) 14%);
+}
+
+.source-drop-message {
+	display: none;
+	margin-bottom: 0.55rem;
+	color: var(--danger);
+	font-size: 0.86rem;
+	font-weight: 650;
+	line-height: 1.35;
+}
+
+.source-drop-message.visible {
+	display: block;
+}
+
 .card-title, .title {
 	font-weight: 650;
 }

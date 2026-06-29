@@ -49,6 +49,9 @@ Code extension updates.
   UI.
 - Web step headers group editing actions, style disabled controls clearly, and
   keep step actions contained on narrow/mobile layouts.
+- Web drag-and-drop rejects directories and multi-file drops with inline
+  feedback, preserves the current source after invalid drops, and shows a busy
+  state while files are read.
 
 ### Plugins
 
@@ -141,13 +144,12 @@ Open questions:
 
 ### 7. Web Drag-and-Drop Polish
 
-Basic source-file drag-and-drop exists. Remaining work is polish and edge-case
-handling.
+Basic source-file drag-and-drop exists, and invalid directory or multi-file drops
+now produce inline feedback without replacing the current source. Remaining work
+is future batch-mode behavior.
 
 Scope:
 
-- Ignore directories explicitly.
-- Provide a clearer visual drop target and error state for unsupported drops.
 - Decide how multiple dropped files should behave after batch mode exists.
 
 ## Packaging and distribution

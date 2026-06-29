@@ -124,13 +124,16 @@ Implemented after the URL routing work:
   UI.
 - [x] Polish web step editing headers by grouping actions, styling disabled
   controls, and adding a narrow/mobile regression check.
+- [x] Polish web drag-and-drop by rejecting directories and multi-file drops
+  with inline feedback, preserving the current source after invalid drops, and
+  showing a file-read busy state.
 
 ## Remaining Local TODOs By Priority
 
 1. Batch mode for applying a saved chain to multiple files.
 2. Batch-mode tests and any remaining CLI/core subcommand dispatch coverage.
-3. Browser/UI regression expansion for large-file busy states, broader
-   narrow/mobile editing layouts, and future routed web features.
+3. Browser/UI regression expansion for broader narrow/mobile editing layouts and
+   future routed web features.
 4. Keep option metadata tests extended as new plugin flags are added.
 5. Optional step editing polish such as drag handles or keyboard shortcuts if
    user testing shows friction.

@@ -83,17 +83,36 @@ async function activeTab(page) {
   return page.locator(".tab.active").textContent();
 }
 
-async function dropSourceFile(page, name, content) {
+async function dropSourceFiles(page, files, options = {}) {
+  if (options.directory) {
+    await page.locator(".source").evaluate((source, sourceFiles) => {
+      const event = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", {
+        value: {
+          items: [{ webkitGetAsEntry: () => ({ isDirectory: true }) }],
+          files: { length: 1, item: () => new File([""], sourceFiles[0].name, { type: "text/plain" }) },
+        },
+      });
+      source.dispatchEvent(event);
+    }, files);
+    return;
+  }
   await page.locator(".source").dispatchEvent("drop", {
     dataTransfer: await page.evaluateHandle(
-      ({ fileName, fileContent }) => {
+      ({ sourceFiles }) => {
         const data = new DataTransfer();
-        data.items.add(new File([fileContent], fileName, { type: "text/plain" }));
+        for (const sourceFile of sourceFiles) {
+          data.items.add(new File([sourceFile.content], sourceFile.name, { type: "text/plain" }));
+        }
         return data;
       },
-      { fileName: name, fileContent: content },
+      { sourceFiles: files },
     ),
   });
+}
+
+async function dropSourceFile(page, name, content) {
+  await dropSourceFiles(page, [{ name, content }]);
 }
 
 async function newTestPage(browser, options = {}) {
@@ -196,6 +215,15 @@ async function main() {
     await page.goto(`${targetURL}#home`, { waitUntil: "domcontentloaded" });
     await page.locator(".source").waitFor();
     await dropSourceFile(page, "sample.txt", "deen");
+    await page.locator(".meta-source", { hasText: "sample.txt" }).waitFor({ timeout: 15000 });
+    await dropSourceFiles(page, [
+      { name: "one.txt", content: "one" },
+      { name: "two.txt", content: "two" },
+    ]);
+    await page.locator(".source-drop-message.visible", { hasText: "Drop one file at a time." }).waitFor({ timeout: 15000 });
+    await page.locator(".meta-source", { hasText: "sample.txt" }).waitFor({ timeout: 15000 });
+    await dropSourceFiles(page, [{ name: "folder-entry", content: "" }], { directory: true });
+    await page.locator(".source-drop-message.visible", { hasText: "Directories are not supported." }).waitFor({ timeout: 15000 });
     await page.locator(".meta-source", { hasText: "sample.txt" }).waitFor({ timeout: 15000 });
     await page.evaluate(() => {
       window.__deenDownloads = [];
