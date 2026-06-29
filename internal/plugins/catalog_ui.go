@@ -113,6 +113,7 @@ var pluginLabels = map[string]string{
 	"asn1":              "ASN.1",
 	"dns":               "DNS",
 	"uuid":              "UUID",
+	"bininspect":        "Binary Inspector",
 	"aes":               "AES",
 	"chacha20poly1305":  "ChaCha20-Poly1305",
 	"certCloner":        "Certificate Cloner",
@@ -290,6 +291,11 @@ var referenceSets = map[string][]Reference{
 	},
 	"magic": {
 		{"WHATWG MIME sniffing", "https://mimesniff.spec.whatwg.org/"},
+	},
+	"bininspect": {
+		{"Go debug/elf", "https://pkg.go.dev/debug/elf"},
+		{"Go debug/pe", "https://pkg.go.dev/debug/pe"},
+		{"Go debug/macho", "https://pkg.go.dev/debug/macho"},
 	},
 	"aes": {
 		{"NIST SP 800-38D", "https://csrc.nist.gov/pubs/sp/800/38/d/final"},
@@ -581,6 +587,12 @@ var catalogCopyByName = map[string]catalogCopy{
 		"Use it to quickly identify dropped files, binary blobs, compressed data, images, PDFs, and executables.",
 		referenceSets["magic"],
 		[]Example{{"Detect PNG", "89504e470d0a1a0a", "type: PNG image\nmime: image/png"}},
+	},
+	"bininspect": {
+		"Inspects executable binary structure for ELF, PE, and Mach-O files.",
+		"Use it during malware triage and reverse engineering to summarize architecture, entry point, sections, segments, and section entropy.",
+		referenceSets["bininspect"],
+		[]Example{{"Inspect executable", "MZ...", "format: PE\nmachine: 0x8664\nsections: ..."}},
 	},
 	"regex": {
 		"Extracts regular expression matches or replaces matched text.",

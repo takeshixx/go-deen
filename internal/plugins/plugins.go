@@ -94,6 +94,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	misc.NewPluginUUID,
 	misc.NewPluginEntropy,
 	misc.NewPluginMagic,
+	misc.NewPluginBinInspect,
 	misc.NewPluginRegex,
 	misc.NewPluginAES,
 	misc.NewPluginChaCha20Poly1305,

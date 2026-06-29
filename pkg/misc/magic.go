@@ -27,6 +27,12 @@ var magicSignatures = []magicSignature{
 	{"zstd data", "application/zstd", []byte{0x28, 0xb5, 0x2f, 0xfd}},
 	{"ELF executable", "application/x-elf", []byte{0x7f, 'E', 'L', 'F'}},
 	{"PE executable", "application/vnd.microsoft.portable-executable", []byte("MZ")},
+	{"Mach-O executable", "application/x-mach-binary", []byte{0xfe, 0xed, 0xfa, 0xce}},
+	{"Mach-O executable", "application/x-mach-binary", []byte{0xce, 0xfa, 0xed, 0xfe}},
+	{"Mach-O executable", "application/x-mach-binary", []byte{0xfe, 0xed, 0xfa, 0xcf}},
+	{"Mach-O executable", "application/x-mach-binary", []byte{0xcf, 0xfa, 0xed, 0xfe}},
+	{"Mach-O universal binary", "application/x-mach-binary", []byte{0xca, 0xfe, 0xba, 0xbe}},
+	{"Mach-O universal binary", "application/x-mach-binary", []byte{0xbe, 0xba, 0xfe, 0xca}},
 }
 
 // NewPluginMagic creates a simple file signature detector.

@@ -1,6 +1,10 @@
 package pipeline
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -28,6 +32,9 @@ func TestSuggestionsDetectCommonTransforms(t *testing.T) {
 		{"asn1", []byte{0x30, 0x03, 0x02, 0x01, 0x2a}, "asn1", false},
 		{"dns", []byte{3, 'w', 'w', 'w', 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0}, "dns", true},
 		{"magic", []byte("%PDF-1.7\n"), "magic", false},
+		{"bininspect elf", []byte{0x7f, 'E', 'L', 'F', 0x02, 0x01}, "bininspect", false},
+		{"bininspect pe", []byte("MZ\x90\x00"), "bininspect", false},
+		{"bininspect macho", []byte{0xcf, 0xfa, 0xed, 0xfe}, "bininspect", false},
 	}
 
 	for _, tt := range tests {
@@ -119,6 +126,42 @@ func TestAddStepWithOptions(t *testing.T) {
 	p.AddStepWithOptions("unicode", true, map[string]string{"encoding": "utf16be"})
 	if got := string(p.Result()); got != "A" {
 		t.Fatalf("result = %q, want A", got)
+	}
+}
+
+func TestSuggestionsDetectAutomatedDecodeChain(t *testing.T) {
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	if _, err := zw.Write([]byte(`{"ok":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	input := []byte(url.QueryEscape(base64.StdEncoding.EncodeToString(gz.Bytes())))
+
+	suggestions := Suggestions(input)
+	chain := findSuggestionChain(suggestions, []SuggestionStep{
+		{Plugin: "url", Unprocess: true},
+		{Plugin: "base64", Unprocess: true},
+		{Plugin: "gzip", Unprocess: true},
+		{Plugin: "json", Unprocess: false},
+	})
+	if chain == nil {
+		t.Fatalf("missing automated decode chain in %#v", suggestions)
+	}
+	if chain.Confidence == 0 || chain.Preview == "" {
+		t.Fatalf("chain missing confidence or preview: %#v", chain)
+	}
+
+	p := New()
+	p.SetSource(input)
+	p.AddSuggestion(*chain)
+	if got := string(p.Result()); !strings.Contains(got, `"ok": true`) {
+		t.Fatalf("AddSuggestion result = %q", got)
+	}
+	if len(p.Steps()) != 4 {
+		t.Fatalf("AddSuggestion added %d steps, want 4", len(p.Steps()))
 	}
 }
 
@@ -284,4 +327,25 @@ func hasSuggestionOption(suggestions []Suggestion, plugin string, unprocess bool
 		}
 	}
 	return false
+}
+
+func findSuggestionChain(suggestions []Suggestion, want []SuggestionStep) *Suggestion {
+	for i := range suggestions {
+		if sameSuggestionChain(suggestions[i].Steps, want) {
+			return &suggestions[i]
+		}
+	}
+	return nil
+}
+
+func sameSuggestionChain(got, want []SuggestionStep) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i].Plugin != want[i].Plugin || got[i].Unprocess != want[i].Unprocess {
+			return false
+		}
+	}
+	return true
 }

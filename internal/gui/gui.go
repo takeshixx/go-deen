@@ -477,6 +477,7 @@ func (dg *DeenGUI) exampleCard(example pipeline.Example) fyne.CanvasObject {
 	load := widget.NewButtonWithIcon("Load example", theme.MediaPlayIcon(), func() {
 		dg.runPipelineWork("Loading example", func() error {
 			dg.pipe.ApplyExample(example)
+			dg.stepsExpanded = false
 			return nil
 		}, func() {
 			dg.rebuild()
@@ -853,7 +854,11 @@ func (dg *DeenGUI) openChain() {
 				return err
 			}
 			dg.clearSourceFullViews()
-			return dg.pipe.ImportJSON(data)
+			if err := dg.pipe.ImportJSON(data); err != nil {
+				return err
+			}
+			dg.stepsExpanded = false
+			return nil
 		}, dg.rebuild)
 	}, dg.window)
 }
@@ -1012,19 +1017,31 @@ func (dg *DeenGUI) showSuggestionsDialog(suggestions []pipeline.Suggestion) {
 	var d dialog.Dialog
 	for _, s := range suggestions {
 		s := s
-		label := s.Label
-		if s.Reason != "" {
-			label += " - " + s.Reason
+		detail := s.Reason
+		if s.Confidence > 0 {
+			detail += fmt.Sprintf(" Confidence: %d%%.", s.Confidence)
 		}
-		list.Add(widget.NewButton(label, func() {
+		actionLabel := "Add"
+		if len(s.Steps) > 1 {
+			actionLabel = "Apply chain"
+		}
+		action := widget.NewButton(actionLabel, func() {
 			if d != nil {
 				d.Hide()
 			}
 			dg.runPipelineWork("Processing", func() error {
-				dg.pipe.AddStepWithOptions(s.Plugin, s.Unprocess, s.Options)
+				dg.pipe.AddSuggestion(s)
 				return nil
 			}, dg.rebuild)
-		}))
+		})
+		itemContent := container.NewVBox(widget.NewLabelWithStyle(s.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+		if s.Reason != "" {
+			itemContent.Add(widget.NewLabel(detail))
+		}
+		if s.Preview != "" {
+			itemContent.Add(widget.NewLabel(s.Preview))
+		}
+		list.Add(container.NewBorder(nil, nil, nil, action, itemContent))
 	}
 	d = dialog.NewCustom("Suggested transforms", "Close", container.NewVScroll(list), dg.window)
 	d.Resize(fyne.NewSize(560, 360))

@@ -5,6 +5,7 @@ Implementation status refreshed after commits:
 
 - `2382bcf` Update docs, lazy examples, and VS Code extension
 - `82f33dd` Add web URL routing and copy links
+- local follow-ups through Binary Inspector and Detect next planning
 
 ## Completed Issues
 
@@ -127,18 +128,28 @@ Implemented after the URL routing work:
 - [x] Polish web drag-and-drop by rejecting directories and multi-file drops
   with inline feedback, preserving the current source after invalid drops, and
   showing a file-read busy state.
+- [x] Add a Binary Inspector plugin for ELF, PE, and Mach-O structure summaries.
+- [x] Surface executable inputs in Detect next with a Binary Inspector
+  suggestion.
+- [x] Add bounded multi-step Detect next suggestions with confidence, reasons,
+  previews, and one-click chain application.
 
 ## Remaining Local TODOs By Priority
 
-1. Batch mode for applying a saved chain to multiple files.
-2. Batch-mode tests and any remaining CLI/core subcommand dispatch coverage.
-3. Browser/UI regression expansion for broader narrow/mobile editing layouts and
+1. Automated Detect next follow-up: broaden candidate chains, improve
+   confidence ranking, and consider an explicit "Apply best chain" control if
+   user testing shows ranked chain suggestions are not enough.
+2. Browser/UI regression expansion for broader narrow/mobile editing layouts and
    future routed web features.
-4. Keep option metadata tests extended as new plugin flags are added.
-5. Optional step editing polish such as drag handles or keyboard shortcuts if
+3. Keep option metadata tests extended as new plugin flags are added.
+4. Optional step editing polish such as drag handles or keyboard shortcuts if
    user testing shows friction.
-6. Diff plugin or compare-view enhancement for two-input workflows.
-7. Homebrew packaging plan and release workflow cleanup.
+5. Diff plugin or compare-view enhancement for two-input workflows.
+6. Batch mode for applying a saved chain to multiple files, if it becomes
+   relevant again.
+7. Batch-mode tests and any remaining CLI/core subcommand dispatch coverage if
+   batch mode is resumed.
+8. Homebrew packaging plan and release workflow cleanup.
 
 ## Verification Checklist
 

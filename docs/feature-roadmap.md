@@ -52,6 +52,8 @@ Code extension updates.
 - Web drag-and-drop rejects directories and multi-file drops with inline
   feedback, preserves the current source after invalid drops, and shows a busy
   state while files are read.
+- Detect next now proposes bounded multi-step decode chains, including layered
+  URL/Base64/compression/format workflows, with confidence and preview text.
 
 ### Plugins
 
@@ -75,11 +77,31 @@ Implemented plugin families and tools:
 - Regex extract / replace.
 - Entropy / byte frequency analyzer.
 - Magic / file-type detector.
+- Binary structure inspector for ELF, PE, and Mach-O executables.
 - QR encode / decode.
 
 ## Open priorities
 
-### 1. Batch Mode
+### 1. Automated Detect Next / Decode Assistant Follow-Up
+
+Detect next now finds useful multi-step decode paths, not only immediate
+single-step hints. Continue hardening it for security research and
+reverse-engineering workflows.
+
+Scope:
+
+- Expand candidate chains beyond the current bounded URL/Base64/hex/HTML/PEM/
+  Unicode/gzip/zlib search.
+- Improve confidence scoring with stronger format-specific signals and branch
+  ranking.
+- Consider an explicit "Apply best chain" action if user testing shows it is
+  more ergonomic than the current ranked suggestion list.
+- Keep analysis local and bounded: cap bytes inspected, avoid network lookups,
+  and stop expensive speculative branches early.
+- Preserve the current simple suggestions as quick actions when the user only
+  wants one transform.
+
+### 2. Batch Mode
 
 Apply a saved chain to multiple files from the CLI and, later, from the GUI/web
 UI.
@@ -91,7 +113,7 @@ Initial CLI scope:
 - Preserve binary-safe output.
 - Report per-file errors without stopping the entire batch unless requested.
 
-### 2. Batch Mode Tests and CLI/Core Coverage
+### 3. Batch Mode Tests and CLI/Core Coverage
 
 `internal/core` now has direct `deen chain` coverage. Keep expanding it around
 batch mode and subcommand dispatch as new CLI behavior lands.
@@ -101,7 +123,7 @@ Scope:
 - Table tests for CLI flag parsing and subcommand dispatch.
 - Batch-mode tests before/with the batch implementation.
 
-### 3. Browser/UI Regression Coverage
+### 4. Browser/UI Regression Coverage
 
 The Playwright regression covers web routing, legacy chain links,
 example/plugin copy links, clipboard fallback behavior, QR preview, source
@@ -114,14 +136,14 @@ Scope:
 - Broader narrow/mobile layout coverage for editing controls.
 - Route coverage for future web features as they are added.
 
-### 4. Option Metadata Completeness
+### 5. Option Metadata Completeness
 
 Scope:
 
 - Continue extending metadata regression tests as new plugins/options are added.
 - Consider debounce for high-cost text option edits in GUI/web UI.
 
-### 5. Step Editing UX Polish
+### 6. Step Editing UX Polish
 
 Step reorder, duplicate, disable, and delete exist in the GUI and web UI, and
 impossible boundary moves are disabled. Web step headers now keep editing
@@ -133,7 +155,7 @@ Scope:
 - Consider drag handles or keyboard shortcuts for reorder.
 - Keep undo/redo behavior covered around each action.
 
-### 6. Diff Plugin
+### 7. Diff Plugin
 
 Add a plugin for textual and/or binary diff workflows.
 
@@ -142,7 +164,7 @@ Open questions:
 - Whether diff should be a normal plugin, a compare-view enhancement, or both.
 - How to feed two inputs in CLI, GUI, and web UI consistently.
 
-### 7. Web Drag-and-Drop Polish
+### 8. Web Drag-and-Drop Polish
 
 Basic source-file drag-and-drop exists, and invalid directory or multi-file drops
 now produce inline feedback without replacing the current source. Remaining work

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -26,16 +27,31 @@ import (
 
 // Suggestion describes a transform that is likely useful for the given data.
 type Suggestion struct {
+	Plugin     string
+	Unprocess  bool
+	Options    map[string]string
+	Label      string
+	Reason     string
+	Steps      []SuggestionStep
+	Confidence int
+	Preview    string
+}
+
+// SuggestionStep is one step in an automated suggestion chain.
+type SuggestionStep struct {
 	Plugin    string
 	Unprocess bool
 	Options   map[string]string
-	Label     string
-	Reason    string
 }
 
 // Suggestions returns likely next transforms for a byte slice. It is heuristic:
 // suggestions should be helpful shortcuts, not declarations of file type.
 func Suggestions(data []byte) []Suggestion {
+	suggestions := oneStepSuggestions(data)
+	return append(suggestions, automatedSuggestions(data)...)
+}
+
+func oneStepSuggestions(data []byte) []Suggestion {
 	if len(data) > LargeDataThreshold {
 		data = data[:LargeDataThreshold]
 	}
@@ -46,10 +62,10 @@ func Suggestions(data []byte) []Suggestion {
 
 	var out []Suggestion
 	add := func(plugin string, unprocess bool, label, reason string) {
-		out = append(out, Suggestion{Plugin: plugin, Unprocess: unprocess, Label: label, Reason: reason})
+		out = append(out, suggestionForStep(SuggestionStep{Plugin: plugin, Unprocess: unprocess}, label, reason, 75))
 	}
 	addOptions := func(plugin string, unprocess bool, options map[string]string, label, reason string) {
-		out = append(out, Suggestion{Plugin: plugin, Unprocess: unprocess, Options: options, Label: label, Reason: reason})
+		out = append(out, suggestionForStep(SuggestionStep{Plugin: plugin, Unprocess: unprocess, Options: options}, label, reason, 75))
 	}
 
 	meta := DataMetadata(trimmed, 0)
@@ -86,6 +102,9 @@ func Suggestions(data []byte) []Suggestion {
 	if strings.Contains(text, "&") && strings.Contains(text, ";") {
 		add("html", true, "HTML decode", "input contains entity-like ampersand escapes")
 	}
+	if bytes.Contains(trimmed, []byte("-----BEGIN ")) {
+		add("pem", true, "Unwrap PEM", "input contains a PEM block")
+	}
 	if bytes.Contains(trimmed, []byte("-----BEGIN CERTIFICATE-----")) {
 		add("certPrinter", false, "Inspect certificate", "input contains a PEM certificate block")
 	}
@@ -110,6 +129,9 @@ func Suggestions(data []byte) []Suggestion {
 	if magicType(trimmed) != "" {
 		add("magic", false, "Detect file type", "input has a recognizable file signature")
 	}
+	if looksLikeExecutable(trimmed) {
+		add("bininspect", false, "Inspect binary structure", "input has an executable file signature")
+	}
 	if looksLikeQRImage(trimmed) {
 		add("qr", true, "Decode QR image", "input image contains a QR code")
 	}
@@ -121,6 +143,241 @@ func Suggestions(data []byte) []Suggestion {
 	}
 	if looksLikeProtobuf(trimmed) {
 		add("protobuf", false, "Decode protobuf", "input looks like binary protobuf wire data")
+	}
+	return out
+}
+
+func suggestionForStep(step SuggestionStep, label, reason string, confidence int) Suggestion {
+	return Suggestion{
+		Plugin:     step.Plugin,
+		Unprocess:  step.Unprocess,
+		Options:    cloneSuggestionOptions(step.Options),
+		Label:      label,
+		Reason:     reason,
+		Steps:      []SuggestionStep{cloneSuggestionStep(step)},
+		Confidence: confidence,
+	}
+}
+
+func automatedSuggestions(data []byte) []Suggestion {
+	if len(data) > LargeDataThreshold {
+		data = data[:LargeDataThreshold]
+	}
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return nil
+	}
+
+	type state struct {
+		data  []byte
+		steps []SuggestionStep
+	}
+	queue := []state{{data: data}}
+	seen := map[string]bool{stateKey(data): true}
+	var out []Suggestion
+
+	for depth := 0; depth < 4 && len(queue) > 0; depth++ {
+		current := queue
+		queue = nil
+		for _, st := range current {
+			for _, s := range oneStepSuggestions(st.data) {
+				step := SuggestionStep{Plugin: s.Plugin, Unprocess: s.Unprocess, Options: s.Options}
+				if canFinishAutomatedChain(s) && len(st.steps) > 0 {
+					steps := append(cloneSuggestionSteps(st.steps), cloneSuggestionStep(step))
+					out = append(out, chainSuggestion(steps, s, applyPreview(st.data, step)))
+				}
+				if !canExpandAutomatedChain(s) || len(st.steps) >= 3 {
+					continue
+				}
+				next, ok := applySuggestionStep(st.data, step)
+				if !ok || bytes.Equal(bytes.TrimSpace(next), bytes.TrimSpace(st.data)) {
+					continue
+				}
+				key := stateKey(next)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				queue = append(queue, state{
+					data:  next,
+					steps: append(cloneSuggestionSteps(st.steps), cloneSuggestionStep(step)),
+				})
+			}
+		}
+	}
+	return dedupeChainSuggestions(out, 4)
+}
+
+func chainSuggestion(steps []SuggestionStep, terminal Suggestion, preview string) Suggestion {
+	label := "Apply chain: " + chainLabel(steps)
+	reason := fmt.Sprintf("%s after %d automatic decode step(s)", terminal.Reason, len(steps)-1)
+	confidence := 70 + len(steps)*5
+	if confidence > 95 {
+		confidence = 95
+	}
+	return Suggestion{
+		Plugin:     steps[0].Plugin,
+		Unprocess:  steps[0].Unprocess,
+		Options:    cloneSuggestionOptions(steps[0].Options),
+		Label:      label,
+		Reason:     reason,
+		Steps:      steps,
+		Confidence: confidence,
+		Preview:    preview,
+	}
+}
+
+func chainLabel(steps []SuggestionStep) string {
+	parts := make([]string, 0, len(steps))
+	for _, step := range steps {
+		parts = append(parts, stepLabel(step))
+	}
+	return strings.Join(parts, " -> ")
+}
+
+func stepLabel(step SuggestionStep) string {
+	switch step.Plugin {
+	case "base64":
+		return "Base64 decode"
+	case "hex":
+		return "hex decode"
+	case "url":
+		return "URL decode"
+	case "html":
+		return "HTML decode"
+	case "gzip":
+		return "gzip decompress"
+	case "zlib":
+		return "zlib decompress"
+	case "unicode":
+		if step.Options["encoding"] != "" {
+			return "decode " + strings.ToUpper(step.Options["encoding"])
+		}
+		return "Unicode decode"
+	case "pem":
+		return "PEM unwrap"
+	case "json":
+		return "format JSON"
+	case "xml":
+		return "format XML"
+	case "asn1":
+		return "inspect ASN.1"
+	case "protobuf":
+		return "decode protobuf"
+	case "msgpack":
+		return "decode MessagePack"
+	case "cbor":
+		return "decode CBOR"
+	case "dns":
+		return "decode DNS"
+	case "magic":
+		return "detect file type"
+	case "bininspect":
+		return "inspect binary"
+	case "certPrinter":
+		return "inspect certificate"
+	default:
+		if step.Unprocess {
+			return step.Plugin + " decode"
+		}
+		return step.Plugin
+	}
+}
+
+func canExpandAutomatedChain(s Suggestion) bool {
+	switch s.Plugin {
+	case "base64", "hex", "url", "html", "gzip", "zlib", "unicode", "pem":
+		return s.Unprocess
+	default:
+		return false
+	}
+}
+
+func canFinishAutomatedChain(s Suggestion) bool {
+	switch s.Plugin {
+	case "json", "xml", "asn1", "protobuf", "msgpack", "cbor", "dns", "magic", "bininspect", "certPrinter", "uuid", "jwt":
+		return true
+	default:
+		return false
+	}
+}
+
+func applySuggestionStep(data []byte, step SuggestionStep) ([]byte, bool) {
+	out, err := runStep(&Step{
+		Plugin:    step.Plugin,
+		Unprocess: step.Unprocess,
+		Options:   cloneSuggestionOptions(step.Options),
+	}, data)
+	if err != nil || len(out) > LargeDataThreshold {
+		return nil, false
+	}
+	return bytes.TrimSpace(out), true
+}
+
+func applyPreview(data []byte, step SuggestionStep) string {
+	out, ok := applySuggestionStep(data, step)
+	if !ok {
+		return ""
+	}
+	if utf8.Valid(out) && mostlyPrintable(out) {
+		if len(out) > 240 {
+			return string(out[:safeTextCut(out, 240)]) + "..."
+		}
+		return string(out)
+	}
+	if len(out) > 64 {
+		out = out[:64]
+	}
+	return hex.Dump(out)
+}
+
+func stateKey(data []byte) string {
+	if len(data) > 256 {
+		data = data[:256]
+	}
+	return fmt.Sprintf("%d:%x", len(data), data)
+}
+
+func dedupeChainSuggestions(in []Suggestion, limit int) []Suggestion {
+	var out []Suggestion
+	seen := map[string]bool{}
+	for _, s := range in {
+		key := chainLabel(s.Steps)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, s)
+		if len(out) >= limit {
+			return out
+		}
+	}
+	return out
+}
+
+func cloneSuggestionStep(step SuggestionStep) SuggestionStep {
+	return SuggestionStep{
+		Plugin:    step.Plugin,
+		Unprocess: step.Unprocess,
+		Options:   cloneSuggestionOptions(step.Options),
+	}
+}
+
+func cloneSuggestionSteps(steps []SuggestionStep) []SuggestionStep {
+	out := make([]SuggestionStep, 0, len(steps))
+	for _, step := range steps {
+		out = append(out, cloneSuggestionStep(step))
+	}
+	return out
+}
+
+func cloneSuggestionOptions(options map[string]string) map[string]string {
+	if len(options) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(options))
+	for k, v := range options {
+		out[k] = v
 	}
 	return out
 }
@@ -322,12 +579,34 @@ func magicType(data []byte) string {
 		return "gzip data"
 	case bytes.HasPrefix(data, []byte{0x7f, 'E', 'L', 'F'}):
 		return "ELF executable"
+	case bytes.HasPrefix(data, []byte("MZ")):
+		return "PE executable"
+	case looksLikeMachO(data):
+		return "Mach-O executable"
 	default:
 		mime := http.DetectContentType(data)
 		if strings.HasPrefix(mime, "image/") || strings.HasPrefix(mime, "application/pdf") {
 			return mime
 		}
 		return ""
+	}
+}
+
+func looksLikeExecutable(data []byte) bool {
+	return bytes.HasPrefix(data, []byte{0x7f, 'E', 'L', 'F'}) ||
+		bytes.HasPrefix(data, []byte("MZ")) ||
+		looksLikeMachO(data)
+}
+
+func looksLikeMachO(data []byte) bool {
+	if len(data) < 4 {
+		return false
+	}
+	switch binary.BigEndian.Uint32(data[:4]) {
+	case 0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca:
+		return true
+	default:
+		return false
 	}
 }
 

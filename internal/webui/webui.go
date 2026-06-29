@@ -53,6 +53,7 @@ var (
 	sourceFullRaw      bool
 	sourceFullHex      bool
 	sourceFullStrings  bool
+	stepCollapsed      = map[int]bool{}
 )
 
 type cardRef struct {
@@ -873,6 +874,14 @@ func rebuild() {
 	renderHome()
 }
 
+func compactStepCollapseState() {
+	stepCollapsed = map[int]bool{}
+	last := pipe.Len() - 1
+	for i := range pipe.Steps() {
+		stepCollapsed[i] = i < last
+	}
+}
+
 func renderHome() {
 	app := div("app")
 	main := div("main")
@@ -1098,6 +1107,7 @@ func populateExampleDetails(card js.Value, example pipeline.Example) {
 		runBusy("Loading example", func() {
 			sourceName = ""
 			pipe.ApplyExample(example)
+			compactStepCollapseState()
 			activeTab = "home"
 			renderActiveTab()
 		})
@@ -1469,20 +1479,34 @@ func showSuggestions() {
 		title := el("strong")
 		title.Set("textContent", s.Label)
 		reason := el("p")
-		reason.Set("textContent", s.Reason)
+		detail := s.Reason
+		if s.Confidence > 0 {
+			detail += " Confidence: " + strconv.Itoa(s.Confidence) + "%."
+		}
+		reason.Set("textContent", detail)
+		appendChildren(item, title, reason)
+		if s.Preview != "" {
+			preview := el("pre")
+			preview.Set("textContent", s.Preview)
+			item.Call("appendChild", preview)
+		}
 		action := el("button")
 		action.Set("type", "button")
-		action.Set("textContent", "Add")
+		if len(s.Steps) > 1 {
+			action.Set("textContent", "Apply chain")
+		} else {
+			action.Set("textContent", "Add")
+		}
 		on(action, "click", func() {
 			if close != nil {
 				close()
 			}
 			runBusy("Processing", func() {
-				pipe.AddStepWithOptions(s.Plugin, s.Unprocess, s.Options)
+				pipe.AddSuggestion(s)
 				rebuild()
 			})
 		})
-		appendChildren(item, title, reason, action)
+		item.Call("appendChild", action)
 		list.Call("appendChild", item)
 	}
 	close = showModal("Suggested transforms", list)
@@ -1707,7 +1731,9 @@ func loadChainFromRoute(route webRoute) {
 	}
 	if err := pipe.ImportJSON(data); err != nil {
 		alert("Could not import chain from URL: " + err.Error())
+		return
 	}
+	compactStepCollapseState()
 }
 
 func downloadBytes(name string, data []byte) {
@@ -1812,6 +1838,7 @@ func loadChainFile(file js.Value) {
 			} else {
 				sourceName = ""
 				clearSourceFullViews()
+				compactStepCollapseState()
 				rebuild()
 			}
 		})
@@ -2132,6 +2159,7 @@ func stepCard(i int) js.Value {
 	remove := iconOnlyButton("trash", "Delete step", func() {
 		runBusy("Processing", func() {
 			pipe.RemoveStep(i)
+			compactStepCollapseState()
 			rebuild()
 		})
 	})
@@ -2246,12 +2274,20 @@ func stepCard(i int) js.Value {
 	ref.errEl.Get("style").Set("display", "none")
 
 	appendChildren(detail, selRow, toggles, options, viewer, ref.fullControls, ref.meta, ref.errEl)
+	if stepCollapsed[i] {
+		detail.Get("style").Set("display", "none")
+		setIconOnlyButtonContent(collapse, "expand", "Expand step")
+	} else {
+		setIconOnlyButtonContent(collapse, "collapse", "Collapse step")
+	}
 	on(collapse, "click", func() {
 		if detail.Get("style").Get("display").String() == "none" {
+			stepCollapsed[i] = false
 			detail.Get("style").Set("display", "block")
 			setIconOnlyButtonContent(collapse, "collapse", "Collapse step")
 			autoSizeOutputTextareas(ref)
 		} else {
+			stepCollapsed[i] = true
 			detail.Get("style").Set("display", "none")
 			setIconOnlyButtonContent(collapse, "expand", "Expand step")
 		}

@@ -232,6 +232,35 @@ func (p *Pipeline) AddStepWithOptions(plugin string, unprocess bool, options map
 	return len(p.steps) - 1
 }
 
+// AddSuggestion appends a detected transform or transform chain as one undoable
+// operation.
+func (p *Pipeline) AddSuggestion(s Suggestion) {
+	steps := s.Steps
+	if len(steps) == 0 && s.Plugin != "" {
+		steps = []SuggestionStep{{
+			Plugin:    s.Plugin,
+			Unprocess: s.Unprocess,
+			Options:   s.Options,
+		}}
+	}
+	if len(steps) == 0 {
+		return
+	}
+	p.record()
+	for _, step := range steps {
+		unprocess := step.Unprocess
+		if unprocess && !plugins.CanDecode(step.Plugin) {
+			unprocess = false
+		}
+		p.steps = append(p.steps, &Step{
+			Plugin:    step.Plugin,
+			Unprocess: unprocess,
+			Options:   normalizeStepOptions(step.Plugin, step.Options),
+		})
+	}
+	p.Compute()
+}
+
 func normalizeStepOptions(plugin string, options map[string]string) map[string]string {
 	opts := make(map[string]string, len(options))
 	for k, v := range options {
