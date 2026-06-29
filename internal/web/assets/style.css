@@ -1024,6 +1024,10 @@ textarea.io.source-io {
 	border-color: color-mix(in srgb, var(--accent) 45%, var(--border) 55%);
 }
 
+.route-highlight {
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
 .example-chain {
 	display: flex;
 	flex-wrap: wrap;

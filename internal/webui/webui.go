@@ -8,6 +8,7 @@ package webui
 import (
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,30 +25,34 @@ var palette = []string{"#4285f4", "#0f9d58", "#f4b400", "#db4437", "#ab47bc", "#
 func accent(i int) string { return palette[i%len(palette)] }
 
 var (
-	doc               js.Value
-	pipe              *pipeline.Pipeline
-	contentEl         js.Value
-	tabBtns           []js.Value
-	stepsEl           js.Value
-	historyEl         js.Value
-	sourceEl          js.Value
-	busyEl            js.Value
-	updating          bool
-	callbacks         []js.Func
-	staticCBs         []js.Func
-	cards             []*cardRef
-	activeTab         = "home"
-	aboutPage         js.Value
-	aboutPageBuilt    bool
-	pluginsPage       js.Value
-	pluginsPageBuilt  bool
-	examplesPage      js.Value
-	examplesPageBuilt bool
-	examplePreviews   = map[string]examplePreview{}
-	sourceName        string
-	sourceFullRaw     bool
-	sourceFullHex     bool
-	sourceFullStrings bool
+	doc                js.Value
+	pipe               *pipeline.Pipeline
+	contentEl          js.Value
+	tabBtns            []js.Value
+	stepsEl            js.Value
+	historyEl          js.Value
+	sourceEl           js.Value
+	busyEl             js.Value
+	updating           bool
+	callbacks          []js.Func
+	staticCBs          []js.Func
+	cards              []*cardRef
+	activeTab          = "home"
+	aboutPage          js.Value
+	aboutPageBuilt     bool
+	pluginsPage        js.Value
+	pluginsPageBuilt   bool
+	examplesPage       js.Value
+	examplesPageBuilt  bool
+	examplePreviews    = map[string]examplePreview{}
+	applyExamplesRoute func(webRoute)
+	applyPluginsRoute  func(webRoute)
+	currentRoute       webRoute
+	updatingRoute      bool
+	sourceName         string
+	sourceFullRaw      bool
+	sourceFullHex      bool
+	sourceFullStrings  bool
 )
 
 type cardRef struct {
@@ -93,12 +98,29 @@ type exampleCardRef struct {
 	card    js.Value
 }
 
+type pluginCardRef struct {
+	info plugins.UIPluginInfo
+	card js.Value
+}
+
+type webRoute struct {
+	tab    string
+	item   string
+	search string
+	chain  string
+}
+
 // Run builds the UI and blocks so the event callbacks stay alive.
 func Run() {
 	doc = js.Global().Get("document")
 	pipe = pipeline.New()
-	loadChainFromHash()
+	currentRoute = parseRoute()
+	loadChainFromRoute(currentRoute)
+	if currentRoute.tab != "" {
+		activeTab = currentRoute.tab
+	}
 	buildLayout()
+	onStatic(js.Global(), "hashchange", applyRouteFromHash)
 	select {}
 }
 
@@ -541,6 +563,165 @@ func afterPaint(fn func()) {
 	raf.Invoke(first)
 }
 
+func navigateTo(route webRoute) {
+	if route.tab == "" {
+		route.tab = "home"
+	}
+	currentRoute = route
+	activeTab = route.tab
+	hash := routeHash(route)
+	if js.Global().Get("location").Get("hash").String() != hash {
+		updatingRoute = true
+		js.Global().Get("location").Set("hash", strings.TrimPrefix(hash, "#"))
+		updatingRoute = false
+	}
+	renderActiveTab()
+}
+
+func replaceRoute(route webRoute) {
+	if route.tab == "" {
+		route.tab = activeTab
+	}
+	currentRoute = route
+	history := js.Global().Get("history")
+	if history.Truthy() {
+		history.Call("replaceState", nil, "", routeHash(route))
+		return
+	}
+	js.Global().Get("location").Set("hash", strings.TrimPrefix(routeHash(route), "#"))
+}
+
+func applyRouteFromHash() {
+	if updatingRoute {
+		return
+	}
+	route := parseRoute()
+	currentRoute = route
+	if route.chain != "" {
+		loadChainFromRoute(route)
+	}
+	if route.tab == "" {
+		route.tab = "home"
+	}
+	activeTab = route.tab
+	renderActiveTab()
+}
+
+func applyCurrentRouteToTab() {
+	switch activeTab {
+	case "examples":
+		if applyExamplesRoute != nil {
+			applyExamplesRoute(currentRoute)
+		}
+	case "plugins":
+		if applyPluginsRoute != nil {
+			applyPluginsRoute(currentRoute)
+		}
+	}
+}
+
+func parseRoute() webRoute {
+	hash := strings.TrimPrefix(js.Global().Get("location").Get("hash").String(), "#")
+	if hash == "" {
+		return webRoute{tab: "home"}
+	}
+	if strings.HasPrefix(hash, "chain=") {
+		return webRoute{tab: "home", chain: strings.TrimPrefix(hash, "chain=")}
+	}
+	path, rawQuery, _ := strings.Cut(hash, "?")
+	values, _ := url.ParseQuery(rawQuery)
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return webRoute{tab: "home", search: values.Get("search"), chain: values.Get("chain")}
+	}
+	parts := strings.Split(path, "/")
+	route := webRoute{
+		tab:    routeTab(parts[0]),
+		search: values.Get("search"),
+		chain:  values.Get("chain"),
+	}
+	if len(parts) > 1 {
+		item, err := url.PathUnescape(strings.Join(parts[1:], "/"))
+		if err == nil {
+			route.item = item
+		}
+	}
+	return route
+}
+
+func routeTab(tab string) string {
+	switch strings.ToLower(strings.TrimSpace(tab)) {
+	case "home", "examples", "plugins", "about":
+		return strings.ToLower(strings.TrimSpace(tab))
+	default:
+		return "home"
+	}
+}
+
+func routeHash(route webRoute) string {
+	if route.chain != "" && route.tab == "home" && route.item == "" && route.search == "" {
+		return "#chain=" + route.chain
+	}
+	tab := routeTab(route.tab)
+	hash := "#" + tab
+	if route.item != "" {
+		hash += "/" + url.PathEscape(route.item)
+	}
+	params := url.Values{}
+	if route.search != "" {
+		params.Set("search", route.search)
+	}
+	if route.chain != "" {
+		params.Set("chain", route.chain)
+	}
+	if encoded := params.Encode(); encoded != "" {
+		hash += "?" + encoded
+	}
+	return hash
+}
+
+func routeURL(route webRoute) string {
+	loc := js.Global().Get("location")
+	return loc.Get("origin").String() +
+		loc.Get("pathname").String() +
+		loc.Get("search").String() +
+		routeHash(route)
+}
+
+func copyRouteLink(route webRoute, label string) {
+	link := routeURL(route)
+	clipboard := js.Global().Get("navigator").Get("clipboard")
+	if clipboard.Truthy() {
+		clipboard.Call("writeText", link)
+		alert(label + " link copied.")
+		return
+	}
+	js.Global().Get("location").Set("hash", strings.TrimPrefix(routeHash(route), "#"))
+	js.Global().Call("prompt", label+" link:", link)
+}
+
+func itemSlug(s string) string {
+	var b strings.Builder
+	lastDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash && b.Len() > 0 {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func highlightRouteTarget(card js.Value) {
+	card.Get("classList").Call("add", "route-highlight")
+	card.Call("scrollIntoView", map[string]any{"block": "center", "behavior": "smooth"})
+}
+
 func menuBar() js.Value {
 	bar := div("menu-bar")
 	appendChildren(bar,
@@ -585,8 +766,7 @@ func tabButton(tab, label string) js.Value {
 	b.Set("textContent", label)
 	tabBtns = append(tabBtns, b)
 	onStatic(b, "click", func() {
-		activeTab = tab
-		renderActiveTab()
+		navigateTo(webRoute{tab: tab})
 	})
 	return b
 }
@@ -618,8 +798,7 @@ func menuItem(icon, label string, fn func()) js.Value {
 
 func menuTabItem(icon, label, tab string) js.Value {
 	b := menuItem(icon, label, func() {
-		activeTab = tab
-		renderActiveTab()
+		navigateTo(webRoute{tab: tab})
 	})
 	b.Call("setAttribute", "data-tab", tab)
 	return b
@@ -683,6 +862,7 @@ func renderActiveTab() {
 	default:
 		renderHome()
 	}
+	applyCurrentRouteToTab()
 }
 
 // rebuild reconstructs the source card, step cards and add card.
@@ -836,7 +1016,27 @@ func renderExamples() {
 			empty.Get("style").Set("display", "none")
 		}
 	}
-	onStatic(query, "input", render)
+	applyExamplesRoute = func(route webRoute) {
+		query.Set("value", route.search)
+		render()
+		for _, ref := range refs {
+			ref.card.Get("classList").Call("remove", "route-highlight")
+		}
+		if route.item == "" {
+			return
+		}
+		for _, ref := range refs {
+			if routeItemMatches(route.item, ref.example.Name) {
+				ref.card.Set("open", true)
+				highlightRouteTarget(ref.card)
+				return
+			}
+		}
+	}
+	onStatic(query, "input", func() {
+		render()
+		replaceRoute(webRoute{tab: "examples", search: query.Get("value").String()})
+	})
 	render()
 	examplesPage = page
 	examplesPageBuilt = true
@@ -902,7 +1102,13 @@ func populateExampleDetails(card js.Value, example pipeline.Example) {
 			renderActiveTab()
 		})
 	})
-	appendChildren(actions, preview, load)
+	copyLink := el("button")
+	copyLink.Set("type", "button")
+	copyLink.Set("textContent", "Copy link")
+	onStatic(copyLink, "click", func() {
+		copyRouteLink(webRoute{tab: "examples", item: itemSlug(example.Name)}, "Example")
+	})
+	appendChildren(actions, preview, load, copyLink)
 	appendChildren(card, desc, source, chain)
 	if example.WantContains != "" {
 		want := div("plugin-meta")
@@ -1049,7 +1255,14 @@ func renderPlugins() {
 		return
 	}
 	page := div("catalog")
+	header := div("examples-header")
+	title := el("h2")
+	title.Set("textContent", "Plugins")
+	query := textInput("Search plugins", "")
+	appendChildren(header, title, query)
+	page.Call("appendChild", header)
 	current := ""
+	refs := make([]pluginCardRef, 0, len(plugins.UICatalog()))
 	for _, info := range plugins.UICatalog() {
 		if info.Category != current {
 			current = info.Category
@@ -1057,11 +1270,67 @@ func renderPlugins() {
 			h.Set("textContent", plugins.CategoryLabel(current))
 			page.Call("appendChild", h)
 		}
-		page.Call("appendChild", pluginCard(info))
+		card := pluginCard(info)
+		refs = append(refs, pluginCardRef{info: info, card: card})
+		page.Call("appendChild", card)
 	}
+	render := func() {
+		q := query.Get("value").String()
+		for _, ref := range refs {
+			if pluginMatches(ref.info, q) {
+				ref.card.Get("style").Set("display", "")
+			} else {
+				ref.card.Get("style").Set("display", "none")
+			}
+		}
+	}
+	applyPluginsRoute = func(route webRoute) {
+		query.Set("value", route.search)
+		render()
+		for _, ref := range refs {
+			ref.card.Get("classList").Call("remove", "route-highlight")
+		}
+		if route.item == "" {
+			return
+		}
+		for _, ref := range refs {
+			if routeItemMatches(route.item, ref.info.Name) || routeItemMatches(route.item, ref.info.Label) {
+				ref.card.Get("style").Set("display", "")
+				highlightRouteTarget(ref.card)
+				return
+			}
+		}
+	}
+	onStatic(query, "input", func() {
+		render()
+		replaceRoute(webRoute{tab: "plugins", search: query.Get("value").String()})
+	})
+	render()
 	pluginsPage = page
 	pluginsPageBuilt = true
 	contentEl.Call("appendChild", page)
+}
+
+func pluginMatches(info plugins.UIPluginInfo, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return true
+	}
+	fields := []string{
+		info.Name,
+		info.Label,
+		info.Category,
+		plugins.CategoryLabel(info.Category),
+		info.Description,
+		info.UseFor,
+		strings.Join(info.Aliases, " "),
+	}
+	return strings.Contains(strings.ToLower(strings.Join(fields, " ")), query)
+}
+
+func routeItemMatches(item, name string) bool {
+	item = strings.TrimSpace(item)
+	return strings.EqualFold(item, name) || itemSlug(item) == itemSlug(name)
 }
 
 func link(label, href string) js.Value {
@@ -1096,7 +1365,15 @@ func pluginCard(info plugins.UIPluginInfo) js.Value {
 	desc.Set("textContent", info.Description)
 	use := el("p")
 	use.Set("textContent", "Use for: "+info.UseFor)
-	appendChildren(card, title, meta, desc, use)
+	actions := div("modal-actions")
+	copyLink := el("button")
+	copyLink.Set("type", "button")
+	copyLink.Set("textContent", "Copy link")
+	onStatic(copyLink, "click", func() {
+		copyRouteLink(webRoute{tab: "plugins", item: itemSlug(info.Name)}, "Plugin")
+	})
+	actions.Call("appendChild", copyLink)
+	appendChildren(card, title, meta, desc, use, actions)
 
 	for _, ex := range info.Examples {
 		example := div("example")
@@ -1419,14 +1696,11 @@ func shareLink(data []byte) string {
 		"#chain=" + base64.RawURLEncoding.EncodeToString(data)
 }
 
-func loadChainFromHash() {
-	hash := js.Global().Get("location").Get("hash").String()
-	hash = strings.TrimPrefix(hash, "#")
-	if !strings.HasPrefix(hash, "chain=") {
+func loadChainFromRoute(route webRoute) {
+	if route.chain == "" {
 		return
 	}
-	encoded := strings.TrimPrefix(hash, "chain=")
-	data, err := base64.RawURLEncoding.DecodeString(encoded)
+	data, err := base64.RawURLEncoding.DecodeString(route.chain)
 	if err != nil {
 		alert("Could not decode chain from URL: " + err.Error())
 		return
