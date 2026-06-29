@@ -69,6 +69,9 @@ func printCLIUsage() {
 	fmt.Fprintln(out, "  deen [global flags] <plugin> [plugin flags] [input]")
 	fmt.Fprintln(out, "  deen [global flags] .<plugin> [plugin flags] [input]")
 	fmt.Fprintln(out, "  deen chain [chain flags] <chain.json> [input]")
+	fmt.Fprintln(out, "  deen inspect [inspect flags] [input]")
+	fmt.Fprintln(out, "  deen detect [detect flags] [input]")
+	fmt.Fprintln(out, "  deen mcp serve")
 	fmt.Fprintln(out, "  deen serve [serve flags]")
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Run a plugin by name to transform data. Prefix a reversible plugin with '.'")
@@ -84,6 +87,9 @@ func printCLIUsage() {
 	fmt.Fprintln(out, "  deen base64 test                encode text as Base64")
 	fmt.Fprintln(out, "  deen .base64 dGVzdA==           decode Base64")
 	fmt.Fprintln(out, "  deen chain saved.json           run a saved Web/GUI chain")
+	fmt.Fprintln(out, "  deen inspect -file sample.txt   inspect data as structured JSON")
+	fmt.Fprintln(out, "  deen detect -file sample.txt    suggest likely decode/inspection steps")
+	fmt.Fprintln(out, "  deen mcp serve                  run a stdio MCP server for agents")
 	fmt.Fprintln(out, "  printf secret | deen sha256     hash stdin")
 	fmt.Fprintln(out, "  deen base64 -h                  show plugin-specific flags")
 	fmt.Fprintln(out, "  deen serve --port 9090          serve the WebAssembly UI")
@@ -92,7 +98,8 @@ func printCLIUsage() {
 	flag.PrintDefaults()
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Use 'deen <plugin> -h' for plugin flags, 'deen chain -h' for saved chains,")
-	fmt.Fprintln(out, "or 'deen serve -h' for web server flags.")
+	fmt.Fprintln(out, "'deen inspect -h'/'deen detect -h' for agent-friendly JSON, or")
+	fmt.Fprintln(out, "'deen serve -h' for web server flags.")
 }
 
 // RunCLI dispatches the requested plugin and returns a process exit code.
@@ -103,6 +110,15 @@ func RunCLI() int {
 	}
 	if cmd == "chain" {
 		return runChain()
+	}
+	if cmd == "inspect" {
+		return runInspect()
+	}
+	if cmd == "detect" {
+		return runDetect()
+	}
+	if cmd == "mcp" {
+		return runMCP()
 	}
 	plugin, unprocess, ok := plugins.Resolve(cmd)
 	if !ok {

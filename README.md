@@ -126,6 +126,45 @@ $ deen -lj               # list as JSON
 $ deen base64 -h         # plugin-specific options
 ```
 
+### Agent-friendly inspection
+
+`inspect` and `detect` emit structured JSON for agents, scripts and future MCP
+integrations. Output is capped by default so large or binary inputs do not flood
+an agent context.
+
+```bash
+$ deen inspect '{"ok":true}'
+$ printf '%s' '%7B%22ok%22%3Atrue%7D' | deen detect
+```
+
+`inspect` returns metadata, SHA-256, MIME sniffing, a safe preview, structured
+preview text when available, and likely next transforms. `detect` focuses on
+ranked one-step and multi-step decode suggestions that can be turned into deen
+chains.
+
+### MCP server
+
+`deen mcp serve` runs a local stdio MCP server for coding agents. It exposes
+tools for inspection, detection, single transforms, saved-chain execution,
+bounded result-range reads, and plugin discovery. It also exposes MCP resources
+for plugin/example catalogs and prompts for common triage, decode, binary
+inspection, and chain-explanation workflows. The server is local-only: it does
+not perform network access, shell execution, or writes.
+
+Example Claude Code project configuration:
+
+```json
+{
+  "mcpServers": {
+    "deen": {
+      "type": "stdio",
+      "command": "deen",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
 ## GUI
 
 `make gui` produces a binary that launches the GUI when started without

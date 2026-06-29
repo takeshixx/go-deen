@@ -1471,6 +1471,9 @@ func showSuggestions() {
 		alert("No likely transforms detected.")
 		return
 	}
+	sort.SliceStable(suggestions, func(i, j int) bool {
+		return suggestions[i].Confidence > suggestions[j].Confidence
+	})
 	list := div("modal-list")
 	var close func()
 	for _, suggestion := range suggestions {

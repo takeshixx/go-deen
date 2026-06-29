@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -1013,6 +1014,9 @@ func (dg *DeenGUI) showSuggestionsDialog(suggestions []pipeline.Suggestion) {
 		dialog.ShowCustom("Suggested transforms", "Close", list, dg.window)
 		return
 	}
+	sort.SliceStable(suggestions, func(i, j int) bool {
+		return suggestions[i].Confidence > suggestions[j].Confidence
+	})
 
 	var d dialog.Dialog
 	for _, s := range suggestions {
@@ -1039,13 +1043,32 @@ func (dg *DeenGUI) showSuggestionsDialog(suggestions []pipeline.Suggestion) {
 			itemContent.Add(widget.NewLabel(detail))
 		}
 		if s.Preview != "" {
-			itemContent.Add(widget.NewLabel(s.Preview))
+			itemContent.Add(widget.NewLabel(guiSafeSuggestionPreview(s.Preview)))
 		}
 		list.Add(container.NewBorder(nil, nil, nil, action, itemContent))
 	}
 	d = dialog.NewCustom("Suggested transforms", "Close", container.NewVScroll(list), dg.window)
 	d.Resize(fyne.NewSize(560, 360))
 	d.Show()
+}
+
+func guiSafeSuggestionPreview(preview string) string {
+	var b strings.Builder
+	for _, r := range preview {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			b.WriteRune(r)
+		case strconv.IsPrint(r):
+			b.WriteRune(r)
+		case r <= 0xff:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		case r <= 0xffff:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		default:
+			fmt.Fprintf(&b, `\U%08x`, r)
+		}
+	}
+	return b.String()
 }
 
 func (dg *DeenGUI) showPluginSearch() {

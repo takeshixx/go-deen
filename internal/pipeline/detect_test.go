@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/pem"
 	"net/url"
 	"strings"
 	"testing"
@@ -162,6 +164,69 @@ func TestSuggestionsDetectAutomatedDecodeChain(t *testing.T) {
 	}
 	if len(p.Steps()) != 4 {
 		t.Fatalf("AddSuggestion added %d steps, want 4", len(p.Steps()))
+	}
+}
+
+func TestSuggestionsJSONPreviewHasNoANSIColor(t *testing.T) {
+	suggestions := Suggestions([]byte(`{"ok":true}`))
+	if !hasSuggestionOption(suggestions, "json", false, "no-color", "true") {
+		t.Fatalf("missing no-color JSON suggestion in %#v", suggestions)
+	}
+
+	input := []byte(url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(`{"ok":true}`))))
+	chain := findSuggestionChain(Suggestions(input), []SuggestionStep{
+		{Plugin: "url", Unprocess: true},
+		{Plugin: "base64", Unprocess: true},
+		{Plugin: "json", Unprocess: false},
+	})
+	if chain == nil {
+		t.Fatal("missing URL/Base64/JSON chain")
+	}
+	if strings.Contains(chain.Preview, "\x1b[") {
+		t.Fatalf("JSON preview contains ANSI color escape: %q", chain.Preview)
+	}
+}
+
+func TestSuggestionsDetectNestedBinaryInspectionChains(t *testing.T) {
+	der := []byte{0x30, 0x03, 0x02, 0x01, 0x2a}
+	tests := []struct {
+		name  string
+		input []byte
+		want  []SuggestionStep
+	}{
+		{
+			name:  "hex encoded asn1",
+			input: []byte(hex.EncodeToString(der)),
+			want: []SuggestionStep{
+				{Plugin: "hex", Unprocess: true},
+				{Plugin: "asn1"},
+			},
+		},
+		{
+			name:  "pem wrapped asn1",
+			input: pem.EncodeToMemory(&pem.Block{Type: "MESSAGE", Bytes: der}),
+			want: []SuggestionStep{
+				{Plugin: "pem", Unprocess: true},
+				{Plugin: "asn1"},
+			},
+		},
+		{
+			name:  "base64 encoded protobuf",
+			input: []byte(base64.StdEncoding.EncodeToString([]byte{0x08, 0x96, 0x01, 0x12, 0x03, 'f', 'o', 'o'})),
+			want: []SuggestionStep{
+				{Plugin: "base64", Unprocess: true},
+				{Plugin: "protobuf"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			suggestions := Suggestions(tt.input)
+			if chain := findSuggestionChain(suggestions, tt.want); chain == nil {
+				t.Fatalf("missing nested detect chain in %#v", suggestions)
+			}
+		})
 	}
 }
 

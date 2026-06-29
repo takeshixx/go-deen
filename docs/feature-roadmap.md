@@ -54,6 +54,14 @@ Code extension updates.
   state while files are read.
 - Detect next now proposes bounded multi-step decode chains, including layered
   URL/Base64/compression/format workflows, with confidence and preview text.
+- Agent-friendly CLI JSON: `deen inspect` and `deen detect` expose capped
+  metadata, previews, hashes, structured previews, and decode suggestions for
+  Claude Code/MCP-style integrations.
+- Initial MCP stdio server: `deen mcp serve` exposes inspect, detect_next,
+  transform, run_chain, read_result_range, list_plugins, and search_plugins
+  tools.
+- MCP resources and prompts expose plugin/example catalogs, session result
+  previews, and common agent workflows.
 
 ### Plugins
 
@@ -82,7 +90,23 @@ Implemented plugin families and tools:
 
 ## Open priorities
 
-### 1. Automated Detect Next / Decode Assistant Follow-Up
+### 1. Agentic Tooling / MCP Integration
+
+Make deen a local data workbench for coding agents such as Claude Code.
+
+Scope:
+
+- Expand `deen mcp serve` beyond the initial stdio tools as needed by real
+  Claude Code workflows.
+- Keep schema-stable structured content and short human summaries for every
+  tool.
+- Keep improving capped previews plus in-session result references for large
+  outputs.
+- Publish Claude Code setup docs and, later, a plugin bundle with skills.
+- Keep all agent tooling local-only by default: no network, no shell execution,
+  no writes unless explicitly requested.
+
+### 2. Automated Detect Next / Decode Assistant Follow-Up
 
 Detect next now finds useful multi-step decode paths, not only immediate
 single-step hints. Continue hardening it for security research and
@@ -101,7 +125,7 @@ Scope:
 - Preserve the current simple suggestions as quick actions when the user only
   wants one transform.
 
-### 2. Batch Mode
+### 3. Batch Mode
 
 Apply a saved chain to multiple files from the CLI and, later, from the GUI/web
 UI.
@@ -113,7 +137,7 @@ Initial CLI scope:
 - Preserve binary-safe output.
 - Report per-file errors without stopping the entire batch unless requested.
 
-### 3. Batch Mode Tests and CLI/Core Coverage
+### 4. Batch Mode Tests and CLI/Core Coverage
 
 `internal/core` now has direct `deen chain` coverage. Keep expanding it around
 batch mode and subcommand dispatch as new CLI behavior lands.
@@ -123,7 +147,7 @@ Scope:
 - Table tests for CLI flag parsing and subcommand dispatch.
 - Batch-mode tests before/with the batch implementation.
 
-### 4. Browser/UI Regression Coverage
+### 5. Browser/UI Regression Coverage
 
 The Playwright regression covers web routing, legacy chain links,
 example/plugin copy links, clipboard fallback behavior, QR preview, source
@@ -136,14 +160,14 @@ Scope:
 - Broader narrow/mobile layout coverage for editing controls.
 - Route coverage for future web features as they are added.
 
-### 5. Option Metadata Completeness
+### 6. Option Metadata Completeness
 
 Scope:
 
 - Continue extending metadata regression tests as new plugins/options are added.
 - Consider debounce for high-cost text option edits in GUI/web UI.
 
-### 6. Step Editing UX Polish
+### 7. Step Editing UX Polish
 
 Step reorder, duplicate, disable, and delete exist in the GUI and web UI, and
 impossible boundary moves are disabled. Web step headers now keep editing
@@ -155,7 +179,7 @@ Scope:
 - Consider drag handles or keyboard shortcuts for reorder.
 - Keep undo/redo behavior covered around each action.
 
-### 7. Diff Plugin
+### 8. Diff Plugin
 
 Add a plugin for textual and/or binary diff workflows.
 
@@ -164,7 +188,7 @@ Open questions:
 - Whether diff should be a normal plugin, a compare-view enhancement, or both.
 - How to feed two inputs in CLI, GUI, and web UI consistently.
 
-### 8. Web Drag-and-Drop Polish
+### 9. Web Drag-and-Drop Polish
 
 Basic source-file drag-and-drop exists, and invalid directory or multi-file drops
 now produce inline feedback without replacing the current source. Remaining work

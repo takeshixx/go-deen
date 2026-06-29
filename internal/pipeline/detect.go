@@ -109,7 +109,7 @@ func oneStepSuggestions(data []byte) []Suggestion {
 		add("certPrinter", false, "Inspect certificate", "input contains a PEM certificate block")
 	}
 	if json.Valid(trimmed) {
-		add("json", false, "Format JSON", "input parses as JSON")
+		addOptions("json", false, map[string]string{"no-color": "true"}, "Format JSON", "input parses as JSON")
 	}
 	if looksLikeXML(trimmed) {
 		add("xml", false, "Format XML", "input parses as XML")
@@ -530,11 +530,37 @@ func looksLikeMessagePack(data []byte) bool {
 	if len(data) < 2 || utf8.Valid(data) && mostlyPrintable(data) {
 		return false
 	}
+	if !plausibleMessagePackContainer(data) {
+		return false
+	}
 	var v interface{}
 	if err := msgpack.Unmarshal(data, &v); err != nil {
 		return false
 	}
 	return structuredBinaryValue(v)
+}
+
+func plausibleMessagePackContainer(data []byte) bool {
+	first := data[0]
+	switch {
+	case first >= 0x80 && first <= 0x8f:
+		return int(first&0x0f) <= len(data)-1
+	case first >= 0x90 && first <= 0x9f:
+		return int(first&0x0f) <= len(data)-1
+	case first == 0xdc || first == 0xde:
+		if len(data) < 3 {
+			return false
+		}
+		return int(binary.BigEndian.Uint16(data[1:3])) <= len(data)-3
+	case first == 0xdd || first == 0xdf:
+		if len(data) < 5 {
+			return false
+		}
+		size := binary.BigEndian.Uint32(data[1:5])
+		return size <= uint32(len(data)-5)
+	default:
+		return false
+	}
 }
 
 func looksLikeCBOR(data []byte) bool {
