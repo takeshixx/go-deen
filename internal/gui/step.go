@@ -458,12 +458,18 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 			return nil
 		}, dg.rebuild)
 	})
+	if i == 0 {
+		moveUp.Disable()
+	}
 	moveDown := stepIconButton(theme.MoveDownIcon(), func() {
 		dg.runPipelineWork("Processing", func() error {
 			dg.pipe.MoveStep(c.index, c.index+1)
 			return nil
 		}, dg.rebuild)
 	})
+	if i == dg.pipe.Len()-1 {
+		moveDown.Disable()
+	}
 	duplicate := stepIconButton(theme.ContentCopyIcon(), func() {
 		dg.runPipelineWork("Processing", func() error {
 			dg.pipe.DuplicateStep(c.index)

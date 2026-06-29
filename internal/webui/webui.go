@@ -2094,12 +2094,14 @@ func stepCard(i int) js.Value {
 			rebuild()
 		})
 	})
+	moveUp.Set("disabled", i == 0)
 	moveDown := iconOnlyButton("arrow-down", "Move step down", func() {
 		runBusy("Processing", func() {
 			pipe.MoveStep(i, i+1)
 			rebuild()
 		})
 	})
+	moveDown.Set("disabled", i == pipe.Len()-1)
 	duplicate := iconOnlyButton("copy", "Duplicate step", func() {
 		runBusy("Processing", func() {
 			pipe.DuplicateStep(i)
@@ -2120,8 +2122,9 @@ func stepCard(i int) js.Value {
 	})
 	enabled.Set("aria-pressed", fmt.Sprintf("%t", !step.Disabled))
 
-	spacer := div("spacer")
-	appendChildren(header, collapse, title, summary, spacer, enabled, moveUp, moveDown, duplicate, remove)
+	actions := div("step-actions")
+	appendChildren(actions, enabled, moveUp, moveDown, duplicate, remove)
+	appendChildren(header, collapse, title, summary, actions)
 
 	detail := div("card-detail")
 

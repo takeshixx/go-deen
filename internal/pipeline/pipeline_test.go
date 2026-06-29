@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/takeshixx/deen/internal/plugins"
 )
 
 func TestChainEncode(t *testing.T) {
@@ -218,6 +220,25 @@ func TestPluginOptions(t *testing.T) {
 	}
 }
 
+func TestPluginOptionsHaveRenderableMetadata(t *testing.T) {
+	for _, plugin := range plugins.Catalog() {
+		for _, opt := range PluginOptions(plugin.Name) {
+			if strings.TrimSpace(opt.Label) == "" {
+				t.Fatalf("%s %s has empty label", plugin.Name, opt.Name)
+			}
+			if strings.TrimSpace(opt.Description) == "" {
+				t.Fatalf("%s %s has empty description", plugin.Name, opt.Name)
+			}
+			if strings.TrimSpace(opt.Kind) == "" {
+				t.Fatalf("%s %s has empty kind", plugin.Name, opt.Name)
+			}
+			if opt.Kind == "select" && len(opt.Choices) == 0 {
+				t.Fatalf("%s %s is select without choices", plugin.Name, opt.Name)
+			}
+		}
+	}
+}
+
 func TestOneWayPluginsCannotBeAddedAsDecodeSteps(t *testing.T) {
 	p := New()
 	p.AddStep("sha256", true)
@@ -345,10 +366,19 @@ func TestPluginOptionsMetadata(t *testing.T) {
 	if got := find("jwt", "verify").Description; got != "Verify the token signature while decoding." {
 		t.Fatalf("jwt verify description = %q", got)
 	}
+	if key := find("jwt", "key"); key.Kind != "text" || key.Secret {
+		t.Fatalf("jwt key metadata = %#v, want visible verification key file", key)
+	}
+	if header := find("jwt", "header"); !header.Multiline {
+		t.Fatalf("jwt header metadata = %#v, want multiline JSON input", header)
+	}
 
 	query := find("jq", "q")
 	if query.Label != "Query" || !query.Multiline || query.HelpURL == "" {
 		t.Fatalf("jq q metadata = %#v, want query label, multiline input and help URL", query)
+	}
+	if headers := find("pem", "headers"); !headers.Multiline {
+		t.Fatalf("pem headers metadata = %#v, want multiline JSON input", headers)
 	}
 	if got := find("jq", "no-color").Label; got != "No color" {
 		t.Fatalf("jq no-color label = %q", got)
@@ -367,6 +397,56 @@ func TestPluginOptionsMetadata(t *testing.T) {
 	}
 	if got := find("aes", "skip-aead-verify").Label; got != "Skip AEAD verify" {
 		t.Fatalf("aes skip-aead-verify label = %q", got)
+	}
+	for _, tc := range []struct {
+		plugin string
+		name   string
+	}{
+		{"aes", "key"},
+		{"chacha20poly1305", "key"},
+		{"jwt", "secret"},
+		{"jwt", "sign-secret"},
+		{"sign", "key"},
+	} {
+		opt := find(tc.plugin, tc.name)
+		if opt.Kind != "secret" || !opt.Secret {
+			t.Fatalf("%s %s metadata = %#v, want secret", tc.plugin, tc.name, opt)
+		}
+	}
+	for _, tc := range []struct {
+		plugin string
+		name   string
+	}{
+		{"aes", "mode"},
+		{"aes", "padding"},
+		{"csv", "in"},
+		{"csv", "out"},
+		{"hmac", "alg"},
+		{"jwt", "sign-alg"},
+		{"jwt", "enc-alg"},
+		{"jwt", "key-alg"},
+		{"certCloner", "sig-alg"},
+		{"lzw", "lit-width"},
+		{"unicode", "encoding"},
+		{"unicode-normalize", "form"},
+	} {
+		opt := find(tc.plugin, tc.name)
+		if opt.Kind != "select" || len(opt.Choices) == 0 {
+			t.Fatalf("%s %s metadata = %#v, want select choices", tc.plugin, tc.name, opt)
+		}
+	}
+	for _, tc := range []struct {
+		plugin string
+		name   string
+	}{
+		{"bcrypt", "cost"},
+		{"qr", "size"},
+		{"scrypt", "len"},
+	} {
+		opt := find(tc.plugin, tc.name)
+		if opt.Kind != "number" && opt.Kind != "select" {
+			t.Fatalf("%s %s metadata = %#v, want numeric control", tc.plugin, tc.name, opt)
+		}
 	}
 	for _, opt := range PluginOptions("aes") {
 		if opt.Name == "nonce" {

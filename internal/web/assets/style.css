@@ -514,14 +514,24 @@ a {
 	min-width: 0;
 }
 
+.card-header .title {
+	flex: 0 0 auto;
+}
+
 .summary {
+	flex: 1 1 auto;
 	min-width: 0;
 	color: var(--muted);
 	font-size: 0.85rem;
 	overflow-wrap: anywhere;
 }
 
-.spacer { flex: 1; }
+.step-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 0.15rem;
+	margin-left: auto;
+}
 
 .icon {
 	width: 2rem;
@@ -540,6 +550,17 @@ a {
 .icon:hover {
 	background: color-mix(in srgb, var(--accent) 12%, transparent);
 	color: var(--fg);
+}
+
+.icon:disabled {
+	color: color-mix(in srgb, var(--muted) 45%, transparent);
+	cursor: default;
+	opacity: 0.55;
+}
+
+.icon:disabled:hover {
+	background: transparent;
+	color: color-mix(in srgb, var(--muted) 45%, transparent);
 }
 
 .icon[aria-pressed="true"] {
@@ -1236,6 +1257,21 @@ a {
 
 	.add-actions {
 		justify-content: flex-start;
+	}
+
+	.card-header {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.card-header .summary {
+		flex-basis: calc(100% - 2.5rem);
+		order: 4;
+	}
+
+	.step-actions {
+		margin-left: 0;
+		order: 3;
 	}
 
 	.examples-header,

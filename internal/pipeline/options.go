@@ -51,7 +51,7 @@ func PluginOptions(name string) []Option {
 			IsBool:      isBool,
 			Kind:        kind,
 			Choices:     optionChoices(p.Name, f.Name),
-			Secret:      isSecretOption(f.Name),
+			Secret:      isSecretOption(p.Name, f.Name),
 			Multiline:   optionMultiline(p.Name, f.Name),
 			HelpLabel:   optionHelpLabel(p.Name, f.Name),
 			HelpURL:     optionHelpURL(p.Name, f.Name),
@@ -77,9 +77,9 @@ func optionLabel(plugin, name string) string {
 	case "brotli:lgwin":
 		return "Window size"
 	case "certCloner:ca-cert":
-		return "CA certificate"
+		return "CA certificate file"
 	case "certCloner:ca-key":
-		return "CA private key"
+		return "CA private key file"
 	case "certCloner:o":
 		return "Output prefix"
 	case "certCloner:sig-alg":
@@ -220,9 +220,9 @@ func optionDescription(plugin, name, usage string) string {
 	case "brotli:lgwin":
 		return "Brotli sliding window size."
 	case "certCloner:ca-cert":
-		return "CA certificate in PEM format. May include the CA key."
+		return "Path to a PEM CA certificate file. The file may also contain the CA private key."
 	case "certCloner:ca-key":
-		return "CA private key in PEM format."
+		return "Path to a PEM CA private key file, if it is not bundled with the CA certificate."
 	case "certCloner:o":
 		return "Write cloned certificate files using this path prefix."
 	case "certCloner:sig-alg":
@@ -258,7 +258,7 @@ func optionDescription(plugin, name, usage string) string {
 	case "jwt:header":
 		return "JSON header to use when creating a token."
 	case "jwt:key":
-		return "Key file used when verifying a token."
+		return "Public key file used when verifying a token."
 	case "jwt:key-alg":
 		return "Key management algorithm for creating JWE tokens."
 	case "jwt:list":
@@ -403,7 +403,12 @@ func prettyOptionPart(part string) string {
 }
 
 func optionMultiline(plugin, name string) bool {
-	return plugin == "jq" && name == "q"
+	switch plugin + ":" + name {
+	case "jq:q", "jwt:header", "pem:headers":
+		return true
+	default:
+		return false
+	}
 }
 
 func optionHelpLabel(plugin, name string) string {
@@ -430,7 +435,7 @@ func optionKind(plugin, name, def string, isBool bool) string {
 		return "bool"
 	case len(optionChoices(plugin, name)) > 0:
 		return "select"
-	case isSecretOption(name):
+	case isSecretOption(plugin, name):
 		return "secret"
 	case isNumberDefault(def):
 		return "number"
@@ -470,6 +475,8 @@ func optionChoices(plugin, name string) []string {
 		return []string{"md5", "sha1", "sha224", "sha256", "sha384", "sha512", "sha3-256", "sha3-512"}
 	case "lzw:order":
 		return []string{"0", "1"}
+	case "lzw:lit-width":
+		return []string{"2", "3", "4", "5", "6", "7", "8"}
 	case "csv:in":
 		return []string{"csv", "tsv", "semicolon"}
 	case "csv:out":
@@ -482,12 +489,26 @@ func optionChoices(plugin, name string) []string {
 		return []string{"16", "15", "14", "13", "12"}
 	case "sign:alg":
 		return []string{"ed25519", "rsa-pss", "ecdsa"}
+	case "certCloner:sig-alg":
+		return []string{"", "sha256", "sha384", "sha512"}
+	case "jwt:sign-alg":
+		return []string{"", "EdDSA", "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512"}
+	case "jwt:enc-alg":
+		return []string{"", "A128CBC-HS256", "A192CBC-HS384", "A256CBC-HS512", "A128GCM", "A192GCM", "A256GCM"}
+	case "jwt:key-alg":
+		return []string{"", "dir", "RSA1_5", "RSA-OAEP", "RSA-OAEP-256", "A128KW", "A192KW", "A256KW", "ECDH-ES", "ECDH-ES+A128KW", "ECDH-ES+A192KW", "ECDH-ES+A256KW", "A128GCMKW", "A192GCMKW", "A256GCMKW", "PBES2-HS256+A128KW", "PBES2-HS384+A192KW", "PBES2-HS512+A256KW"}
 	default:
 		return nil
 	}
 }
 
-func isSecretOption(name string) bool {
+func isSecretOption(plugin, name string) bool {
+	switch plugin + ":" + name {
+	case "jwt:key", "sign:pub", "scrypt:salt":
+		return false
+	case "certCloner:ca-key", "jwt:enc-keyfile", "jwt:sign-keyfile":
+		return true
+	}
 	name = strings.ToLower(name)
 	return strings.Contains(name, "key") ||
 		strings.Contains(name, "secret") ||

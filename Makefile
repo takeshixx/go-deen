@@ -100,6 +100,14 @@ clean:
 test:
 	go test $(gomodflags) -timeout 20s -count=1 -cover ./...
 
+.PHONY: test-all
+test-all: test
+	go test $(gomodflags) -tags gui ./internal/gui
+	PATH=$$(go env GOROOT)/lib/wasm:$$PATH GOOS=js GOARCH=wasm go test $(gomodflags) ./internal/webui
+	npm --prefix extras/vscode-deen run compile
+	npm --prefix extras/vscode-deen run lint
+	$(MAKE) test-web-browser
+
 .PHONY: bench
 bench:
 	go test $(gomodflags) -run '^$$' -bench . -benchmem ./internal/pipeline ./internal/plugins
@@ -117,6 +125,12 @@ bench-web-browser: web-assets
 	npm --prefix extras/web-perf install
 	npm --prefix extras/web-perf exec playwright install chromium
 	npm --prefix extras/web-perf run bench
+
+.PHONY: test-web-browser
+test-web-browser: web-assets
+	npm --prefix extras/web-perf install
+	npm --prefix extras/web-perf exec playwright install chromium
+	npm --prefix extras/web-perf test
 
 .PHONY: all
 all: clean build test
