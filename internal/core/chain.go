@@ -20,7 +20,7 @@ func runChain() int {
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  deen chain saved.json\n")
 		fmt.Fprintf(os.Stderr, "  deen chain -file saved.json\n")
-		fmt.Fprintf(os.Stderr, "  printf data | deen chain saved.json -stdin\n\n")
+		fmt.Fprintf(os.Stderr, "  printf data | deen chain -stdin saved.json\n\n")
 		fs.PrintDefaults()
 	}
 	chainFile := fs.String("file", "", "saved chain JSON file")

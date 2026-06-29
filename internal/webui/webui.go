@@ -850,31 +850,47 @@ func exampleCard(example pipeline.Example) js.Value {
 	title := el("h3")
 	title.Set("textContent", example.Name)
 	summary.Call("appendChild", title)
+	card.Call("appendChild", summary)
 
+	detailsLoaded := false
+	onStatic(card, "toggle", func() {
+		if detailsLoaded || !card.Get("open").Bool() {
+			return
+		}
+		detailsLoaded = true
+		populateExampleDetails(card, example)
+	})
+
+	return card
+}
+
+func populateExampleDetails(card js.Value, example pipeline.Example) {
 	desc := el("p")
 	desc.Set("textContent", example.Description)
+	source := div("plugin-meta")
+	source.Set("textContent", "Input: "+pipeline.DataMetadata(example.Source, 0).Summary())
 	chain := exampleChain(example.Steps)
 
-	data := div("example-data-grid")
+	previewSlot := div("example-preview-slot")
+	previewHint := div("plugin-meta")
+	previewHint.Set("textContent", "Preview data is loaded on demand.")
+	previewSlot.Call("appendChild", previewHint)
+
+	actions := div("modal-actions")
 	previewLoaded := false
-	onStatic(card, "toggle", func() {
-		if previewLoaded || !card.Get("open").Bool() {
+	preview := el("button")
+	preview.Set("type", "button")
+	preview.Set("textContent", "Preview data")
+	onStatic(preview, "click", func() {
+		if previewLoaded {
 			return
 		}
 		previewLoaded = true
-		preview := cachedExamplePreview(example)
-		if preview.err != nil {
-			output := div("error")
-			output.Set("textContent", "Output error: "+preview.err.Error())
-			data.Call("appendChild", output)
-			return
-		}
-		inputPanel := exampleDataPanel("Input data", example.Source)
-		outputPanel := exampleDataPanel("Output result", preview.result)
-		appendChildren(data, inputPanel, outputPanel)
+		preview.Set("disabled", true)
+		runBusy("Previewing example", func() {
+			renderExamplePreview(example, previewSlot)
+		})
 	})
-
-	actions := div("modal-actions")
 	load := el("button")
 	load.Set("type", "button")
 	load.Set("textContent", "Load example")
@@ -886,16 +902,32 @@ func exampleCard(example pipeline.Example) js.Value {
 			renderActiveTab()
 		})
 	})
-	actions.Call("appendChild", load)
-	appendChildren(card, summary, desc, chain)
+	appendChildren(actions, preview, load)
+	appendChildren(card, desc, source, chain)
 	if example.WantContains != "" {
 		want := div("plugin-meta")
 		want.Set("textContent", "Expected result contains: "+example.WantContains)
 		card.Call("appendChild", want)
 	}
-	card.Call("appendChild", data)
-	card.Call("appendChild", actions)
-	return card
+	appendChildren(card, previewSlot, actions)
+}
+
+func renderExamplePreview(example pipeline.Example, slot js.Value) {
+	slot.Set("innerHTML", "")
+	preview := cachedExamplePreview(example)
+	if preview.err != nil {
+		output := div("error")
+		output.Set("textContent", "Output error: "+preview.err.Error())
+		slot.Call("appendChild", output)
+		return
+	}
+	outputSummary := div("plugin-meta")
+	outputSummary.Set("textContent", "Output: "+pipeline.DataMetadata(preview.result, len(example.Source)).Summary())
+	data := div("example-data-grid")
+	inputPanel := exampleDataPanel("Input data", example.Source)
+	outputPanel := exampleDataPanel("Output result", preview.result)
+	appendChildren(data, inputPanel, outputPanel)
+	appendChildren(slot, outputSummary, data)
 }
 
 func cachedExamplePreview(example pipeline.Example) examplePreview {

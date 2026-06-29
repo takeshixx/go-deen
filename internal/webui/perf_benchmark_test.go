@@ -51,11 +51,23 @@ func BenchmarkWebExamplesInitialFilter(b *testing.B) {
 		for _, example := range examples {
 			if pipeline.ExampleMatches(example, "") {
 				matches++
-				webBenchmarkSink = exampleChainSummary(example.Steps)
-				webBenchmarkSink = pipeline.DataMetadata(example.Source, 0).Summary()
+				webBenchmarkSink = example.Name
 			}
 		}
 		webBenchmarkSink = matches
+	}
+}
+
+func BenchmarkWebExamplesDetailPreparation(b *testing.B) {
+	examples := pipeline.BuiltinExamples()
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, example := range examples {
+			webBenchmarkSink = example.Description
+			webBenchmarkSink = exampleChainSummary(example.Steps)
+			webBenchmarkSink = pipeline.DataMetadata(example.Source, 0).Summary()
+			webBenchmarkSink = example.WantContains
+		}
 	}
 }
 

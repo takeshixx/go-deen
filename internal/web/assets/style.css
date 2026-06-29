@@ -1120,6 +1120,10 @@ textarea.io.source-io {
 	margin: 0.7rem 0;
 }
 
+.example-preview-slot {
+	margin: 0.7rem 0;
+}
+
 .example-data-panel {
 	min-width: 0;
 }

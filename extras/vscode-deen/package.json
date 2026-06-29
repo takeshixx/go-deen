@@ -58,6 +58,10 @@
 				"title": "deen: HTML Decode"
 			},
 			{
+				"command": "deen.asciiConvert",
+				"title": "deen: ASCII Convert"
+			},
+			{
 				"command": "deen.hexEncode",
 				"title": "deen: Hex Encode"
 			},
@@ -66,12 +70,68 @@
 				"title": "deen: Hex Decode"
 			},
 			{
+				"command": "deen.pemEncode",
+				"title": "deen: PEM Encode"
+			},
+			{
+				"command": "deen.pemDecode",
+				"title": "deen: PEM Decode"
+			},
+			{
+				"command": "deen.quotedPrintableEncode",
+				"title": "deen: Quoted-Printable Encode"
+			},
+			{
+				"command": "deen.quotedPrintableDecode",
+				"title": "deen: Quoted-Printable Decode"
+			},
+			{
+				"command": "deen.rot13Transform",
+				"title": "deen: ROT13 Transform"
+			},
+			{
 				"command": "deen.jsonFormat",
 				"title": "deen: JSON Format"
 			},
 			{
 				"command": "deen.jsonUnformat",
 				"title": "deen: JSON Unformat"
+			},
+			{
+				"command": "deen.xmlFormat",
+				"title": "deen: XML Format"
+			},
+			{
+				"command": "deen.xmlUnformat",
+				"title": "deen: XML Unformat"
+			},
+			{
+				"command": "deen.yamlFormat",
+				"title": "deen: YAML Format"
+			},
+			{
+				"command": "deen.yamlUnformat",
+				"title": "deen: YAML Unformat"
+			},
+			{
+				"command": "deen.tomlFormat",
+				"title": "deen: TOML Format"
+			},
+			{
+				"command": "deen.protobufInspect",
+				"title": "deen: Protocol Buffers Inspect"
+			},
+			{
+				"command": "deen.msgpackDecode",
+				"title": "deen: MessagePack Decode"
+			},
+			{
+				"command": "deen.cborDecode",
+				"title": "deen: CBOR Decode"
+			},
+			{
+				"command": "deen.samlDecode",
+				"title": "deen: SAML Decode"
 			},
 			{
 				"command": "deen.flateCompress",
@@ -138,6 +198,14 @@
 				"title": "deen: brotli Uncompress"
 			},
 			{
+				"command": "deen.zstdCompress",
+				"title": "deen: zstd Compress"
+			},
+			{
+				"command": "deen.zstdUncompress",
+				"title": "deen: zstd Uncompress"
+			},
+			{
 				"command": "deen.sha1Hash",
 				"title": "deen: SHA1 Hash"
 			},
@@ -158,6 +226,14 @@
 				"title": "deen: SHA512 Hash"
 			},
 			{
+				"command": "deen.sha512-224Hash",
+				"title": "deen: SHA512-224 Hash"
+			},
+			{
+				"command": "deen.sha512-256Hash",
+				"title": "deen: SHA512-256 Hash"
+			},
+			{
 				"command": "deen.sha3-224Hash",
 				"title": "deen: SHA3-224 Hash"
 			},
@@ -171,7 +247,7 @@
 			},
 			{
 				"command": "deen.sha3-512Hash",
-				"title": "deen: SHA3512 Hash"
+				"title": "deen: SHA3-512 Hash"
 			},
 			{
 				"command": "deen.md4Hash",
@@ -182,7 +258,7 @@
 				"title": "deen: MD5 Hash"
 			},
 			{
-				"command": "deen.sha1Hash",
+				"command": "deen.ripemd160Hash",
 				"title": "deen: RIPEMD160 Hash"
 			},
 			{
@@ -208,8 +284,74 @@
 			{
 				"command": "deen.scryptHash",
 				"title": "deen: scrypt Hash"
+			},
+			{
+				"command": "deen.adler32Hash",
+				"title": "deen: Adler-32 Hash"
+			},
+			{
+				"command": "deen.crc32Hash",
+				"title": "deen: CRC-32 Hash"
+			},
+			{
+				"command": "deen.crc32cHash",
+				"title": "deen: CRC-32C Hash"
+			},
+			{
+				"command": "deen.crc32kHash",
+				"title": "deen: CRC-32K Hash"
+			},
+			{
+				"command": "deen.crc64Hash",
+				"title": "deen: CRC-64 Hash"
+			},
+			{
+				"command": "deen.crc64EcmaHash",
+				"title": "deen: CRC-64 ECMA Hash"
+			},
+			{
+				"command": "deen.fnv32Hash",
+				"title": "deen: FNV-32 Hash"
+			},
+			{
+				"command": "deen.fnv32aHash",
+				"title": "deen: FNV-32a Hash"
+			},
+			{
+				"command": "deen.fnv64Hash",
+				"title": "deen: FNV-64 Hash"
+			},
+			{
+				"command": "deen.fnv64aHash",
+				"title": "deen: FNV-64a Hash"
+			},
+			{
+				"command": "deen.fnv128Hash",
+				"title": "deen: FNV-128 Hash"
+			},
+			{
+				"command": "deen.fnv128aHash",
+				"title": "deen: FNV-128a Hash"
+			},
+			{
+				"command": "deen.entropyAnalyze",
+				"title": "deen: Entropy Analyze"
+			},
+			{
+				"command": "deen.magicDetect",
+				"title": "deen: Magic Detect"
 			}
-		]
+		],
+		"configuration": {
+			"title": "deen",
+			"properties": {
+				"deen.binaryPath": {
+					"type": "string",
+					"default": "deen",
+					"description": "Path to the deen executable used by VS Code commands."
+				}
+			}
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",

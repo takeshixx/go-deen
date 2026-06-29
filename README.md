@@ -70,6 +70,54 @@ plugin name). Decoders ignore surrounding whitespace, and base64 decoding
 auto-detects the standard, raw, URL and raw-URL alphabets unless `-strict`,
 `-url` or `-raw` is given.
 
+### Transform chains
+
+Plugins can be composed into repeatable transform chains. In the CLI, a chain is
+just a shell pipeline:
+
+```bash
+$ printf '%s' '%7B%22role%22%3A%22admin%22%7D' | deen .url | deen json
+{
+    "role": "admin"
+}
+
+$ printf H4sIAAAAAAAA/ypJLS4BBAAA//8Mfn/YBAAAAA== | deen .base64 | deen .gzip
+test
+```
+
+The GUI and web UI provide the same model with editable steps, previews,
+examples, undo/redo, and import/export for chain JSON files. Chain exports are
+useful for saving an analysis workflow or sharing it with someone who will
+provide their own input data.
+
+Saved Web/GUI chains can also be run from the CLI with the `chain` subcommand.
+For example, this source-free chain recipe URL-decodes input and formats the
+result as JSON:
+
+```json
+{
+  "version": 1,
+  "steps": [
+    {
+      "plugin": "url",
+      "unprocess": true
+    },
+    {
+      "plugin": "json"
+    }
+  ]
+}
+```
+
+Save it as `decode-url-json.json`, then run it against stdin:
+
+```bash
+$ printf '%s' '%7B%22role%22%3A%22admin%22%7D' | deen chain -stdin decode-url-json.json
+{
+    "role": "admin"
+}
+```
+
 ### Listing and help
 
 ```bash
@@ -97,6 +145,12 @@ self-contained binary and serves it on `http://127.0.0.1:9090`:
 make web
 ```
 
+Open `http://127.0.0.1:9090`, paste or load input data, then add transforms or
+start from one of the built-in examples. The web UI can download results, export
+and import chain JSON, and copy a share link for the current chain. Share links
+include the transform recipe in the URL hash, but intentionally do not include
+the source input.
+
 To do it by hand, build with the `webembed` tag and run `serve`:
 
 ```bash
@@ -106,7 +160,7 @@ deen serve --port 9090
 
 `deen serve` can also serve any directory (`--root`) and supports TLS
 (`--tls-cert`/`--tls-key`), HTTP basic auth (`--auth-user`/`--auth-pass`) and
-request logging (`--log`). The experimental UI itself lives on the `web` branch.
+request logging (`--log`).
 
 ## Writing plugins
 
