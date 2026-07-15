@@ -168,11 +168,70 @@ Example Claude Code project configuration:
 ## GUI
 
 `make gui` produces a binary that launches the GUI when started without
-arguments. On Linux the GUI build needs the X development headers:
+arguments. The Fyne 2.8 desktop build supports Windows 10 and later, macOS
+10.15 and later, and Linux desktops using X11 or Wayland. Fyne selects the
+available Linux window protocol at runtime.
+
+On Debian, Ubuntu, and Raspberry Pi OS, install the graphics development
+headers before building:
 
 ```bash
-sudo apt install xorg-dev    # Debian/Ubuntu
+sudo apt install gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
 ```
+
+The GUI follows the system light/dark appearance by default. System, Dark, or
+Light can be selected from the Appearance menu, and that choice is remembered
+for future launches.
+
+The desktop layout uses a collapsible workspace sidebar that always retains an
+icon rail, plus a focused
+master/detail pipeline editor. A second collapsible navigator selects the input,
+one transformer, or the add-transformer view without rendering the entire chain
+as a card wall. Pipeline commands share a single compact top row, while the
+activity/result status area remains visible below the focused editor.
+Transformer configuration and output stay
+side by side in a draggable split view, and the preferred balance is remembered.
+Sidebar destinations and pipeline stages are keyboard-focusable and activate
+with Space or Return, with a distinct focus outline separate from selection.
+At compact window widths, the workspace sidebar becomes an icon rail that can
+expand temporarily over the editor, while the pipeline navigator becomes a
+temporary drawer. Opening either does not overwrite its saved wide-window
+visibility, and selecting a destination closes the expansion automatically.
+Configuration/output and other master/detail panes stack vertically where a
+compact window has enough height to make that arrangement useful. Horizontal
+and compact divider positions are stored independently, avoiding layout jumps
+or lost preferences after resizing.
+The Pipeline page's single top command row adapts to available width. Open, Save, Add, and
+More remain visible in compact windows; Copy, Undo, and Redo move into the More
+menu with the same availability state and return inline when space permits.
+The Input workspace switches between exclusive Editor and Inspector views. The
+Inspector contains Raw, Hex, Strings, and structured Preview representations;
+both view selections are remembered, and files can be dropped directly onto the
+window.
+Add Transformer is a searchable, category-filtered catalog with Favorites and
+Recent filters, inline detection suggestions, detailed use cases, references,
+and encode/decode actions. While the search field stays focused, Up/Down browses
+results and Return adds the selection. Its filter and split balance are
+remembered. Window size, focused workspace/stage, split balances, and selected
+viewer tabs persist between launches.
+The Transformers workspace uses the same master/detail catalog instead of a
+separate card list. It shares Favorites and Recent history with Add Transformer,
+while remembering its own browsing filter and divider position.
+The Workflows workspace combines runnable Examples and reusable Presets in one
+searchable master/detail library. It previews only the selected example and
+clearly distinguishes replacing input and chain from applying a chain to the
+current input. Its filter and divider position are remembered independently.
+The Compare workspace places any two pipeline points side by side with Text,
+Hex, and Base64 views, byte metadata, an exact first-difference summary, and a
+one-click side swap. It follows the final output as steps change and remembers
+the selected points, view mode, and divider position.
+On macOS, File, Edit, View, navigation, and add-transformer actions use standard
+Command-key menu shortcuts. Command–Option–Up/Down moves between pipeline
+stages; Command–1 through Command–5 opens Pipeline, Workflows, Transformers,
+Compare, and About. Command–Shift–E toggles the focused step,
+Command–Option–Shift–Up/Down reorders it, and Command–Shift–D duplicates it.
+The Workflow menu also exposes remove without assigning a destructive global
+shortcut. The equivalent platform shortcut modifier is used elsewhere.
 
 ## WebAssembly
 

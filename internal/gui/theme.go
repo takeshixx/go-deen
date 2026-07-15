@@ -11,15 +11,27 @@ import (
 
 type adversecTheme struct {
 	base    fyne.Theme
-	variant fyne.ThemeVariant
+	variant *fyne.ThemeVariant
 }
 
 func newAdversecTheme(variant fyne.ThemeVariant) fyne.Theme {
-	return &adversecTheme{base: theme.DefaultTheme(), variant: variant}
+	return &adversecTheme{base: theme.DefaultTheme(), variant: &variant}
 }
 
-func (t *adversecTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
-	if t.variant == theme.VariantLight {
+func newSystemAdversecTheme() fyne.Theme {
+	return &adversecTheme{base: theme.DefaultTheme()}
+}
+
+func (t *adversecTheme) effectiveVariant(requested fyne.ThemeVariant) fyne.ThemeVariant {
+	if t.variant != nil {
+		return *t.variant
+	}
+	return requested
+}
+
+func (t *adversecTheme) Color(n fyne.ThemeColorName, requested fyne.ThemeVariant) color.Color {
+	variant := t.effectiveVariant(requested)
+	if variant == theme.VariantLight {
 		switch n {
 		case theme.ColorNameBackground:
 			return color.NRGBA{R: 0xf7, G: 0xf9, B: 0xf8, A: 0xff}
@@ -33,6 +45,8 @@ func (t *adversecTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.
 			return color.NRGBA{R: 0xef, G: 0xf4, B: 0xf3, A: 0xff}
 		case theme.ColorNameInputBorder, theme.ColorNameSeparator:
 			return color.NRGBA{R: 0x9b, G: 0xad, B: 0xaa, A: 0xff}
+		case theme.ColorNameShadow:
+			return color.NRGBA{R: 0x0b, G: 0x12, B: 0x12, A: 0x35}
 		case theme.ColorNamePrimary, theme.ColorNameHyperlink:
 			return color.NRGBA{R: 0x0b, G: 0x7f, B: 0x75, A: 0xff}
 		case theme.ColorNameFocus, theme.ColorNameWarning:
@@ -42,7 +56,7 @@ func (t *adversecTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.
 		case theme.ColorNameError:
 			return color.NRGBA{R: 0xbf, G: 0x2f, B: 0x35, A: 0xff}
 		}
-		return t.base.Color(n, t.variant)
+		return t.base.Color(n, variant)
 	}
 
 	switch n {
@@ -60,6 +74,8 @@ func (t *adversecTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.
 		return color.NRGBA{R: 0x17, G: 0x1c, B: 0x1d, A: 0xff}
 	case theme.ColorNameInputBorder, theme.ColorNameSeparator:
 		return color.NRGBA{R: 0x34, G: 0x41, B: 0x42, A: 0xff}
+	case theme.ColorNameShadow:
+		return color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x7a}
 	case theme.ColorNameHover, theme.ColorNamePressed, theme.ColorNameSelection:
 		return color.NRGBA{R: 0x12, G: 0x4c, B: 0x48, A: 0xff}
 	case theme.ColorNamePrimary, theme.ColorNameHyperlink:
@@ -73,9 +89,30 @@ func (t *adversecTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.
 	case theme.ColorNameError:
 		return color.NRGBA{R: 0xff, G: 0x6b, B: 0x6b, A: 0xff}
 	}
-	return t.base.Color(n, t.variant)
+	return t.base.Color(n, variant)
 }
 
 func (t *adversecTheme) Font(s fyne.TextStyle) fyne.Resource     { return t.base.Font(s) }
 func (t *adversecTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return t.base.Icon(n) }
-func (t *adversecTheme) Size(n fyne.ThemeSizeName) float32       { return t.base.Size(n) }
+func (t *adversecTheme) Size(n fyne.ThemeSizeName) float32 {
+	switch n {
+	case theme.SizeNameButtonRadius:
+		return 7
+	case theme.SizeNameCardRadius:
+		return 10
+	case theme.SizeNameDialogRadius:
+		return 12
+	case theme.SizeNameInputRadius:
+		return 7
+	case theme.SizeNameMenuRadius:
+		return 8
+	case theme.SizeNameModalBlurRadius:
+		return 2.5
+	case theme.SizeNamePopupRadius:
+		return 9
+	case theme.SizeNameSelectionRadius:
+		return 5
+	default:
+		return t.base.Size(n)
+	}
+}

@@ -101,12 +101,17 @@ test:
 	go test $(gomodflags) -timeout 20s -count=1 -cover ./...
 
 .PHONY: test-all
-test-all: test
-	go test $(gomodflags) -tags gui ./internal/gui
+test-all: test test-gui
 	PATH=$$(go env GOROOT)/lib/wasm:$$PATH GOOS=js GOARCH=wasm go test $(gomodflags) ./internal/webui
 	npm --prefix extras/vscode-deen run compile
 	npm --prefix extras/vscode-deen run lint
 	$(MAKE) test-web-browser
+
+.PHONY: test-gui
+test-gui:
+	go test $(gomodflags) -tags gui ./internal/gui
+	go test $(gomodflags) -tags "gui hints" ./internal/gui
+	go test $(gomodflags) -tags "gui accessibility" ./internal/gui
 
 .PHONY: bench
 bench:

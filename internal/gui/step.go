@@ -12,6 +12,7 @@ import (
 	_ "image/png"
 	neturl "net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -25,7 +26,8 @@ import (
 	"github.com/takeshixx/deen/internal/plugins"
 )
 
-// stepPalette gives each step a distinct accent colour (cycled).
+// stepPalette gives adjacent steps decorative visual separation. These colours
+// do not encode transform type or state; labels, icons, and controls do that.
 var stepPalette = []color.NRGBA{
 	{0x42, 0x85, 0xf4, 0xff}, // blue
 	{0x0f, 0x9d, 0x58, 0xff}, // green
@@ -37,16 +39,14 @@ var stepPalette = []color.NRGBA{
 
 func accent(i int) color.NRGBA { return stepPalette[i%len(stepPalette)] }
 
-// tint returns the accent at low opacity, for card backgrounds.
-func tint(c color.NRGBA) color.NRGBA { return color.NRGBA{R: c.R, G: c.G, B: c.B, A: 0x22} }
-
 func disabledAccent() color.NRGBA { return color.NRGBA{R: 0x8c, G: 0x96, B: 0x9b, A: 0xff} }
 
-const outputViewerHeight float32 = 260
 const compactControlMinWidth float32 = 360
+const focusedStepEditorHeight float32 = 520
+const defaultStepEditorSplit = 0.40
+const minStepEditorSplit = 0.28
+const maxStepEditorSplit = 0.62
 const sourceInputRows = 14
-const sourceInputMinHeight float32 = 160
-const sourceInputMaxHeight float32 = 306
 
 type fixedHeightLayout struct {
 	height float32
@@ -89,6 +89,29 @@ func (l cappedMinWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	return fyne.NewSize(width, height)
 }
 
+func newStepSurface(content fyne.CanvasObject, accentColor color.NRGBA, disabled bool) fyne.CanvasObject {
+	backgroundColor := theme.Color(theme.ColorNameButton)
+	if disabled {
+		backgroundColor = theme.Color(theme.ColorNameDisabledButton)
+		accentColor = disabledAccent()
+	}
+	background := canvas.NewRectangle(backgroundColor)
+	background.CornerRadius = theme.Size(theme.SizeNameCardRadius)
+	background.Shadow = canvas.Shadow{
+		Color:      theme.Color(theme.ColorNameShadow),
+		BlurRadius: 12,
+		Spread:     -2,
+		Offset:     fyne.NewPos(0, 3),
+		Variant:    canvas.BoxShadow,
+	}
+
+	rail := canvas.NewRectangle(accentColor)
+	rail.CornerRadius = 2
+	rail.SetMinSize(fyne.NewSize(4, 1))
+	body := container.NewBorder(nil, nil, rail, nil, container.NewPadded(content))
+	return container.NewPadded(container.NewStack(background, body))
+}
+
 // multilineEntry returns a word-wrapping multi-line entry with a readable
 // minimum height.
 func multilineEntry(rows int) *widget.Entry {
@@ -96,24 +119,6 @@ func multilineEntry(rows int) *widget.Entry {
 	e.Wrapping = fyne.TextWrapBreak
 	e.SetMinRowsVisible(rows)
 	return e
-}
-
-func sourceInputHeight(data []byte) float32 {
-	if len(data) == 0 {
-		return sourceInputMinHeight
-	}
-	if pipeline.IsLargeData(data) || pipeline.IsBinaryData(data) || len(data) > 4096 {
-		return sourceInputMaxHeight
-	}
-	lines := bytes.Count(data, []byte{'\n'}) + 1
-	switch {
-	case lines <= 3:
-		return sourceInputMinHeight
-	case lines <= 8:
-		return 240
-	default:
-		return sourceInputMaxHeight
-	}
 }
 
 func guiTextDisplay(data []byte) (string, bool) {
@@ -227,38 +232,51 @@ func (dg *DeenGUI) categorySelectors(current string, onPick func(name string)) *
 			setCategory(category, current)
 		}
 	}
+	dg.registerWorkControl(categorySelect)
+	dg.registerWorkControl(transformerSelect)
 
-	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewGridWithColumns(2, categorySelect, transformerSelect))
+	return container.NewVBox(categorySelect, transformerSelect)
 }
 
-func (dg *DeenGUI) addCategorySelectors() fyne.CanvasObject {
-	pickers := make([]fyne.CanvasObject, 0, len(plugins.PluginCategories))
-	for _, category := range plugins.PluginCategories {
-		category := category
-		labels, labelToName, _ := pluginSelectLabels(category)
-		selectBox := widget.NewSelect(labels, func(label string) {
-			name := labelToName[label]
-			if name == "" {
-				return
-			}
-			dg.runPipelineWork("Processing", func() error {
-				dg.pipe.AddStep(name, false)
-				return nil
-			}, dg.rebuild)
-		})
-		selectBox.PlaceHolder = plugins.CategorySelectLabel(category)
-
-		label := widget.NewLabelWithStyle(plugins.CategoryLabel(category), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-		pickers = append(pickers, container.NewVBox(label, selectBox))
+func normalizeStepEditorSplit(value float64) float64 {
+	if value != value { // NaN cannot be meaningfully restored from preferences.
+		return defaultStepEditorSplit
 	}
-	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewGridWithColumns(2, pickers...))
+	if value < minStepEditorSplit {
+		return minStepEditorSplit
+	}
+	if value > maxStepEditorSplit {
+		return maxStepEditorSplit
+	}
+	return value
+}
+
+// rememberStepEditorSplit captures Fyne's live divider position before a
+// focused card is discarded. Split does not expose a drag callback, so the
+// offset is persisted on rebuild and once more when Run returns.
+func (dg *DeenGUI) rememberStepEditorSplit() {
+	for _, card := range dg.cards {
+		if card == nil || card.editorSplit == nil {
+			continue
+		}
+		offset := normalizeStepEditorSplit(card.editorSplit.Offset)
+		if card.editorSplitController != nil {
+			offset = card.editorSplitController.remember()
+		}
+		if offset == dg.stepEditorSplit {
+			return
+		}
+		dg.stepEditorSplit = offset
+		if dg.app != nil {
+			dg.app.Preferences().SetFloat(stepEditorSplitPreferenceKey, offset)
+		}
+		return
+	}
 }
 
 // newSourceCard builds the editable source-input card at the top of the chain.
 func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 	dg.sourceEntry = multilineEntry(sourceInputRows)
-	dg.sourceHex = nil
-	dg.sourceStrings = nil
 	rawNeedsFull, hexNeedsFull, stringsNeedsFull := dg.sourceNeedsFull()
 	if !rawNeedsFull {
 		dg.sourceFullRaw = false
@@ -274,12 +292,26 @@ func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 	if sourceCapped {
 		dg.sourceEntry.Disable()
 	}
+	dg.registerWorkControl(dg.sourceEntry)
+	dg.sourceRaw = multilineEntry(sourceInputRows)
+	dg.sourceRaw.Disable()
+	dg.sourceHex = multilineEntry(sourceInputRows)
+	dg.sourceHex.Disable()
+	dg.sourceStrings = multilineEntry(sourceInputRows)
+	dg.sourceStrings.Disable()
+	rawText, _ := guiTextDisplayMode(dg.pipe.Source(), dg.sourceFullRaw)
+	hexText, _ := guiHexDisplayMode(dg.pipe.Source(), dg.sourceFullHex)
+	stringsText, _ := guiStringsDisplayMode(dg.pipe.Source(), dg.sourceFullStrings)
+	dg.sourceRaw.SetText(rawText)
+	dg.sourceHex.SetText(hexText)
+	dg.sourceStrings.SetText(stringsText)
+
 	dg.sourceMeta = widget.NewLabel(dg.sourceMetadataSummary())
 	dg.sourceMeta.Importance = widget.LowImportance
 	dg.sourceMeta.Wrapping = fyne.TextWrapBreak
 	dg.sourceMeta.TextStyle.Monospace = true
 	dg.sourceEntry.OnChanged = func(s string) {
-		if dg.updating {
+		if dg.updating || dg.working {
 			return
 		}
 		if pipeline.IsLargeData(dg.pipe.Source()) {
@@ -290,30 +322,86 @@ func (dg *DeenGUI) newSourceCard() fyne.CanvasObject {
 		dg.pipe.SetSourceOwned([]byte(s))
 		dg.refreshFrom(0)
 	}
-	var sourceView fyne.CanvasObject = dg.sourceEntry
-	if pipeline.IsBinaryData(dg.pipe.Source()) {
-		dg.sourceHex = multilineEntry(sourceInputRows)
-		hexText, _ := guiHexDisplayMode(dg.pipe.Source(), dg.sourceFullHex)
-		dg.sourceHex.SetText(hexText)
-		dg.sourceHex.Disable()
-		dg.sourceStrings = multilineEntry(sourceInputRows)
-		stringsText, _ := guiStringsDisplayMode(dg.pipe.Source(), dg.sourceFullStrings)
-		dg.sourceStrings.SetText(stringsText)
-		dg.sourceStrings.Disable()
-		viewer := container.NewAppTabs(
-			container.NewTabItem("Raw", dg.sourceEntry),
-			container.NewTabItem("Hex", dg.sourceHex),
-			container.NewTabItem("Strings", dg.sourceStrings),
-		)
-		viewer.SetTabLocation(container.TabLocationTop)
-		viewer.SelectIndex(1)
-		sourceView = viewer
+
+	tabs := []*container.TabItem{
+		container.NewTabItem("Raw", dg.sourceRaw),
+		container.NewTabItem("Hex", dg.sourceHex),
+		container.NewTabItem("Strings", dg.sourceStrings),
 	}
-	sourceBox := container.New(fixedHeightLayout{height: sourceInputHeight(dg.pipe.Source())}, sourceView)
+	if pipeline.HasStructuredPreview(dg.pipe.Source()) {
+		dg.sourcePreview = newPreviewGrid()
+		preview, spans, _ := pipeline.HighlightedPreview(dg.pipe.Source())
+		setPreviewText(dg.sourcePreview, preview, spans)
+		dg.sourcePreviewTab = container.NewTabItem("Preview", dg.sourcePreview)
+		tabs = append(tabs, dg.sourcePreviewTab)
+	}
+	dg.sourceViewer = container.NewAppTabs(tabs...)
+	dg.sourceViewer.SetTabLocation(container.TabLocationTop)
+	selectAppTab(dg.sourceViewer, dg.sourceView, defaultSourceView)
+	dg.sourceViewer.OnSelected = func(tab *container.TabItem) {
+		dg.sourceView = tab.Text
+		if dg.app != nil {
+			dg.app.Preferences().SetString(sourceViewPreferenceKey, tab.Text)
+		}
+	}
+
 	dg.sourceFullControls = container.NewHBox()
 	dg.refreshSourceFullControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
-	content := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, container.NewVBox(sourceBox, dg.sourceFullControls, dg.sourceMeta))
-	return widget.NewCard("Input", "", container.NewPadded(content))
+	editorHint := lowImportanceLabel("Type or paste text here. You can also drop a file anywhere in the window.")
+	editorPane := widget.NewCard("Editable source", "", container.NewBorder(editorHint, nil, nil, nil, dg.sourceEntry))
+	inspectorBottom := container.NewVBox(dg.sourceFullControls, dg.sourceMeta)
+	inspectorPane := widget.NewCard("Inspector", "", container.NewBorder(nil, inspectorBottom, nil, nil, dg.sourceViewer))
+	dg.sourceWorkspace = container.NewAppTabs(
+		container.NewTabItem("Editor", editorPane),
+		container.NewTabItem("Inspector", inspectorPane),
+	)
+	dg.sourceWorkspace.SetTabLocation(container.TabLocationTop)
+	dg.sourcePane = normalizeSourcePane(dg.sourcePane)
+	selectAppTab(dg.sourceWorkspace, dg.sourcePane, defaultSourcePane)
+	dg.sourceWorkspace.OnSelected = func(tab *container.TabItem) {
+		dg.sourcePane = normalizeSourcePane(tab.Text)
+		if dg.app != nil {
+			dg.app.Preferences().SetString(sourcePanePreferenceKey, dg.sourcePane)
+		}
+	}
+	content := container.New(fixedHeightLayout{height: focusedStepEditorHeight}, dg.sourceWorkspace)
+	return widget.NewCard("Input", "Edit or inspect the pipeline input one focused view at a time.", content)
+}
+
+func (dg *DeenGUI) syncSourcePreviewTab() {
+	if dg.sourceViewer == nil {
+		return
+	}
+	hasPreview := pipeline.HasStructuredPreview(dg.pipe.Source())
+	if hasPreview && dg.sourcePreviewTab == nil {
+		dg.sourcePreview = newPreviewGrid()
+		dg.sourcePreviewTab = container.NewTabItem("Preview", dg.sourcePreview)
+		dg.sourceViewer.Append(dg.sourcePreviewTab)
+		dg.sourceViewer.Select(dg.sourcePreviewTab)
+		return
+	}
+	if !hasPreview && dg.sourcePreviewTab != nil {
+		if dg.sourceViewer.Selected() == dg.sourcePreviewTab {
+			selectAppTab(dg.sourceViewer, dg.sourceView, defaultSourceView)
+			if dg.sourceViewer.Selected() == dg.sourcePreviewTab {
+				dg.sourceViewer.SelectIndex(1)
+			}
+		}
+		dg.sourceViewer.Remove(dg.sourcePreviewTab)
+		dg.sourcePreviewTab = nil
+		dg.sourcePreview = nil
+	}
+}
+
+func selectAppTab(tabs *container.AppTabs, preferred, fallback string) {
+	for _, name := range []string{preferred, fallback, "Raw"} {
+		for _, item := range tabs.Items {
+			if item.Text == name {
+				tabs.Select(item)
+				return
+			}
+		}
+	}
 }
 
 func (dg *DeenGUI) sourceNeedsFull() (raw, hexView, stringsView bool) {
@@ -339,11 +427,14 @@ func (dg *DeenGUI) refreshSourceFullControls(rawCapped, hexCapped, stringsCapped
 			return
 		}
 		button := widget.NewButton(label, func() {
+			if dg.working {
+				return
+			}
 			dialog.ShowConfirm(
 				label+"?",
 				"Rendering the full input view can use a lot of memory and may make the interface slow for large files.",
 				func(ok bool) {
-					if !ok {
+					if !ok || dg.working {
 						return
 					}
 					setFull()
@@ -380,30 +471,32 @@ type stepCard struct {
 	pluginName string
 	collapsed  bool
 
-	decode       *widget.Check
-	enabled      *widget.Check
-	summary      *canvas.Text
-	collapse     *widget.Button
-	detail       *fyne.Container
-	options      *fyne.Container
-	fullControls *fyne.Container
-	body         *widget.Entry
-	hexBody      *widget.Entry
-	stringsBody  *widget.Entry
-	viewer       *container.AppTabs
-	rawTab       *container.TabItem
-	hexTab       *container.TabItem
-	stringsTab   *container.TabItem
-	previewTab   *container.TabItem
-	preview      *widget.TextGrid
-	image        *canvas.Image
-	imageMsg     *widget.Label
-	meta         *widget.Label
-	status       *widget.Label
-	container    fyne.CanvasObject
-	fullRaw      bool
-	fullHex      bool
-	fullStrings  bool
+	decode                *widget.Check
+	summary               *canvas.Text
+	collapse              *widget.Button
+	headerActions         []*widget.Button
+	detail                *fyne.Container
+	options               *fyne.Container
+	fullControls          *fyne.Container
+	body                  *widget.Entry
+	hexBody               *widget.Entry
+	stringsBody           *widget.Entry
+	viewer                *container.AppTabs
+	editorSplit           *container.Split
+	editorSplitController *responsiveSplitController
+	rawTab                *container.TabItem
+	hexTab                *container.TabItem
+	stringsTab            *container.TabItem
+	previewTab            *container.TabItem
+	preview               *widget.TextGrid
+	image                 *canvas.Image
+	imageMsg              *widget.Label
+	meta                  *widget.Label
+	status                *widget.Label
+	container             fyne.CanvasObject
+	fullRaw               bool
+	fullHex               bool
+	fullStrings           bool
 }
 
 func (dg *DeenGUI) newStepCard(i int) *stepCard {
@@ -414,8 +507,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 
 	c.decode = widget.NewCheck("decode", nil)
 	c.decode.SetChecked(step.Unprocess && canDecode)
-	c.enabled = widget.NewCheck("enabled", nil)
-	c.enabled.SetChecked(!step.Disabled)
+	dg.registerWorkControl(c.decode)
 
 	apply := func() {
 		if c.pluginName == "" {
@@ -433,13 +525,7 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	})
 	c.decode.OnChanged = func(bool) { apply() }
 	toggleEnabled := func() {
-		dg.runPipelineWork("Processing", func() error {
-			if c.index < 0 || c.index >= dg.pipe.Len() {
-				return nil
-			}
-			dg.pipe.SetStepDisabled(c.index, !dg.pipe.Steps()[c.index].Disabled)
-			return nil
-		}, dg.rebuild)
+		dg.toggleStep(c.index)
 	}
 
 	// Title row: collapse toggle, coloured title, active-plugin summary, remove.
@@ -451,42 +537,36 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	c.summary.TextStyle = fyne.TextStyle{Bold: true}
 	title := canvas.NewText(fmt.Sprintf("Step %d", i+1), displayCol)
 	title.TextStyle = fyne.TextStyle{Bold: true}
-	c.collapse = stepIconButton(theme.MenuDropDownIcon(), c.toggleCollapse)
-	moveUp := stepIconButton(theme.MoveUpIcon(), func() {
-		dg.runPipelineWork("Processing", func() error {
-			dg.pipe.MoveStep(c.index, c.index-1)
-			return nil
-		}, dg.rebuild)
+	c.collapse = stepIconButton("Collapse step", theme.MenuDropDownIcon(), c.toggleCollapse)
+	moveUp := stepIconButton("Move step up", theme.MoveUpIcon(), func() {
+		dg.moveStep(c.index, -1)
 	})
 	if i == 0 {
 		moveUp.Disable()
 	}
-	moveDown := stepIconButton(theme.MoveDownIcon(), func() {
-		dg.runPipelineWork("Processing", func() error {
-			dg.pipe.MoveStep(c.index, c.index+1)
-			return nil
-		}, dg.rebuild)
+	moveDown := stepIconButton("Move step down", theme.MoveDownIcon(), func() {
+		dg.moveStep(c.index, 1)
 	})
 	if i == dg.pipe.Len()-1 {
 		moveDown.Disable()
 	}
-	duplicate := stepIconButton(theme.ContentCopyIcon(), func() {
-		dg.runPipelineWork("Processing", func() error {
-			dg.pipe.DuplicateStep(c.index)
-			return nil
-		}, dg.rebuild)
+	duplicate := stepIconButton("Duplicate step", theme.ContentCopyIcon(), func() {
+		dg.duplicateStep(c.index)
 	})
-	remove := stepIconButton(theme.DeleteIcon(), func() {
-		dg.runPipelineWork("Processing", func() error {
-			dg.pipe.RemoveStep(c.index)
-			return nil
-		}, dg.rebuild)
+	remove := stepIconButton("Remove step", theme.DeleteIcon(), func() {
+		dg.removeStep(c.index)
 	})
 	enabledIcon := theme.VisibilityIcon()
+	enabledLabel := "Disable step"
 	if step.Disabled {
 		enabledIcon = theme.VisibilityOffIcon()
+		enabledLabel = "Enable step"
 	}
-	enabledControl := stepIconButton(enabledIcon, toggleEnabled)
+	enabledControl := stepIconButton(enabledLabel, enabledIcon, toggleEnabled)
+	c.headerActions = []*widget.Button{c.collapse, enabledControl, moveUp, moveDown, duplicate, remove}
+	for _, control := range c.headerActions {
+		dg.registerWorkControl(control)
+	}
 	titleRow := container.NewBorder(nil, nil,
 		container.NewHBox(c.collapse, title, c.summary),
 		container.NewHBox(enabledControl, moveUp, moveDown, duplicate, remove))
@@ -494,8 +574,9 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	// Detail: selectors, toggles, options, output, errors.
 	c.options = container.NewVBox()
 	c.body = multilineEntry(6)
+	dg.registerWorkControl(c.body)
 	c.body.OnChanged = func(s string) {
-		if dg.updating {
+		if dg.updating || dg.working {
 			return
 		}
 		dg.pipe.EditOutput(c.index, []byte(s))
@@ -532,14 +613,21 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	viewer := container.NewAppTabs(viewerTabs...)
 	viewer.SetTabLocation(container.TabLocationTop)
 	c.viewer = viewer
+	fallbackView := "Raw"
 	if c.previewTab != nil {
-		viewer.Select(c.previewTab)
+		fallbackView = "Preview"
 	} else if pipeline.IsBinaryData(dg.pipe.Output(i)) {
-		viewer.Select(c.hexTab)
+		fallbackView = "Hex"
 	} else if stepGeneratesImage(step) {
-		viewer.Select(viewerTabs[len(viewerTabs)-1])
+		fallbackView = "Image"
 	}
-	viewerBox := container.New(fixedHeightLayout{height: outputViewerHeight}, viewer)
+	selectAppTab(viewer, dg.stepOutputView, fallbackView)
+	viewer.OnSelected = func(tab *container.TabItem) {
+		dg.stepOutputView = tab.Text
+		if dg.app != nil {
+			dg.app.Preferences().SetString(stepOutputPreferenceKey, tab.Text)
+		}
+	}
 	c.fullControls = container.NewHBox()
 	c.meta = widget.NewLabel("")
 	c.meta.Importance = widget.LowImportance
@@ -553,22 +641,28 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	if canDecode {
 		toggles.Add(stepToggleControl(c.decode, "Mode", col))
 	}
-	c.detail = container.NewVBox(selectors, toggles, c.options, viewerBox, c.fullControls, c.meta, c.status)
+	configuration := container.NewVBox(selectors, toggles, c.options)
+	configurationPane := widget.NewCard("Configuration", "", container.NewVScroll(configuration))
+	outputDetails := container.NewVBox(c.fullControls, c.meta, c.status)
+	outputPane := widget.NewCard("Output", "", container.NewBorder(nil, outputDetails, nil, nil, viewer))
+	c.editorSplit = container.NewHSplit(configurationPane, outputPane)
+	c.editorSplitController = newResponsiveSplit(
+		dg,
+		c.editorSplit,
+		stepEditorSplitPreferenceKey,
+		stepEditorCompactPreferenceKey,
+		dg.stepEditorSplit,
+		defaultCompactSplit,
+		normalizeStepEditorSplit,
+		func(fyne.Size) bool { return dg.compactStages },
+	)
+	c.detail = container.New(fixedHeightLayout{height: focusedStepEditorHeight}, c.editorSplitController.host)
 
-	bg := canvas.NewRectangle(tint(displayCol))
-	bg.StrokeColor = displayCol
-	bg.StrokeWidth = 2
-	bg.CornerRadius = 6
 	inner := container.NewVBox(titleRow, c.detail)
-	c.container = container.NewStack(bg, container.NewPadded(inner))
+	c.container = newStepSurface(inner, displayCol, step.Disabled)
 
 	c.rebuildOptions()
 	c.updateSummary()
-	if !dg.stepsExpanded && i < len(dg.pipe.Steps())-1 {
-		c.collapsed = true
-		c.detail.Hide()
-		c.collapse.SetIcon(theme.NavigateNextIcon())
-	}
 	if !c.collapsed {
 		c.refresh()
 	}
@@ -580,11 +674,11 @@ func (c *stepCard) toggleCollapse() {
 	c.collapsed = !c.collapsed
 	if c.collapsed {
 		c.detail.Hide()
-		c.collapse.SetIcon(theme.NavigateNextIcon())
+		c.collapse.SetIcon(stepActionIcon("Expand step", theme.NavigateNextIcon()))
 	} else {
 		c.refresh()
 		c.detail.Show()
-		c.collapse.SetIcon(theme.MenuDropDownIcon())
+		c.collapse.SetIcon(stepActionIcon("Collapse step", theme.MenuDropDownIcon()))
 	}
 }
 
@@ -602,7 +696,7 @@ func (c *stepCard) updateSummary() {
 	}
 	cat := plugins.CategoryOf(name)
 	c.summary.Text = fmt.Sprintf("  %s / %s · %s", plugins.CategoryLabel(cat), plugins.PluginLabel(name), dir)
-	if !c.enabled.Checked {
+	if c.gui.pipe.Steps()[c.index].Disabled {
 		c.summary.Text += " · disabled"
 	}
 	c.summary.Refresh()
@@ -619,6 +713,7 @@ func (c *stepCard) rebuildOptions() {
 	}
 	var checkOptions []fyne.CanvasObject
 	var fieldOptions []fyne.CanvasObject
+	var secretOptions []fyne.CanvasObject
 	for _, opt := range opts {
 		opt := opt
 		label := widget.NewLabelWithStyle(opt.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -640,16 +735,17 @@ func (c *stepCard) rebuildOptions() {
 			control = chk
 			target = &checkOptions
 		} else if opt.Kind == "select" {
-			selectInput := widget.NewSelect(opt.Choices, func(s string) {
-				c.gui.runPipelineWork("Processing", func() error {
-					c.gui.pipe.SetOption(c.index, opt.Name, s)
-					return nil
-				}, func() { c.gui.refreshFrom(c.index) })
-			})
+			selectInput := widget.NewSelect(opt.Choices, nil)
 			if v, ok := step.Options[opt.Name]; ok {
 				selectInput.SetSelected(v)
 			} else {
 				selectInput.SetSelected(opt.Default)
+			}
+			selectInput.OnChanged = func(s string) {
+				c.gui.runPipelineWork("Processing", func() error {
+					c.gui.pipe.SetOption(c.index, opt.Name, s)
+					return nil
+				}, func() { c.gui.refreshFrom(c.index) })
 			}
 			control = selectInput
 			target = &fieldOptions
@@ -661,26 +757,63 @@ func (c *stepCard) rebuildOptions() {
 			if opt.Kind == "secret" || opt.Secret {
 				entry = widget.NewPasswordEntry()
 			}
+			entry.Validator = optionEntryValidator(step.Plugin, opt)
+			entry.AlwaysShowValidationError = entry.Validator != nil
 			entry.SetPlaceHolder(optionPlaceholder(opt))
 			if v, ok := step.Options[opt.Name]; ok {
 				entry.SetText(v)
 			}
 			entry.OnChanged = func(s string) {
+				if c.gui.working {
+					return
+				}
+				if entry.Validator != nil && entry.Validator(s) != nil {
+					return
+				}
 				c.gui.pipe.SetOption(c.index, opt.Name, s)
 				c.gui.refreshFrom(c.index)
 			}
 			control = entry
-			target = &fieldOptions
+			if opt.Kind == "secret" || opt.Secret {
+				target = &secretOptions
+			} else {
+				target = &fieldOptions
+			}
 		}
 		*target = append(*target, optionBlock(label, control, opt))
+		if disableable, ok := control.(fyne.Disableable); ok {
+			c.gui.registerWorkControl(disableable)
+		}
 	}
 	if len(checkOptions) > 0 {
-		c.options.Add(optionSection("Checkboxes", checkOptions))
+		c.options.Add(optionSection("Behavior", checkOptions))
 	}
 	if len(fieldOptions) > 0 {
-		c.options.Add(optionSection("Inputs", fieldOptions))
+		c.options.Add(optionSection("Values", fieldOptions))
+	}
+	if len(secretOptions) > 0 {
+		c.options.Add(optionSection("Sensitive values", secretOptions))
 	}
 	c.options.Refresh()
+}
+
+func optionEntryValidator(plugin string, opt pipeline.Option) fyne.StringValidator {
+	if opt.Kind != "number" {
+		return nil
+	}
+	// Arithmetic operands intentionally accept decimal, hex, or one character.
+	if (plugin == "add" || plugin == "sub" || plugin == "xor") && opt.Name == "value" {
+		return nil
+	}
+	return func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("enter an integer")
+		}
+		if _, err := strconv.Atoi(value); err != nil {
+			return fmt.Errorf("enter an integer")
+		}
+		return nil
+	}
 }
 
 func optionPlaceholder(opt pipeline.Option) string {
@@ -713,6 +846,12 @@ func optionHelp(opt pipeline.Option) fyne.CanvasObject {
 		desc.Wrapping = fyne.TextWrapWord
 		items = append(items, desc)
 	}
+	if opt.Secret || opt.Kind == "secret" {
+		warning := widget.NewLabel("Sensitive value: masked on screen, but included as plaintext when this chain is saved.")
+		warning.Importance = widget.WarningImportance
+		warning.Wrapping = fyne.TextWrapWord
+		items = append(items, warning)
+	}
 	if opt.HelpURL != "" {
 		u, err := neturl.Parse(opt.HelpURL)
 		if err == nil {
@@ -729,8 +868,26 @@ func optionHelp(opt pipeline.Option) fyne.CanvasObject {
 	return container.NewVBox(items...)
 }
 
-func stepIconButton(icon fyne.Resource, tapped func()) *widget.Button {
-	button := widget.NewButtonWithIcon("", icon, tapped)
+type namedThemedResource struct {
+	fyne.Resource
+	label string
+}
+
+func (r namedThemedResource) Name() string { return r.label }
+
+func (r namedThemedResource) ThemeColorName() fyne.ThemeColorName {
+	if themed, ok := r.Resource.(fyne.ThemedResource); ok {
+		return themed.ThemeColorName()
+	}
+	return theme.ColorNameForeground
+}
+
+func stepActionIcon(label string, icon fyne.Resource) fyne.Resource {
+	return namedThemedResource{Resource: icon, label: label}
+}
+
+func stepIconButton(label string, icon fyne.Resource, tapped func()) *widget.Button {
+	button := widget.NewButtonWithIcon("", stepActionIcon(label, icon), tapped)
 	button.Importance = widget.LowImportance
 	return button
 }
@@ -798,11 +955,14 @@ func (c *stepCard) refreshFullControls(rawCapped, hexCapped, stringsCapped bool)
 			return
 		}
 		button := widget.NewButton(label, func() {
+			if c.gui.working {
+				return
+			}
 			dialog.ShowConfirm(
 				label+"?",
 				"Rendering the full view can use a lot of memory and may make the interface slow for large binary data.",
 				func(ok bool) {
-					if !ok {
+					if !ok || c.gui.working {
 						return
 					}
 					setFull()
@@ -834,10 +994,10 @@ func stepToggleControl(check *widget.Check, label string, accent color.NRGBA) fy
 	title := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	title.Importance = widget.LowImportance
 	body := container.NewVBox(title, check)
-	bg := canvas.NewRectangle(tint(accent))
+	bg := canvas.NewRectangle(theme.Color(theme.ColorNameInputBackground))
 	bg.StrokeColor = accent
 	bg.StrokeWidth = 1
-	bg.CornerRadius = 6
+	bg.CornerRadius = theme.Size(theme.SizeNameButtonRadius)
 	return container.NewStack(bg, container.NewPadded(body))
 }
 
@@ -902,17 +1062,6 @@ func setImagePreview(img *canvas.Image, msg *widget.Label, data []byte) {
 	img.Refresh()
 	msg.SetText("image/" + format)
 	msg.Show()
-}
-
-// newAddSlot builds the compact category/transformer picker that appends a step.
-func (dg *DeenGUI) newAddSlot() fyne.CanvasObject {
-	actions := container.NewHBox(
-		widget.NewButtonWithIcon("Search transformers", theme.SearchIcon(), dg.showPluginSearch),
-		widget.NewButtonWithIcon("Detect next", theme.ContentAddIcon(), dg.showSuggestions),
-	)
-	subtitle := widget.NewLabel("Choose a transformer by category or search the catalog.")
-	subtitle.Importance = widget.LowImportance
-	return widget.NewCard("Add transformer step", "", container.NewVBox(subtitle, actions, dg.addCategorySelectors()))
 }
 
 var previewStyles = map[pipeline.SyntaxKind]widget.TextGridStyle{

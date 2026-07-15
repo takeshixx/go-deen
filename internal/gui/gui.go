@@ -8,10 +8,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"image/color"
 	"io"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -21,6 +19,8 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -34,124 +34,472 @@ type DeenGUI struct {
 	app    fyne.App
 	window fyne.Window
 
-	pipe        *pipeline.Pipeline
-	pluginNames []string
+	pipe *pipeline.Pipeline
 
-	sourceEntry        *widget.Entry
-	sourceHex          *widget.Entry
-	sourceStrings      *widget.Entry
-	sourceMeta         *widget.Label
-	sourceFullControls *fyne.Container
-	sourceName         string
-	sourceFullRaw      bool
-	sourceFullHex      bool
-	sourceFullStrings  bool
-	stepsBox           *fyne.Container // holds the source card, step cards and add-slot
-	cards              []*stepCard     // parallel to pipe.Steps()
-	history            *fyne.Container // horizontal transformer-chain overview
-	chainView          fyne.CanvasObject
-	tabButtons         []*navTab
-	tabContent         *fyne.Container
-	tabViews           [4]fyne.CanvasObject
-	workStatus         *widget.Label
-	activeTab          int
-	actionsOpen        bool
-	stepsExpanded      bool
-	working            bool
+	sourceEntry           *widget.Entry
+	sourceRaw             *widget.Entry
+	sourceHex             *widget.Entry
+	sourceStrings         *widget.Entry
+	sourcePreview         *widget.TextGrid
+	sourcePreviewTab      *container.TabItem
+	sourceViewer          *container.AppTabs
+	sourceWorkspace       *container.AppTabs
+	sourceMeta            *widget.Label
+	sourceFullControls    *fyne.Container
+	sourceName            string
+	sourceFullRaw         bool
+	sourceFullHex         bool
+	sourceFullStrings     bool
+	stepsBox              *fyne.Container // focused pipeline detail content
+	cards                 []*stepCard     // sparse, indexed by pipe.Steps()
+	pipelineOutline       *fyne.Container
+	pipelineOutlineCount  *widget.Label
+	pipelineNavigator     fyne.CanvasObject
+	pipelineShell         *fyne.Container
+	pipelineNavButton     *widget.Button
+	pipelineStageButtons  []*navTab
+	selectedStage         int
+	pipelineNavOpen       bool
+	stepEditorSplit       float64
+	sourcePane            string
+	sourceView            string
+	stepOutputView        string
+	addCatalog            *transformerCatalog
+	browserCatalog        *transformerCatalog
+	workflowLibrary       *workflowLibrary
+	compareWorkspace      *compareWorkspace
+	addSuggestions        *fyne.Container
+	favoriteTransformers  []string
+	recentTransformers    []string
+	navigationPanel       fyne.CanvasObject
+	sidebarLayout         *fixedWidthLayout
+	sidebarBrandCopy      fyne.CanvasObject
+	sidebarSection        *widget.Label
+	sidebarCollapsed      bool
+	applicationShell      *fyne.Container
+	tabButtons            []*navTab
+	tabContent            *fyne.Container
+	tabViews              [5]fyne.CanvasObject
+	homeCommands          fyne.CanvasObject
+	homeCommandScroll     *container.Scroll
+	homeCommandBar        *fyne.Container
+	commandLayout         *adaptiveCommandLayout
+	workspaceTitle        *widget.Label
+	workspaceTitleDivider fyne.CanvasObject
+	sidebarButton         *widget.Button
+	commandButtons        []*widget.Button
+	compactCommandButtons []*widget.Button
+	overflowUndoMenuItem  *fyne.MenuItem
+	overflowRedoMenuItem  *fyne.MenuItem
+	overflowCopyMenuItem  *fyne.MenuItem
+	workControls          []fyne.Disableable
+	workControlStates     map[fyne.Disableable]bool
+	undoCommand           *widget.Button
+	redoCommand           *widget.Button
+	undoMenuItem          *fyne.MenuItem
+	redoMenuItem          *fyne.MenuItem
+	addMenuItem           *fyne.MenuItem
+	clearMenuItem         *fyne.MenuItem
+	previousStageMenuItem *fyne.MenuItem
+	nextStageMenuItem     *fyne.MenuItem
+	toggleStepMenuItem    *fyne.MenuItem
+	moveStepUpMenuItem    *fyne.MenuItem
+	moveStepDownMenuItem  *fyne.MenuItem
+	duplicateStepMenuItem *fyne.MenuItem
+	removeStepMenuItem    *fyne.MenuItem
+	workActivity          *widget.Activity
+	workStatus            *widget.Label
+	workIndicator         *fyne.Container
+	resultStatus          *widget.Label
+	activeTab             int
+	appearance            appearanceMode
+	sidebarOpen           bool
+	compactSidebar        bool
+	compactStages         bool
+	sidebarDrawerOpen     bool
+	stagesDrawerOpen      bool
+	updatingAppearance    bool
+	themeRefreshPending   bool
+	commandBarCompact     bool
+	working               bool
+	actionFeedbackActive  bool
 
 	// updating guards programmatic SetText so it does not re-enter OnChanged.
 	updating bool
 }
 
+type appearanceMode string
+
+const (
+	appearanceSystem appearanceMode = "system"
+	appearanceDark   appearanceMode = "dark"
+	appearanceLight  appearanceMode = "light"
+
+	appearancePreferenceKey           = "gui.appearance"
+	sidebarPreferenceKey              = "gui.sidebar"
+	pipelineNavPreferenceKey          = "gui.pipeline_navigator"
+	stepEditorSplitPreferenceKey      = "gui.step_editor_split"
+	stepEditorCompactPreferenceKey    = "gui.step_editor_split_compact"
+	sourcePanePreferenceKey           = "gui.source_pane"
+	sourceViewPreferenceKey           = "gui.source_view"
+	stepOutputPreferenceKey           = "gui.step_output_view"
+	addSplitPreferenceKey             = "gui.add_catalog_split"
+	addCompactSplitPreferenceKey      = "gui.add_catalog_split_compact"
+	addCategoryPreferenceKey          = "gui.add_category"
+	browserSplitPreferenceKey         = "gui.transformer_catalog_split"
+	browserCompactSplitPreferenceKey  = "gui.transformer_split_compact"
+	browserCategoryPreferenceKey      = "gui.transformer_category"
+	workflowSplitPreferenceKey        = "gui.workflow_split"
+	workflowCompactPreferenceKey      = "gui.workflow_split_compact"
+	workflowFilterPreferenceKey       = "gui.workflow_filter"
+	compareSplitPreferenceKey         = "gui.compare_split"
+	compareCompactPreferenceKey       = "gui.compare_split_compact"
+	compareModePreferenceKey          = "gui.compare_mode"
+	compareLeftPreferenceKey          = "gui.compare_left"
+	compareRightPreferenceKey         = "gui.compare_right"
+	favoriteTransformersPreferenceKey = "gui.favorite_transformers"
+	recentTransformersPreferenceKey   = "gui.recent_transformers"
+	windowWidthPreferenceKey          = "gui.window_width"
+	windowHeightPreferenceKey         = "gui.window_height"
+	workspacePreferenceKey            = "gui.workspace"
+	selectedStagePreferenceKey        = "gui.selected_stage"
+
+	pipelineStageAdd   = -2
+	pipelineStageInput = -1
+)
+
+func normalizeAppearance(value string) appearanceMode {
+	switch appearanceMode(value) {
+	case appearanceDark:
+		return appearanceDark
+	case appearanceLight:
+		return appearanceLight
+	default:
+		return appearanceSystem
+	}
+}
+
+func themeForAppearance(mode appearanceMode) fyne.Theme {
+	switch mode {
+	case appearanceDark:
+		return newAdversecTheme(theme.VariantDark)
+	case appearanceLight:
+		return newAdversecTheme(theme.VariantLight)
+	default:
+		return newSystemAdversecTheme()
+	}
+}
+
 // NewDeenGUI builds the GUI.
 func NewDeenGUI() (*DeenGUI, error) {
 	dg := &DeenGUI{
-		app:         app.NewWithID("io.deen.app"),
-		pipe:        pipeline.New(),
-		pluginNames: plugins.Names(),
+		app:  app.NewWithID("io.deen.app"),
+		pipe: pipeline.New(),
 	}
-	dg.app.Settings().SetTheme(newAdversecTheme(theme.VariantDark))
+	dg.appearance = normalizeAppearance(dg.app.Preferences().StringWithFallback(appearancePreferenceKey, string(appearanceSystem)))
+	dg.sidebarOpen = dg.app.Preferences().BoolWithFallback(sidebarPreferenceKey, true)
+	dg.pipelineNavOpen = dg.app.Preferences().BoolWithFallback(pipelineNavPreferenceKey, true)
+	dg.stepEditorSplit = normalizeStepEditorSplit(dg.app.Preferences().FloatWithFallback(stepEditorSplitPreferenceKey, defaultStepEditorSplit))
+	dg.sourcePane = normalizeSourcePane(dg.app.Preferences().StringWithFallback(sourcePanePreferenceKey, defaultSourcePane))
+	dg.sourceView = dg.app.Preferences().StringWithFallback(sourceViewPreferenceKey, defaultSourceView)
+	dg.stepOutputView = dg.app.Preferences().StringWithFallback(stepOutputPreferenceKey, "")
+	dg.favoriteTransformers = sanitizeTransformerHistory(dg.app.Preferences().StringListWithFallback(favoriteTransformersPreferenceKey, nil), maxFavoriteTransformers)
+	dg.recentTransformers = sanitizeTransformerHistory(dg.app.Preferences().StringListWithFallback(recentTransformersPreferenceKey, nil), maxRecentTransformers)
+	dg.selectedStage = dg.app.Preferences().IntWithFallback(selectedStagePreferenceKey, pipelineStageInput)
+	dg.app.Settings().SetTheme(themeForAppearance(dg.appearance))
 	dg.window = dg.app.NewWindow("deen")
 	dg.window.SetMaster()
 	dg.window.SetIcon(deenLogoResource)
 
 	dg.stepsBox = container.NewVBox()
-	dg.history = fyne.NewContainerWithLayout(chainRowLayout{})
+	dg.pipelineOutline = container.NewVBox()
 	dg.activeTab = -1
-	dg.actionsOpen = false
 	dg.tabContent = container.NewMax()
-	dg.workStatus = widget.NewLabel("")
+	dg.navigationPanel = dg.navigationSidebar()
+	dg.homeCommands = dg.homeMenuBar()
+	dg.workActivity = widget.NewActivity()
+	dg.workActivity.Hide()
+	dg.workStatus = widget.NewLabel("Ready")
 	dg.workStatus.Importance = widget.LowImportance
-	dg.workStatus.Hide()
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameBackground))
-	top := container.NewVBox(dg.tabHeader(), dg.workStatus)
-	content := container.NewBorder(top, nil, nil, nil, dg.tabContent)
-	dg.window.SetContent(container.NewStack(bg, content))
+	dg.workIndicator = container.NewHBox(dg.workActivity, dg.workStatus)
+	dg.resultStatus = widget.NewLabel("")
+	dg.resultStatus.Importance = widget.LowImportance
+	workspace := container.NewBorder(dg.workspaceToolbar(), dg.statusBar(), nil, nil, dg.tabContent)
+	dg.window.SetContent(container.NewPadded(dg.newApplicationShell(workspace)))
 	dg.window.SetMainMenu(dg.mainMenu())
-	dg.window.Resize(fyne.NewSize(760, 560))
+	dg.window.Resize(dg.restoredWindowSize())
+	dg.window.SetOnDropped(dg.handleDroppedFiles)
 
-	dg.selectTab(0)
+	dg.selectTab(normalizeWorkspace(dg.app.Preferences().IntWithFallback(workspacePreferenceKey, 0)))
 	dg.rebuild()
+	dg.app.Settings().AddListener(func(fyne.Settings) {
+		dg.handleSettingsChange()
+	})
 	return dg, nil
 }
 
 // Run shows the window and blocks until it closes.
-func (dg *DeenGUI) Run() { dg.window.ShowAndRun() }
+func (dg *DeenGUI) Run() {
+	defer dg.rememberWorkspaceState()
+	dg.window.ShowAndRun()
+}
 
 func compactMinWidth(obj fyne.CanvasObject) fyne.CanvasObject {
 	return container.New(cappedMinWidthLayout{width: compactControlMinWidth}, obj)
 }
 
-func (dg *DeenGUI) tabHeader() fyne.CanvasObject {
+type fixedWidthLayout struct {
+	width float32
+}
+
+func (l fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, object := range objects {
+		object.Resize(size)
+	}
+}
+
+func (l fixedWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	height := float32(0)
+	for _, object := range objects {
+		if min := object.MinSize(); min.Height > height {
+			height = min.Height
+		}
+	}
+	return fyne.NewSize(l.width, height)
+}
+
+func (dg *DeenGUI) navigationSidebar() fyne.CanvasObject {
 	logo := canvas.NewImageFromResource(deenLogoResource)
 	logo.FillMode = canvas.ImageFillContain
-	logo.SetMinSize(fyne.NewSize(24, 24))
+	logo.SetMinSize(fyne.NewSize(34, 34))
 	title := widget.NewLabelWithStyle("deen", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	brand := container.NewHBox(logo, title, widget.NewSeparator())
+	subtitle := widget.NewLabel("Local data workbench")
+	subtitle.Importance = widget.LowImportance
+	dg.sidebarBrandCopy = container.NewVBox(title, subtitle)
+	brand := container.NewHBox(logo, dg.sidebarBrandCopy)
 
 	dg.tabButtons = []*navTab{
-		newNavTab("Home", func() { dg.selectTab(0) }),
-		newNavTab("Examples", func() { dg.selectTab(1) }),
-		newNavTab("Plugins", func() { dg.selectTab(2) }),
-		newNavTab("About", func() { dg.selectTab(3) }),
+		newSidebarNavItem("Pipeline", theme.HomeIcon(), func() { dg.selectTab(0) }),
+		newSidebarNavItem("Workflows", theme.HistoryIcon(), func() { dg.selectTab(1) }),
+		newSidebarNavItem("Transformers", theme.SearchIcon(), func() { dg.selectTab(2) }),
+		newSidebarNavItem("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
+		newSidebarNavItem("Compare", theme.ViewFullScreenIcon(), func() { dg.selectTab(4) }),
 	}
-	nav := make([]fyne.CanvasObject, 0, len(dg.tabButtons)+1)
-	nav = append(nav, brand)
+	dg.sidebarSection = widget.NewLabelWithStyle("WORKSPACE", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	dg.sidebarSection.Importance = widget.LowImportance
+	primary := container.NewVBox(dg.sidebarSection, dg.tabButtons[0], dg.tabButtons[1], dg.tabButtons[2], dg.tabButtons[4])
+	bottom := container.NewVBox(widget.NewSeparator(), dg.tabButtons[3])
+	content := container.NewBorder(container.NewVBox(brand, widget.NewSeparator()), bottom, nil, nil, primary)
+	panel := widget.NewCard("", "", container.NewPadded(content))
+	dg.sidebarLayout = &fixedWidthLayout{width: expandedSidebarWidth}
+	return container.New(dg.sidebarLayout, panel)
+}
+
+func (dg *DeenGUI) newApplicationShell(workspace fyne.CanvasObject) fyne.CanvasObject {
+	layout := &sidebarShellLayout{gui: dg, leading: dg.navigationPanel, content: workspace}
+	dg.applicationShell = container.NewWithoutLayout(workspace, dg.navigationPanel)
+	dg.applicationShell.Layout = layout
+	dg.applicationShell.Resize(fyne.NewSize(compactSidebarBreakpoint, max(workspace.MinSize().Height, dg.navigationPanel.MinSize().Height)))
+	return dg.applicationShell
+}
+
+func (dg *DeenGUI) setSidebarCollapsed(collapsed bool) {
+	if dg.sidebarCollapsed == collapsed {
+		return
+	}
+	dg.sidebarCollapsed = collapsed
+	if dg.sidebarLayout != nil {
+		if collapsed {
+			dg.sidebarLayout.width = collapsedSidebarWidth
+		} else {
+			dg.sidebarLayout.width = expandedSidebarWidth
+		}
+	}
 	for _, tab := range dg.tabButtons {
-		nav = append(nav, tab)
+		tab.setIconOnly(collapsed)
 	}
-	return container.NewPadded(container.NewHBox(nav...))
+	setAdaptiveObjectVisible(dg.sidebarBrandCopy, !collapsed)
+	setAdaptiveObjectVisible(dg.sidebarSection, !collapsed)
+	if dg.navigationPanel != nil {
+		dg.navigationPanel.Refresh()
+	}
+}
+
+func (dg *DeenGUI) setCompactSidebar(compact bool) {
+	dg.compactSidebar = compact
+	dg.sidebarDrawerOpen = false
+	if compact {
+		dg.unfocusNavigation(dg.tabButtons)
+	}
+}
+
+func (dg *DeenGUI) setCompactStages(compact bool) {
+	dg.compactStages = compact
+	dg.stagesDrawerOpen = false
+	if compact {
+		dg.unfocusNavigation(dg.pipelineStageButtons)
+	}
+}
+
+func (dg *DeenGUI) unfocusNavigation(items []*navTab) {
+	if dg.window == nil {
+		return
+	}
+	focused := dg.window.Canvas().Focused()
+	for _, item := range items {
+		if focused == item {
+			dg.window.Canvas().Unfocus()
+			return
+		}
+	}
+}
+
+func (dg *DeenGUI) refreshAdaptiveNavigation() {
+	if dg.applicationShell != nil {
+		dg.applicationShell.Refresh()
+	}
+	if dg.pipelineShell != nil {
+		dg.pipelineShell.Refresh()
+	}
+}
+
+func (dg *DeenGUI) closeCompactNavigation() {
+	changed := dg.sidebarDrawerOpen || dg.stagesDrawerOpen
+	if dg.sidebarDrawerOpen {
+		dg.unfocusNavigation(dg.tabButtons)
+	}
+	if dg.stagesDrawerOpen {
+		dg.unfocusNavigation(dg.pipelineStageButtons)
+	}
+	dg.sidebarDrawerOpen = false
+	dg.stagesDrawerOpen = false
+	if changed {
+		dg.refreshAdaptiveNavigation()
+	}
+}
+
+func (dg *DeenGUI) workspaceToolbar() fyne.CanvasObject {
+	dg.sidebarButton = widget.NewButtonWithIcon("Sidebar", theme.MenuIcon(), dg.toggleSidebar)
+	dg.sidebarButton.Importance = widget.LowImportance
+	dg.pipelineNavButton = widget.NewButtonWithIcon("Stages", theme.ListIcon(), dg.togglePipelineNavigator)
+	dg.pipelineNavButton.Importance = widget.LowImportance
+	dg.workspaceTitle = widget.NewLabelWithStyle("Pipeline", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	dg.workspaceTitleDivider = widget.NewSeparator()
+	leading := container.NewHBox(dg.sidebarButton, dg.pipelineNavButton, dg.workspaceTitleDivider, dg.workspaceTitle)
+	toolbar := container.NewBorder(nil, nil, leading, nil, dg.homeCommands)
+	return widget.NewCard("", "", container.NewPadded(toolbar))
+}
+
+func (dg *DeenGUI) statusBar() fyne.CanvasObject {
+	content := container.NewBorder(nil, nil, dg.workIndicator, dg.resultStatus)
+	return widget.NewCard("", "", container.NewPadded(content))
+}
+
+func (dg *DeenGUI) toggleSidebar() {
+	if dg.compactSidebar {
+		if dg.sidebarDrawerOpen {
+			dg.unfocusNavigation(dg.tabButtons)
+		}
+		dg.sidebarDrawerOpen = !dg.sidebarDrawerOpen
+		dg.refreshAdaptiveNavigation()
+		if dg.sidebarDrawerOpen && dg.window != nil && dg.activeTab >= 0 && dg.activeTab < len(dg.tabButtons) {
+			dg.window.Canvas().Focus(dg.tabButtons[dg.activeTab])
+		}
+		return
+	}
+	dg.sidebarOpen = !dg.sidebarOpen
+	if dg.app != nil {
+		dg.app.Preferences().SetBool(sidebarPreferenceKey, dg.sidebarOpen)
+	}
+	if dg.applicationShell == nil {
+		dg.setSidebarCollapsed(!dg.sidebarOpen)
+	}
+	dg.refreshAdaptiveNavigation()
+}
+
+func (dg *DeenGUI) togglePipelineNavigator() {
+	if dg.compactStages {
+		if dg.stagesDrawerOpen {
+			dg.unfocusNavigation(dg.pipelineStageButtons)
+		}
+		dg.stagesDrawerOpen = !dg.stagesDrawerOpen
+		dg.refreshAdaptiveNavigation()
+		position := dg.pipelineStagePosition()
+		if dg.stagesDrawerOpen && dg.window != nil && position >= 0 && position < len(dg.pipelineStageButtons) {
+			dg.window.Canvas().Focus(dg.pipelineStageButtons[position])
+		}
+		return
+	}
+	dg.pipelineNavOpen = !dg.pipelineNavOpen
+	if dg.app != nil {
+		dg.app.Preferences().SetBool(pipelineNavPreferenceKey, dg.pipelineNavOpen)
+	}
+	if dg.pipelineShell == nil {
+		setAdaptiveObjectVisible(dg.pipelineNavigator, dg.pipelineNavOpen)
+	}
+	dg.refreshAdaptiveNavigation()
 }
 
 func (dg *DeenGUI) homeMenuBar() fyne.CanvasObject {
-	menuBar := container.NewHBox(
-		dg.menuButton("File", theme.FolderIcon(), fyne.NewMenu("File",
-			fyne.NewMenuItemWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile),
-			fyne.NewMenuItemWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult),
-		)),
-		dg.menuButton("Navigate", theme.MenuIcon(), fyne.NewMenu("Navigate",
-			fyne.NewMenuItemWithIcon("Home", theme.HomeIcon(), func() { dg.selectTab(0) }),
-			fyne.NewMenuItemWithIcon("Examples", theme.HistoryIcon(), func() { dg.selectTab(1) }),
-			fyne.NewMenuItemWithIcon("Plugins", theme.SearchIcon(), func() { dg.selectTab(2) }),
-			fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
-		)),
-		dg.menuButton("Chain", theme.FileTextIcon(), fyne.NewMenu("Chain",
-			fyne.NewMenuItemWithIcon("Open chain", theme.FileTextIcon(), dg.openChain),
-			fyne.NewMenuItemWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain),
-			fyne.NewMenuItemWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand),
-		)),
-		dg.menuButton("Workflow", theme.HistoryIcon(), fyne.NewMenu("Workflow",
-			fyne.NewMenuItemWithIcon("Presets", theme.HistoryIcon(), dg.showPresets),
-			fyne.NewMenuItemWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare),
-			fyne.NewMenuItemWithIcon("Undo", theme.NavigateBackIcon(), dg.undo),
-			fyne.NewMenuItemWithIcon("Redo", theme.NavigateNextIcon(), dg.redo),
-			fyne.NewMenuItemWithIcon("Clear", theme.ContentClearIcon(), dg.clear),
-		)),
-	)
-	return widget.NewCard("", "", container.NewPadded(menuBar))
+	open := widget.NewButtonWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile)
+	open.Importance = widget.HighImportance
+	save := widget.NewButtonWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult)
+	copyResult := widget.NewButtonWithIcon("Copy result", theme.ContentCopyIcon(), dg.copyResult)
+	dg.undoCommand = widget.NewButtonWithIcon("Undo", theme.NavigateBackIcon(), dg.undo)
+	dg.redoCommand = widget.NewButtonWithIcon("Redo", theme.NavigateNextIcon(), dg.redo)
+	add := widget.NewButtonWithIcon("Add step", theme.ContentAddIcon(), dg.showPluginSearch)
+	dg.overflowUndoMenuItem = fyne.NewMenuItemWithIcon("Undo", theme.ContentUndoIcon(), dg.undo)
+	dg.overflowRedoMenuItem = fyne.NewMenuItemWithIcon("Redo", theme.ContentRedoIcon(), dg.redo)
+	dg.overflowCopyMenuItem = fyne.NewMenuItemWithIcon("Copy result", theme.ContentCopyIcon(), dg.copyResult)
+	more := dg.menuButton("More", theme.MoreHorizontalIcon(), fyne.NewMenu("More",
+		dg.overflowUndoMenuItem,
+		dg.overflowRedoMenuItem,
+		dg.overflowCopyMenuItem,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItemWithIcon("Open chain", theme.FileTextIcon(), dg.openChain),
+		fyne.NewMenuItemWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain),
+		fyne.NewMenuItemWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand),
+		fyne.NewMenuItemWithIcon("Presets", theme.HistoryIcon(), dg.showPresets),
+		fyne.NewMenuItemWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare),
+		fyne.NewMenuItemWithIcon("Clear", theme.ContentClearIcon(), dg.clear),
+	))
+
+	dg.commandButtons = []*widget.Button{open, save, copyResult, add, more, dg.undoCommand, dg.redoCommand}
+	dg.compactCommandButtons = []*widget.Button{copyResult, dg.undoCommand, dg.redoCommand}
+	dg.refreshCommandButtons()
+	primarySeparator := widget.NewSeparator()
+	historySeparator := widget.NewSeparator()
+	objects := []fyne.CanvasObject{open, save, copyResult, primarySeparator, add, more, historySeparator, dg.undoCommand, dg.redoCommand}
+	dg.commandLayout = &adaptiveCommandLayout{
+		objects: objects,
+		compactHidden: map[fyne.CanvasObject]bool{
+			copyResult:       true,
+			historySeparator: true,
+			dg.undoCommand:   true,
+			dg.redoCommand:   true,
+		},
+		onCompact: dg.setCommandBarCompact,
+	}
+	dg.homeCommandBar = container.New(dg.commandLayout, objects...)
+	dg.homeCommandScroll = container.NewHScroll(dg.homeCommandBar)
+	return dg.homeCommandScroll
 }
 
-func (dg *DeenGUI) menuButton(label string, icon fyne.Resource, menu *fyne.Menu) fyne.CanvasObject {
+func (dg *DeenGUI) setCommandBarCompact(compact bool) {
+	dg.commandBarCompact = compact
+	if !compact || dg.window == nil {
+		return
+	}
+	focused := dg.window.Canvas().Focused()
+	for _, button := range dg.compactCommandButtons {
+		if focused == button {
+			dg.window.Canvas().Unfocus()
+			return
+		}
+	}
+}
+
+func (dg *DeenGUI) menuButton(label string, icon fyne.Resource, menu *fyne.Menu) *widget.Button {
 	btn := widget.NewButtonWithIcon(label, icon, nil)
 	btn.Importance = widget.LowImportance
 	btn.OnTapped = func() {
@@ -160,17 +508,140 @@ func (dg *DeenGUI) menuButton(label string, icon fyne.Resource, menu *fyne.Menu)
 	return btn
 }
 
+func (dg *DeenGUI) refreshCommandButtons() {
+	for _, button := range dg.commandButtons {
+		if dg.working {
+			button.Disable()
+		} else {
+			button.Enable()
+		}
+	}
+	if dg.working {
+		dg.refreshOverflowMenuState()
+		dg.refreshNativeMenuState()
+		return
+	}
+	if dg.undoCommand != nil && !dg.pipe.CanUndo() {
+		dg.undoCommand.Disable()
+	}
+	if dg.redoCommand != nil && !dg.pipe.CanRedo() {
+		dg.redoCommand.Disable()
+	}
+	dg.refreshOverflowMenuState()
+	dg.refreshNativeMenuState()
+}
+
+func (dg *DeenGUI) refreshOverflowMenuState() {
+	if dg.pipe == nil {
+		return
+	}
+	if dg.overflowUndoMenuItem != nil {
+		dg.overflowUndoMenuItem.Disabled = dg.working || !dg.pipe.CanUndo()
+	}
+	if dg.overflowRedoMenuItem != nil {
+		dg.overflowRedoMenuItem.Disabled = dg.working || !dg.pipe.CanRedo()
+	}
+	if dg.overflowCopyMenuItem != nil {
+		dg.overflowCopyMenuItem.Disabled = dg.working
+	}
+}
+
+func (dg *DeenGUI) refreshNativeMenuState() {
+	if dg.pipe == nil {
+		return
+	}
+	if dg.undoMenuItem != nil {
+		dg.undoMenuItem.Disabled = dg.working || !dg.pipe.CanUndo()
+	}
+	if dg.redoMenuItem != nil {
+		dg.redoMenuItem.Disabled = dg.working || !dg.pipe.CanRedo()
+	}
+	if dg.addMenuItem != nil {
+		dg.addMenuItem.Disabled = dg.working
+	}
+	if dg.clearMenuItem != nil {
+		dg.clearMenuItem.Disabled = dg.working || (dg.pipe.Len() == 0 && len(dg.pipe.Source()) == 0)
+	}
+	position := dg.pipelineStagePosition()
+	if dg.previousStageMenuItem != nil {
+		dg.previousStageMenuItem.Disabled = dg.working || dg.activeTab != 0 || position <= 0
+	}
+	if dg.nextStageMenuItem != nil {
+		dg.nextStageMenuItem.Disabled = dg.working || dg.activeTab != 0 || position < 0 || position >= dg.pipe.Len()+1
+	}
+	selectedStep := dg.activeTab == 0 && dg.selectedStage >= 0 && dg.selectedStage < dg.pipe.Len()
+	if dg.toggleStepMenuItem != nil {
+		dg.toggleStepMenuItem.Disabled = dg.working || !selectedStep
+	}
+	if dg.moveStepUpMenuItem != nil {
+		dg.moveStepUpMenuItem.Disabled = dg.working || !selectedStep || dg.selectedStage == 0
+	}
+	if dg.moveStepDownMenuItem != nil {
+		dg.moveStepDownMenuItem.Disabled = dg.working || !selectedStep || dg.selectedStage == dg.pipe.Len()-1
+	}
+	if dg.duplicateStepMenuItem != nil {
+		dg.duplicateStepMenuItem.Disabled = dg.working || !selectedStep
+	}
+	if dg.removeStepMenuItem != nil {
+		dg.removeStepMenuItem.Disabled = dg.working || !selectedStep
+	}
+}
+
 func (dg *DeenGUI) selectTab(index int) {
-	if index < 0 || index > 3 || dg.activeTab == index || dg.tabContent == nil {
+	if index < 0 || index > 4 || dg.tabContent == nil {
+		return
+	}
+	dg.closeCompactNavigation()
+	if dg.activeTab == index {
 		return
 	}
 	dg.activeTab = index
+	if dg.app != nil {
+		dg.app.Preferences().SetInt(workspacePreferenceKey, index)
+	}
+	if dg.homeCommands != nil {
+		if index == 0 {
+			dg.homeCommands.Show()
+			setAdaptiveObjectVisible(dg.workspaceTitleDivider, false)
+			setAdaptiveObjectVisible(dg.workspaceTitle, false)
+		} else {
+			dg.homeCommands.Hide()
+			setAdaptiveObjectVisible(dg.workspaceTitleDivider, true)
+			setAdaptiveObjectVisible(dg.workspaceTitle, true)
+		}
+	}
+	if dg.pipelineNavButton != nil {
+		if index == 0 {
+			dg.pipelineNavButton.Show()
+		} else {
+			dg.pipelineNavButton.Hide()
+		}
+	}
 	for i, tab := range dg.tabButtons {
 		tab.setActive(i == index)
 	}
+	dg.refreshWorkspaceTitle()
 
 	dg.tabContent.Objects = []fyne.CanvasObject{dg.cachedTab(index)}
 	dg.tabContent.Refresh()
+	if index == 1 && dg.workflowLibrary != nil {
+		dg.workflowLibrary.refreshSelectedDetail()
+	}
+	if index == 4 && dg.compareWorkspace != nil {
+		dg.compareWorkspace.refreshPoints()
+	}
+	dg.refreshNativeMenuState()
+}
+
+func (dg *DeenGUI) refreshWorkspaceTitle() {
+	if dg.workspaceTitle == nil {
+		return
+	}
+	titles := []string{"Pipeline", "Workflows", "Transformers", "About deen", "Compare"}
+	if dg.activeTab < 0 || dg.activeTab >= len(titles) {
+		return
+	}
+	dg.workspaceTitle.SetText(titles[dg.activeTab])
 }
 
 func (dg *DeenGUI) cachedTab(index int) fyne.CanvasObject {
@@ -185,6 +656,8 @@ func (dg *DeenGUI) cachedTab(index int) fyne.CanvasObject {
 		content = dg.pluginsTab()
 	case 3:
 		content = dg.aboutTab()
+	case 4:
+		content = dg.compareTab()
 	default:
 		content = dg.homeTab()
 	}
@@ -193,24 +666,146 @@ func (dg *DeenGUI) cachedTab(index int) fyne.CanvasObject {
 }
 
 func (dg *DeenGUI) setWorking(label string, working bool) {
-	if dg.workStatus == nil {
+	dg.setTransformerCatalogsDisabled(working)
+	if dg.workflowLibrary != nil {
+		dg.workflowLibrary.setDisabled(working)
+	}
+	if dg.compareWorkspace != nil {
+		dg.compareWorkspace.setDisabled(working)
+	}
+	if dg.workStatus == nil || dg.workIndicator == nil {
 		return
 	}
 	if label == "" {
 		label = "Processing"
 	}
 	if working {
-		dg.workStatus.SetText(label + "...")
-		dg.workStatus.Show()
+		dg.actionFeedbackActive = false
+		if dg.window != nil {
+			dg.window.Canvas().Unfocus()
+		}
+		dg.setWorkControlsDisabled(true)
+		dg.workStatus.SetText(label + "…")
+		dg.workStatus.Importance = widget.LowImportance
+		dg.workStatus.Refresh()
+		if dg.workActivity != nil {
+			dg.workActivity.Show()
+			dg.workActivity.Start()
+		}
 	} else {
-		dg.workStatus.Hide()
+		dg.setWorkControlsDisabled(false)
+		if dg.workActivity != nil {
+			dg.workActivity.Stop()
+			dg.workActivity.Hide()
+		}
+		if !dg.actionFeedbackActive {
+			dg.workStatus.SetText("Ready")
+			dg.workStatus.Importance = widget.LowImportance
+			dg.workStatus.Refresh()
+		}
 	}
-	dg.workStatus.Refresh()
+	dg.refreshCommandButtons()
+	dg.workIndicator.Refresh()
 }
 
-func (dg *DeenGUI) runPipelineWork(label string, work func() error, done func()) {
-	if dg.working {
+// showActionFeedback reports a completed user action in the persistent status
+// area. The next processing cycle clears it; avoiding a timer keeps the message
+// available to assistive technology and makes completion deterministic.
+func (dg *DeenGUI) showActionFeedback(message string) {
+	message = strings.TrimSpace(message)
+	if message == "" || dg.workStatus == nil || dg.workIndicator == nil {
 		return
+	}
+	dg.actionFeedbackActive = true
+	dg.workStatus.SetText(message)
+	dg.workStatus.Importance = widget.SuccessImportance
+	dg.workStatus.Refresh()
+	dg.workIndicator.Show()
+	dg.workIndicator.Refresh()
+}
+
+func fileActionFeedback(fallback, verb string, uri fyne.URI) string {
+	if uri == nil || strings.TrimSpace(uri.Name()) == "" {
+		return fallback
+	}
+	return fmt.Sprintf("%s “%s”", verb, feedbackSubject(uri.Name()))
+}
+
+func feedbackSubject(subject string) string {
+	const maxRunes = 40
+	subject = strings.Join(strings.Fields(subject), " ")
+	runes := []rune(subject)
+	if len(runes) <= maxRunes {
+		return subject
+	}
+	return string(runes[:maxRunes-1]) + "…"
+}
+
+func writeAndClose(wc fyne.URIWriteCloser, data []byte) error {
+	written, writeErr := wc.Write(data)
+	if writeErr == nil && written != len(data) {
+		writeErr = io.ErrShortWrite
+	}
+	closeErr := wc.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
+func (dg *DeenGUI) refreshResultStatus() {
+	if dg.resultStatus == nil || dg.pipe == nil {
+		return
+	}
+	steps := dg.pipe.Len()
+	stepLabel := "steps"
+	if steps == 1 {
+		stepLabel = "step"
+	}
+	dg.resultStatus.SetText(fmt.Sprintf("%d %s  •  %d B result", steps, stepLabel, len(dg.pipe.Result())))
+}
+
+func (dg *DeenGUI) registerWorkControl(control fyne.Disableable) {
+	if control == nil {
+		return
+	}
+	dg.workControls = append(dg.workControls, control)
+	if dg.working {
+		if dg.workControlStates == nil {
+			dg.workControlStates = make(map[fyne.Disableable]bool)
+		}
+		dg.workControlStates[control] = control.Disabled()
+		control.Disable()
+	}
+}
+
+func (dg *DeenGUI) setWorkControlsDisabled(disabled bool) {
+	if disabled {
+		if dg.workControlStates == nil {
+			dg.workControlStates = make(map[fyne.Disableable]bool, len(dg.workControls))
+		}
+		for _, control := range dg.workControls {
+			if _, recorded := dg.workControlStates[control]; recorded {
+				continue
+			}
+			dg.workControlStates[control] = control.Disabled()
+			control.Disable()
+		}
+		return
+	}
+	for control, wasDisabled := range dg.workControlStates {
+		if !wasDisabled {
+			control.Enable()
+		}
+	}
+	dg.workControlStates = nil
+}
+
+func (dg *DeenGUI) runPipelineWork(label string, work func() error, done func()) <-chan struct{} {
+	completed := make(chan struct{})
+	if dg.working {
+		close(completed)
+		return completed
 	}
 	dg.working = true
 	dg.setWorking(label, true)
@@ -220,6 +815,11 @@ func (dg *DeenGUI) runPipelineWork(label string, work func() error, done func())
 			defer func() {
 				dg.working = false
 				dg.setWorking("", false)
+				if dg.themeRefreshPending {
+					dg.themeRefreshPending = false
+					dg.refreshAppearanceSurfaces()
+				}
+				close(completed)
 			}()
 			if err != nil {
 				dialog.ShowError(err, dg.window)
@@ -230,147 +830,170 @@ func (dg *DeenGUI) runPipelineWork(label string, work func() error, done func())
 			}
 		})
 	}()
-}
-
-func (dg *DeenGUI) homeActions() fyne.CanvasObject {
-	open := widget.NewButtonWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile)
-	open.Importance = widget.HighImportance
-	save := widget.NewButtonWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult)
-	copyResult := widget.NewButtonWithIcon("Copy result", theme.ContentCopyIcon(), dg.copyResult)
-	undo := widget.NewButtonWithIcon("Undo", theme.NavigateBackIcon(), dg.undo)
-	redo := widget.NewButtonWithIcon("Redo", theme.NavigateNextIcon(), dg.redo)
-	clear := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), dg.clear)
-	stepLayoutLabel := "Expand steps"
-	stepLayoutIcon := theme.MenuExpandIcon()
-	if dg.stepsExpanded {
-		stepLayoutLabel = "Compact steps"
-		stepLayoutIcon = theme.ViewRestoreIcon()
-	}
-	stepLayout := widget.NewButtonWithIcon(stepLayoutLabel, stepLayoutIcon, func() {
-		dg.stepsExpanded = !dg.stepsExpanded
-		dg.rebuild()
-	})
-
-	openChain := widget.NewButtonWithIcon("Open chain", theme.FileTextIcon(), dg.openChain)
-	saveChain := widget.NewButtonWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain)
-	presets := widget.NewButtonWithIcon("Presets", theme.HistoryIcon(), dg.showPresets)
-	copyCommand := widget.NewButtonWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand)
-
-	compare := widget.NewButtonWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare)
-
-	return container.NewVBox(
-		actionGroup("Result", copyResult, save, open),
-		actionGroup("Chain", openChain, saveChain, copyCommand),
-		actionGroup("Workflow", presets, compare, stepLayout, undo, redo, clear),
-	)
-}
-
-func actionGroup(title string, objects ...fyne.CanvasObject) fyne.CanvasObject {
-	label := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	label.Importance = widget.LowImportance
-	return container.NewVBox(label, container.NewGridWithColumns(3, objects...))
-}
-
-type chainRowLayout struct{}
-
-func (chainRowLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	x := float32(0)
-	for _, obj := range objects {
-		if !obj.Visible() {
-			continue
-		}
-		min := obj.MinSize()
-		y := float32(0)
-		if size.Height > min.Height {
-			y = (size.Height - min.Height) / 2
-		}
-		obj.Move(fyne.NewPos(x, y))
-		obj.Resize(min)
-		x += min.Width + theme.Padding()
-	}
-}
-
-func (chainRowLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	width, height := float32(0), float32(0)
-	visible := 0
-	for _, obj := range objects {
-		if !obj.Visible() {
-			continue
-		}
-		min := obj.MinSize()
-		width += min.Width
-		if min.Height > height {
-			height = min.Height
-		}
-		visible++
-	}
-	if visible > 1 {
-		width += theme.Padding() * float32(visible-1)
-	}
-	return fyne.NewSize(width, height)
-}
-
-func (dg *DeenGUI) newActionBar() fyne.CanvasObject {
-	title := widget.NewLabelWithStyle("Actions", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	toggleLabel := "Hide"
-	toggleIcon := theme.MenuDropUpIcon()
-	if !dg.actionsOpen {
-		toggleLabel = "Show"
-		toggleIcon = theme.MenuDropDownIcon()
-	}
-	toggle := widget.NewButtonWithIcon(toggleLabel, toggleIcon, func() {
-		dg.actionsOpen = !dg.actionsOpen
-		dg.rebuild()
-	})
-	toggle.Importance = widget.LowImportance
-	header := container.NewBorder(nil, nil, title, toggle)
-	if !dg.actionsOpen {
-		return widget.NewCard("", "", header)
-	}
-	return widget.NewCard("", "", container.NewVBox(header, dg.homeActions()))
+	return completed
 }
 
 // mainMenu builds the window menu (theme switching).
 func (dg *DeenGUI) mainMenu() *fyne.MainMenu {
-	setTheme := func(t fyne.Theme) func() { return func() { dg.app.Settings().SetTheme(t) } }
+	withShortcut := func(item *fyne.MenuItem, key fyne.KeyName, modifier fyne.KeyModifier) *fyne.MenuItem {
+		item.Shortcut = &desktop.CustomShortcut{KeyName: key, Modifier: modifier}
+		return item
+	}
+	standard := fyne.KeyModifierShortcutDefault
+	appearanceItem := func(label string, mode appearanceMode, icon fyne.Resource) *fyne.MenuItem {
+		item := fyne.NewMenuItemWithIcon(label, icon, func() { dg.applyAppearance(mode) })
+		item.Checked = dg.appearance == mode
+		return item
+	}
 	fileMenu := fyne.NewMenu("File",
-		fyne.NewMenuItemWithIcon("Open file", theme.FolderOpenIcon(), dg.openFile),
-		fyne.NewMenuItemWithIcon("Save result", theme.DocumentSaveIcon(), dg.saveResult),
+		withShortcut(fyne.NewMenuItemWithIcon("Open file…", theme.FolderOpenIcon(), dg.openFile), fyne.KeyO, standard),
+		withShortcut(fyne.NewMenuItemWithIcon("Save result…", theme.DocumentSaveIcon(), dg.saveResult), fyne.KeyS, standard),
 	)
+	dg.undoMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Undo", theme.ContentUndoIcon(), dg.undo), fyne.KeyZ, standard)
+	dg.redoMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Redo", theme.ContentRedoIcon(), dg.redo), fyne.KeyZ, standard|fyne.KeyModifierShift)
+	editMenu := fyne.NewMenu("Edit",
+		dg.undoMenuItem,
+		dg.redoMenuItem,
+		fyne.NewMenuItemSeparator(),
+		withShortcut(fyne.NewMenuItemWithIcon("Copy result", theme.ContentCopyIcon(), dg.copyResult), fyne.KeyC, standard|fyne.KeyModifierShift),
+	)
+	viewMenu := fyne.NewMenu("View",
+		withShortcut(fyne.NewMenuItemWithIcon("Toggle sidebar", theme.MenuIcon(), dg.toggleSidebar), fyne.KeyS, standard|fyne.KeyModifierControl),
+		withShortcut(fyne.NewMenuItemWithIcon("Toggle pipeline navigator", theme.ListIcon(), dg.togglePipelineNavigator), fyne.KeyP, standard|fyne.KeyModifierControl),
+	)
+	dg.previousStageMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Previous pipeline stage", theme.MoveUpIcon(), func() {
+		dg.navigatePipelineStage(-1)
+	}), fyne.KeyUp, standard|fyne.KeyModifierAlt)
+	dg.nextStageMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Next pipeline stage", theme.MoveDownIcon(), func() {
+		dg.navigatePipelineStage(1)
+	}), fyne.KeyDown, standard|fyne.KeyModifierAlt)
 	navigateMenu := fyne.NewMenu("Navigate",
-		fyne.NewMenuItemWithIcon("Home", theme.HomeIcon(), func() { dg.selectTab(0) }),
-		fyne.NewMenuItemWithIcon("Examples", theme.HistoryIcon(), func() { dg.selectTab(1) }),
-		fyne.NewMenuItemWithIcon("Plugins", theme.SearchIcon(), func() { dg.selectTab(2) }),
-		fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
+		withShortcut(fyne.NewMenuItemWithIcon("Pipeline", theme.HomeIcon(), func() { dg.selectTab(0) }), fyne.Key1, standard),
+		withShortcut(fyne.NewMenuItemWithIcon("Workflows", theme.HistoryIcon(), func() { dg.selectTab(1) }), fyne.Key2, standard),
+		withShortcut(fyne.NewMenuItemWithIcon("Transformers", theme.SearchIcon(), func() { dg.selectTab(2) }), fyne.Key3, standard),
+		withShortcut(fyne.NewMenuItemWithIcon("Compare", theme.ViewFullScreenIcon(), func() { dg.selectTab(4) }), fyne.Key4, standard),
+		withShortcut(fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }), fyne.Key5, standard),
+		fyne.NewMenuItemSeparator(),
+		dg.previousStageMenuItem,
+		dg.nextStageMenuItem,
 	)
 	chainMenu := fyne.NewMenu("Chain",
 		fyne.NewMenuItemWithIcon("Open chain", theme.FileTextIcon(), dg.openChain),
 		fyne.NewMenuItemWithIcon("Save chain", theme.DocumentCreateIcon(), dg.saveChain),
 		fyne.NewMenuItemWithIcon("Copy command", theme.MailForwardIcon(), dg.copyCommand),
 	)
+	dg.addMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Add transformer…", theme.ContentAddIcon(), dg.showPluginSearch), fyne.KeyK, standard)
+	dg.clearMenuItem = fyne.NewMenuItemWithIcon("Clear", theme.ContentClearIcon(), dg.clear)
+	dg.toggleStepMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Enable or disable selected step", theme.VisibilityIcon(), func() {
+		dg.toggleStep(dg.selectedStage)
+	}), fyne.KeyE, standard|fyne.KeyModifierShift)
+	dg.moveStepUpMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Move selected step up", theme.MoveUpIcon(), func() {
+		dg.moveStep(dg.selectedStage, -1)
+	}), fyne.KeyUp, standard|fyne.KeyModifierAlt|fyne.KeyModifierShift)
+	dg.moveStepDownMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Move selected step down", theme.MoveDownIcon(), func() {
+		dg.moveStep(dg.selectedStage, 1)
+	}), fyne.KeyDown, standard|fyne.KeyModifierAlt|fyne.KeyModifierShift)
+	dg.duplicateStepMenuItem = withShortcut(fyne.NewMenuItemWithIcon("Duplicate selected step", theme.ContentCopyIcon(), func() {
+		dg.duplicateStep(dg.selectedStage)
+	}), fyne.KeyD, standard|fyne.KeyModifierShift)
+	dg.removeStepMenuItem = fyne.NewMenuItemWithIcon("Remove selected step", theme.DeleteIcon(), func() {
+		dg.removeStep(dg.selectedStage)
+	})
 	workflowMenu := fyne.NewMenu("Workflow",
+		dg.addMenuItem,
+		fyne.NewMenuItemSeparator(),
+		dg.toggleStepMenuItem,
+		dg.moveStepUpMenuItem,
+		dg.moveStepDownMenuItem,
+		dg.duplicateStepMenuItem,
+		dg.removeStepMenuItem,
+		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItemWithIcon("Presets", theme.HistoryIcon(), dg.showPresets),
 		fyne.NewMenuItemWithIcon("Compare", theme.ViewFullScreenIcon(), dg.showCompare),
-		fyne.NewMenuItemWithIcon("Undo", theme.NavigateBackIcon(), dg.undo),
-		fyne.NewMenuItemWithIcon("Redo", theme.NavigateNextIcon(), dg.redo),
-		fyne.NewMenuItemWithIcon("Clear", theme.ContentClearIcon(), dg.clear),
+		dg.clearMenuItem,
 	)
-	themeMenu := fyne.NewMenu("Theme",
-		fyne.NewMenuItemWithIcon("Dark", theme.VisibilityIcon(), setTheme(newAdversecTheme(theme.VariantDark))),
-		fyne.NewMenuItemWithIcon("Light", theme.VisibilityOffIcon(), setTheme(newAdversecTheme(theme.VariantLight))),
-		fyne.NewMenuItemWithIcon("System", theme.SettingsIcon(), setTheme(theme.DefaultTheme())),
+	themeMenu := fyne.NewMenu("Appearance",
+		appearanceItem("System", appearanceSystem, theme.SettingsIcon()),
+		appearanceItem("Dark", appearanceDark, theme.VisibilityIcon()),
+		appearanceItem("Light", appearanceLight, theme.VisibilityOffIcon()),
 	)
 	help := fyne.NewMenu("Help",
 		fyne.NewMenuItemWithIcon("How to use", theme.HelpIcon(), dg.showHelp),
-		fyne.NewMenuItemWithIcon("Examples", theme.HistoryIcon(), func() { dg.selectTab(1) }),
+		fyne.NewMenuItemWithIcon("Workflows", theme.HistoryIcon(), func() { dg.selectTab(1) }),
 		fyne.NewMenuItemWithIcon("Plugin catalog", theme.SearchIcon(), func() { dg.selectTab(2) }),
+		fyne.NewMenuItemWithIcon("Compare pipeline data", theme.ViewFullScreenIcon(), func() { dg.selectTab(4) }),
 		fyne.NewMenuItemWithIcon("About", theme.InfoIcon(), func() { dg.selectTab(3) }),
 	)
-	return fyne.NewMainMenu(fileMenu, navigateMenu, chainMenu, workflowMenu, themeMenu, help)
+	menu := fyne.NewMainMenu(fileMenu, editMenu, viewMenu, navigateMenu, chainMenu, workflowMenu, themeMenu, help)
+	dg.refreshNativeMenuState()
+	return menu
+}
+
+func (dg *DeenGUI) applyAppearance(mode appearanceMode) {
+	if dg.working {
+		return
+	}
+	mode = normalizeAppearance(string(mode))
+	dg.appearance = mode
+	dg.app.Preferences().SetString(appearancePreferenceKey, string(mode))
+	dg.updatingAppearance = true
+	dg.app.Settings().SetTheme(themeForAppearance(mode))
+	dg.updatingAppearance = false
+	dg.themeRefreshPending = false
+	dg.refreshAppearanceSurfaces()
+	if dg.window != nil {
+		dg.window.SetMainMenu(dg.mainMenu())
+	}
+}
+
+func (dg *DeenGUI) handleSettingsChange() {
+	if dg.appearance != appearanceSystem || dg.updatingAppearance {
+		return
+	}
+	if dg.working {
+		dg.themeRefreshPending = true
+		return
+	}
+	dg.refreshAppearanceSurfaces()
+}
+
+func (dg *DeenGUI) refreshAppearanceSurfaces() {
+	for i, tab := range dg.tabButtons {
+		tab.setActive(i == dg.activeTab)
+	}
+	if dg.stepsBox != nil {
+		dg.rebuild()
+	}
 }
 
 func (dg *DeenGUI) homeTab() fyne.CanvasObject {
-	return container.NewVScroll(dg.stepsBox)
+	if dg.pipelineOutline == nil {
+		dg.pipelineOutline = container.NewVBox()
+	}
+	dg.pipelineOutlineCount = widget.NewLabel("")
+	dg.pipelineOutlineCount.Importance = widget.LowImportance
+	heading := container.NewVBox(
+		widget.NewLabelWithStyle("Pipeline", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		dg.pipelineOutlineCount,
+		widget.NewSeparator(),
+	)
+	outline := container.NewBorder(heading, nil, nil, nil, container.NewVScroll(dg.pipelineOutline))
+	dg.pipelineNavigator = container.New(fixedWidthLayout{width: 232}, widget.NewCard("", "", container.NewPadded(outline)))
+	detail := container.NewVScroll(dg.stepsBox)
+	layout := &adaptiveLeadingLayout{
+		leading:    dg.pipelineNavigator,
+		content:    detail,
+		breakpoint: compactStagesBreakpoint,
+		isOpen: func(compact bool) bool {
+			if compact {
+				return dg.stagesDrawerOpen
+			}
+			return dg.pipelineNavOpen
+		},
+		onCompact: dg.setCompactStages,
+	}
+	dg.pipelineShell = newAdaptiveLeadingContainer(layout)
+	return dg.pipelineShell
 }
 
 // showHelp displays a usage/info page describing the GUI.
@@ -381,30 +1004,72 @@ deen applies a **chain of transforms** to your input — like Burp Suite's
 Decoder. The result of each step feeds into the next.
 
 ### Steps
-- Type or open data into the **Input** card at the top.
-- Use the **Add transformer step** card to append a step: each plugin category
-  (codecs, compressions, hashs, formatters, misc) has its own dropdown.
+- Use the Input **Editor** to type or paste data, open a file, or drop a file
+  anywhere in the window. Switch to **Inspector** for Raw, Hex, Strings, and
+  structured Preview representations; only the selected view is shown.
+- Open **Add transformer** to search names, aliases, descriptions, and use cases.
+  Filter by category, Favorites, or Recent; browse with the keyboard; and press
+  Return to add. Favoriting a transformer and adding one updates those reusable
+  filters locally.
 - Tick **decode** to run a step in reverse (e.g. base64 decode). One-way
   plugins like hashes cannot be decoded.
-- Plugin options (e.g. base64 ` + "`-url`" + `, gzip ` + "`-level`" + `) appear as fields
-  under each step.
+- Plugin options (e.g. base64 ` + "`-url`" + `, gzip ` + "`-level`" + `) are grouped
+  by behavior, values, and sensitive values. Invalid numeric input is highlighted;
+  sensitive values are masked but remain plaintext in saved chain files.
 - **hex** shows a step's output as a hex dump (read-only).
 - Use **Open chain** and **Save chain** to reuse complete transform chains.
-- Use **Search transformers** in the **Add transformer step** card to search the catalog and append a transform.
-- Use **Presets** to load starter chains while keeping the current input.
-- Use **Detect next** in the **Add transformer step** card to detect likely next transforms from the current result.
-- Use **Compare** in the Transformer Chain panel to inspect any two pipeline points side by side.
+- Use **Analyze current result** in Add transformer to show likely next transforms
+  inline without changing the pipeline.
+- Open **Workflows** to browse runnable Examples and reusable Presets. Examples
+  replace input and chain; Presets keep the current input and replace the chain.
+- Use **Compare** from the toolbar or Workflow menu to inspect any two pipeline
+  points side by side.
 - Copy the equivalent shell pipeline from the toolbar.
 - Editing any step's output recomputes everything below it.
 - Use the disclosure arrow to **collapse/expand** a step, the trash icon
   to remove it.
 
-### Toolbar
-- Open a file, save the final result, copy the result, or clear the chain.
-- Toggle the **Transformer Chain** side panel, which lists the whole chain.
+### Workspace
+- Use the sidebar to move between the pipeline, workflows, transformer catalog,
+  comparison, and app information. Collapsing it keeps an icon rail visible;
+  sidebar destinations and pipeline stages participate in Tab focus and
+  activate with Space or Return.
+- The **Workflows** workspace searches Examples and Presets together, previews
+  bundled example data asynchronously, and labels input-replacement behavior
+  before applying anything.
+- The **Transformers** workspace shares the searchable catalog, Favorites, and
+  Recent history with Add Transformer, while keeping its own browsing layout.
+- Within the pipeline, use the stage navigator to focus the input, one
+  transformer, or the add-transformer editor. It can be hidden independently
+  when more editing space is needed. Command–Option–Up/Down moves to the
+  previous or next stage on macOS.
+- At compact window widths, the workspace sidebar automatically becomes an
+  icon rail and can expand temporarily over the workspace. The stage navigator
+  remains a temporary drawer. Selecting a destination closes either expansion,
+  and resizing wider restores the saved desktop visibility choices.
+- Configuration/output and other master/detail panes stack vertically when a
+  compact layout has enough height to benefit. Wide and compact divider
+  balances are remembered independently, so resizing never replaces one with
+  the other.
+- Drag the divider between Configuration and Output to balance the focused
+  transformer editor. The chosen balance is remembered.
+- Window size, workspace, focused stage, split balances, workflow/catalog
+  filters, favorites/recents, and inspection/output tabs are restored on the
+  next launch.
+- The Pipeline page places file, result, history, and add-step commands in its
+  single compact top row. When the complete command row cannot fit, Open, Save,
+  Add, and More remain visible while Copy, Undo, and Redo move into More without
+  losing their enabled or disabled state.
+- The bottom status area reports background activity, step count, and result
+  size without moving the editor.
 
 ### Menu
-- **Theme**: follow the system theme or force light/dark.`
+- **Appearance**: follow the system theme or force light/dark.
+- **Workflow**: enable/disable, move, duplicate, or remove the focused pipeline
+  step. Unavailable actions are disabled at the input, Add, and chain boundaries.
+- macOS uses standard Command-key shortcuts; other desktops use their standard
+  shortcut modifier. Command–Shift–E toggles the focused step,
+  Command–Option–Shift–Up/Down reorders it, and Command–Shift–D duplicates it.`
 
 	rich := widget.NewRichTextFromMarkdown(md)
 	rich.Wrapping = fyne.TextWrapWord
@@ -439,114 +1104,12 @@ func (dg *DeenGUI) aboutTab() fyne.CanvasObject {
 }
 
 func (dg *DeenGUI) examplesTab() fyne.CanvasObject {
-	query := widget.NewEntry()
-	query.SetPlaceHolder("Search examples")
-	list := container.NewVBox()
-	render := func(q string) {
-		list.RemoveAll()
-		matches := 0
-		for _, example := range pipeline.BuiltinExamples() {
-			example := example
-			if !pipeline.ExampleMatches(example, q) {
-				continue
-			}
-			matches++
-			list.Add(dg.exampleCard(example))
-		}
-		if matches == 0 {
-			list.Add(widget.NewLabel("No examples found."))
-		}
-		list.Refresh()
-	}
-	query.OnChanged = render
-	render("")
-	return container.NewPadded(container.NewBorder(query, nil, nil, nil, container.NewVScroll(list)))
-}
-
-func (dg *DeenGUI) exampleCard(example pipeline.Example) fyne.CanvasObject {
-	desc := widget.NewLabel(example.Description)
-	desc.Wrapping = fyne.TextWrapWord
-
-	chain := widget.NewLabel(exampleChainSummary(example.Steps))
-	chain.Importance = widget.LowImportance
-	chain.Wrapping = fyne.TextWrapBreak
-
-	source := widget.NewLabel(exampleSourceSummary(example.Source))
-	source.Importance = widget.LowImportance
-	source.Wrapping = fyne.TextWrapBreak
-
-	load := widget.NewButtonWithIcon("Load example", theme.MediaPlayIcon(), func() {
-		dg.runPipelineWork("Loading example", func() error {
-			dg.pipe.ApplyExample(example)
-			dg.stepsExpanded = false
-			return nil
-		}, func() {
-			dg.rebuild()
-			dg.selectTab(0)
-		})
-	})
-	previewSlot := container.NewVBox()
-	var preview *widget.Button
-	preview = widget.NewButtonWithIcon("Preview data", theme.VisibilityIcon(), func() {
-		previewSlot.RemoveAll()
-		result, err := pipeline.ExampleResult(example)
-		if err != nil {
-			errLabel := widget.NewLabel("Output error: " + err.Error())
-			errLabel.Importance = widget.DangerImportance
-			errLabel.Wrapping = fyne.TextWrapBreak
-			previewSlot.Add(errLabel)
-			previewSlot.Refresh()
-			return
-		}
-		outputSummary := widget.NewLabel("Output: " + pipeline.DataMetadata(result, len(example.Source)).Summary())
-		outputSummary.Importance = widget.LowImportance
-		outputSummary.Wrapping = fyne.TextWrapBreak
-		inputEntry := multilineEntry(5)
-		inputEntry.SetText(exampleDataText(example.Source))
-		inputEntry.Disable()
-		outputEntry := multilineEntry(5)
-		outputEntry.SetText(exampleDataText(result))
-		outputEntry.Disable()
-		dataGrid := container.NewGridWithColumns(2,
-			widget.NewCard("Input data", "", exampleDataObject(example.Source, inputEntry)),
-			widget.NewCard("Output result", "", exampleDataObject(result, outputEntry)),
-		)
-		preview.Disable()
-		previewSlot.Add(outputSummary)
-		previewSlot.Add(dataGrid)
-		previewSlot.Refresh()
-	})
-
-	body := container.NewVBox(desc, source, chain)
-	if example.WantContains != "" {
-		want := widget.NewLabel("Expected result contains: " + example.WantContains)
-		want.Importance = widget.LowImportance
-		want.Wrapping = fyne.TextWrapBreak
-		body.Add(want)
-	}
-	body.Add(load)
-	body.Add(preview)
-	body.Add(previewSlot)
-	details := container.New(cappedMinWidthLayout{width: compactControlMinWidth}, body)
-	accordion := widget.NewAccordion(widget.NewAccordionItem(example.Name, details))
-	accordion.CloseAll()
-	return container.NewPadded(accordion)
+	dg.workflowLibrary = newWorkflowLibrary(dg)
+	return container.NewPadded(dg.workflowLibrary.splitContent)
 }
 
 func exampleSourceSummary(source []byte) string {
 	return "Input: " + pipeline.DataMetadata(source, 0).Summary()
-}
-
-func exampleChainSummary(steps []pipeline.PresetStep) string {
-	parts := make([]string, 0, len(steps))
-	for _, step := range steps {
-		name := plugins.PluginLabel(step.Plugin)
-		if step.Unprocess {
-			name = "." + name
-		}
-		parts = append(parts, name)
-	}
-	return "Chain: " + strings.Join(parts, " -> ")
 }
 
 func exampleDataText(data []byte) string {
@@ -590,155 +1153,263 @@ func looksReadable(data []byte) bool {
 }
 
 func (dg *DeenGUI) pluginsTab() fyne.CanvasObject {
-	list := container.NewVBox()
-	currentCategory := ""
-	for _, info := range plugins.UICatalog() {
-		if info.Category != currentCategory {
-			currentCategory = info.Category
-			list.Add(widget.NewLabelWithStyle(plugins.CategoryLabel(currentCategory), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		}
-		list.Add(pluginInfoCard(info))
-	}
-	return container.NewPadded(container.NewVScroll(list))
+	dg.browserCatalog = newTransformerCatalog(
+		dg,
+		"Browse transformers",
+		browserCategoryPreferenceKey,
+		browserSplitPreferenceKey,
+		browserCompactSplitPreferenceKey,
+		compactWorkspaceSplit,
+	)
+	return container.NewPadded(dg.browserCatalog.splitContent)
 }
 
-func pluginInfoCard(info plugins.UIPluginInfo) fyne.CanvasObject {
-	direction := "Encode only"
-	if info.CanDecode {
-		direction = "Encode and decode"
-	}
-	meta := []string{plugins.CategoryLabel(info.Category), direction}
-	if info.Label != info.Name {
-		meta = append(meta, "Command: "+info.Name)
-	}
-	if len(info.Aliases) > 0 {
-		meta = append(meta, "Aliases: "+strings.Join(info.Aliases, ", "))
-	}
-
-	metaLabel := widget.NewLabel(strings.Join(meta, " · "))
-	metaLabel.Wrapping = fyne.TextWrapBreak
-	desc := widget.NewLabel(info.Description)
-	desc.Wrapping = fyne.TextWrapWord
-	useFor := widget.NewLabel("Use for: " + info.UseFor)
-	useFor.Wrapping = fyne.TextWrapWord
-	body := container.NewVBox(metaLabel, desc, useFor)
-	for _, ex := range info.Examples {
-		exampleLabel := widget.NewLabel("Example: " + ex.Label)
-		exampleLabel.Wrapping = fyne.TextWrapBreak
-		input := widget.NewLabel("Input: " + ex.Input)
-		input.Wrapping = fyne.TextWrapBreak
-		output := widget.NewLabel("Output: " + ex.Output)
-		output.Wrapping = fyne.TextWrapBreak
-		body.Add(exampleLabel)
-		body.Add(input)
-		body.Add(output)
-	}
-	for _, ref := range info.References {
-		u, err := url.Parse(ref.URL)
-		if err == nil {
-			body.Add(container.NewHBox(widget.NewLabel("Reference:"), widget.NewHyperlink(ref.Label, u)))
-		}
-	}
-	return widget.NewCard(info.Label, "", body)
-}
-
-// rebuild recreates the whole card stack. Called on structural changes
-// (adding/removing steps). Content-only changes use refreshFrom instead.
+// rebuild recreates the pipeline navigator and the currently focused editor.
+// Structural changes use this path; content-only changes use refreshFrom.
 func (dg *DeenGUI) rebuild() {
 	dg.setWorking("Rendering pipeline", true)
 	defer dg.setWorking("", false)
+	dg.rememberStepEditorSplit()
+	dg.rememberAddSplit()
+	dg.workControls = nil
+	dg.workControlStates = nil
 	dg.stepsBox.RemoveAll()
-	dg.cards = dg.cards[:0]
+	dg.clampSelectedStage()
+	dg.rebuildPipelineOutline()
+	dg.cards = make([]*stepCard, dg.pipe.Len())
+	dg.sourceEntry = nil
+	dg.sourceRaw = nil
+	dg.sourceHex = nil
+	dg.sourceStrings = nil
+	dg.sourcePreview = nil
+	dg.sourcePreviewTab = nil
+	dg.sourceViewer = nil
+	dg.sourceWorkspace = nil
+	dg.sourceMeta = nil
+	dg.sourceFullControls = nil
+	dg.addCatalog = nil
+	dg.addSuggestions = nil
 
-	dg.stepsBox.Add(dg.homeMenuBar())
-	dg.stepsBox.Add(dg.newSourceCard())
-	dg.stepsBox.Add(dg.newChainOverview())
-	for i := range dg.pipe.Steps() {
-		c := dg.newStepCard(i)
-		dg.cards = append(dg.cards, c)
+	switch {
+	case dg.selectedStage == pipelineStageAdd:
+		dg.stepsBox.Add(dg.newAddSlot())
+	case dg.selectedStage == pipelineStageInput:
+		dg.stepsBox.Add(dg.newSourceCard())
+	case dg.selectedStage >= 0 && dg.selectedStage < dg.pipe.Len():
+		c := dg.newStepCard(dg.selectedStage)
+		dg.cards[dg.selectedStage] = c
 		dg.stepsBox.Add(c.container)
 	}
-	dg.stepsBox.Add(dg.newAddSlot())
 	dg.stepsBox.Refresh()
-	dg.updateHistory()
+	dg.refreshCommandButtons()
+	dg.refreshResultStatus()
+	dg.refreshWorkspaceTitle()
+	if dg.compareWorkspace != nil {
+		dg.compareWorkspace.refreshPoints()
+	}
+	if dg.app != nil {
+		dg.app.Preferences().SetInt(selectedStagePreferenceKey, dg.selectedStage)
+	}
 }
 
-func (dg *DeenGUI) newChainOverview() fyne.CanvasObject {
-	scroll := container.NewHScroll(dg.history)
-	scroll.SetMinSize(fyne.NewSize(compactControlMinWidth, 54))
-	dg.chainView = scroll
-	return container.NewMax(scroll)
+func (dg *DeenGUI) clampSelectedStage() {
+	if dg.selectedStage == pipelineStageInput || dg.selectedStage == pipelineStageAdd {
+		return
+	}
+	if dg.pipe.Len() == 0 {
+		dg.selectedStage = pipelineStageInput
+		return
+	}
+	if dg.selectedStage < 0 {
+		dg.selectedStage = pipelineStageInput
+	} else if dg.selectedStage >= dg.pipe.Len() {
+		dg.selectedStage = dg.pipe.Len() - 1
+	}
 }
 
-// updateHistory redraws the horizontal transformer chain overview.
-func (dg *DeenGUI) updateHistory() {
-	dg.history.RemoveAll()
-	shown := 0
-	for i, s := range dg.pipe.Steps() {
-		if s.Disabled {
-			continue
+func (dg *DeenGUI) selectPipelineStage(stage int) {
+	if dg.working || stage < pipelineStageAdd || stage >= dg.pipe.Len() {
+		return
+	}
+	dg.closeCompactNavigation()
+	if stage == dg.selectedStage {
+		return
+	}
+	dg.selectedStage = stage
+	dg.rebuild()
+}
+
+func (dg *DeenGUI) pipelineStagePosition() int {
+	if dg.pipe == nil {
+		return -1
+	}
+	switch {
+	case dg.selectedStage == pipelineStageInput:
+		return 0
+	case dg.selectedStage == pipelineStageAdd:
+		return dg.pipe.Len() + 1
+	case dg.selectedStage >= 0 && dg.selectedStage < dg.pipe.Len():
+		return dg.selectedStage + 1
+	default:
+		return -1
+	}
+}
+
+func (dg *DeenGUI) navigatePipelineStage(delta int) {
+	if dg.working || dg.activeTab != 0 || dg.pipe == nil || (delta != -1 && delta != 1) {
+		return
+	}
+	position := dg.pipelineStagePosition()
+	if position < 0 {
+		return
+	}
+	position += delta
+	if position < 0 || position > dg.pipe.Len()+1 {
+		return
+	}
+	stage := pipelineStageInput
+	switch {
+	case position == dg.pipe.Len()+1:
+		stage = pipelineStageAdd
+	case position > 0:
+		stage = position - 1
+	}
+	dg.selectPipelineStage(stage)
+}
+
+func completedGUIAction() <-chan struct{} {
+	completed := make(chan struct{})
+	close(completed)
+	return completed
+}
+
+func (dg *DeenGUI) validStepIndex(index int) bool {
+	return dg.pipe != nil && index >= 0 && index < dg.pipe.Len()
+}
+
+func (dg *DeenGUI) toggleStep(index int) <-chan struct{} {
+	if dg.working || !dg.validStepIndex(index) {
+		return completedGUIAction()
+	}
+	return dg.runPipelineWork("Updating step", func() error {
+		dg.pipe.SetStepDisabled(index, !dg.pipe.Steps()[index].Disabled)
+		return nil
+	}, dg.rebuild)
+}
+
+func (dg *DeenGUI) moveStep(index, delta int) <-chan struct{} {
+	target := index + delta
+	if dg.working || !dg.validStepIndex(index) || !dg.validStepIndex(target) || (delta != -1 && delta != 1) {
+		return completedGUIAction()
+	}
+	return dg.runPipelineWork("Moving step", func() error {
+		dg.pipe.MoveStep(index, target)
+		return nil
+	}, func() {
+		dg.selectedStage = target
+		dg.rebuild()
+	})
+}
+
+func (dg *DeenGUI) duplicateStep(index int) <-chan struct{} {
+	if dg.working || !dg.validStepIndex(index) {
+		return completedGUIAction()
+	}
+	return dg.runPipelineWork("Duplicating step", func() error {
+		dg.pipe.DuplicateStep(index)
+		return nil
+	}, func() {
+		dg.selectedStage = index + 1
+		dg.rebuild()
+	})
+}
+
+func (dg *DeenGUI) removeStep(index int) <-chan struct{} {
+	if dg.working || !dg.validStepIndex(index) {
+		return completedGUIAction()
+	}
+	return dg.runPipelineWork("Removing step", func() error {
+		dg.pipe.RemoveStep(index)
+		return nil
+	}, func() {
+		switch {
+		case dg.pipe.Len() == 0:
+			dg.selectedStage = pipelineStageInput
+		case index >= dg.pipe.Len():
+			dg.selectedStage = dg.pipe.Len() - 1
+		default:
+			dg.selectedStage = index
 		}
-		if shown > 0 {
-			arrow := canvas.NewText("→", theme.Color(theme.ColorNamePlaceHolder))
-			arrow.TextStyle = fyne.TextStyle{Bold: true}
-			arrow.TextSize = 18
-			dg.history.Add(arrow)
-		}
-		dg.history.Add(guiChainStepPill(i, s))
-		shown++
-	}
-	if dg.chainView != nil {
-		if shown == 0 {
-			dg.chainView.Hide()
-		} else {
-			dg.chainView.Show()
-		}
-	}
-	dg.history.Refresh()
+		dg.rebuild()
+	})
 }
 
-func guiChainStepPill(i int, step *pipeline.Step) fyne.CanvasObject {
-	displayCol := accent(i)
-	if step.Disabled {
-		displayCol = disabledAccent()
+func (dg *DeenGUI) rebuildPipelineOutline() {
+	if dg.pipelineOutline == nil {
+		dg.pipelineOutline = container.NewVBox()
 	}
-	name := plugins.PluginLabel(step.Plugin)
-	if name == "" {
-		name = "(none)"
+	dg.pipelineOutline.RemoveAll()
+	dg.pipelineStageButtons = dg.pipelineStageButtons[:0]
+	if dg.pipelineOutlineCount != nil {
+		steps := dg.pipe.Len()
+		label := "steps"
+		if steps == 1 {
+			label = "step"
+		}
+		dg.pipelineOutlineCount.SetText(fmt.Sprintf("%d %s", steps, label))
 	}
-	if step.Unprocess {
-		name = "." + name
-	}
-	title := canvas.NewText(name, displayCol)
-	title.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
-	metaParts := make([]string, 0, len(step.Options))
-	for k, v := range step.Options {
-		metaParts = append(metaParts, k+"="+v)
-	}
-	sort.Strings(metaParts)
-	var meta fyne.CanvasObject
-	if len(metaParts) > 0 {
-		text := canvas.NewText(strings.Join(metaParts, ", "), theme.Color(theme.ColorNamePlaceHolder))
-		text.TextStyle = fyne.TextStyle{Monospace: true}
-		text.TextSize = 12
-		meta = text
-	}
-	return guiChainPill(title, meta, displayCol, step.Disabled)
-}
 
-func guiChainPill(title fyne.CanvasObject, meta fyne.CanvasObject, accentColor color.NRGBA, disabled bool) fyne.CanvasObject {
-	bg := canvas.NewRectangle(tint(accentColor))
-	if disabled {
-		bg.FillColor = color.NRGBA{R: accentColor.R, G: accentColor.G, B: accentColor.B, A: 0x18}
+	input := newPipelineStageItem("Input", theme.DocumentIcon(), nil, func() {
+		dg.selectPipelineStage(pipelineStageInput)
+	})
+	dg.pipelineStageButtons = append(dg.pipelineStageButtons, input)
+	dg.pipelineOutline.Add(input)
+
+	for i, step := range dg.pipe.Steps() {
+		i := i
+		stepColor := accent(i)
+		icon := theme.NavigateNextIcon()
+		direction := "encode"
+		if step.Unprocess {
+			icon = theme.NavigateBackIcon()
+			direction = "decode"
+		}
+		state := ""
+		if step.Disabled {
+			stepColor = disabledAccent()
+			icon = theme.VisibilityOffIcon()
+			state = " · off"
+		}
+		name := plugins.PluginLabel(step.Plugin)
+		if name == "" {
+			name = "No transformer"
+		}
+		label := fmt.Sprintf("%d  %s · %s%s", i+1, name, direction, state)
+		item := newPipelineStageItem(label, icon, stepColor, func() { dg.selectPipelineStage(i) })
+		dg.pipelineStageButtons = append(dg.pipelineStageButtons, item)
+		dg.pipelineOutline.Add(item)
 	}
-	bg.StrokeColor = accentColor
-	bg.StrokeWidth = 1
-	bg.CornerRadius = 6
-	body := container.NewVBox(title)
-	if meta != nil {
-		body.Add(meta)
+
+	add := newPipelineStageItem("Add transformer", theme.ContentAddIcon(), nil, func() {
+		dg.selectPipelineStage(pipelineStageAdd)
+	})
+	dg.pipelineStageButtons = append(dg.pipelineStageButtons, add)
+	dg.pipelineOutline.Add(add)
+
+	for _, item := range dg.pipelineStageButtons {
+		item.setActive(false)
 	}
-	return container.NewStack(bg, container.NewPadded(body))
+	switch dg.selectedStage {
+	case pipelineStageInput:
+		input.setActive(true)
+	case pipelineStageAdd:
+		add.setActive(true)
+	default:
+		if dg.selectedStage >= 0 && dg.selectedStage < dg.pipe.Len() {
+			dg.pipelineStageButtons[dg.selectedStage+1].setActive(true)
+		}
+	}
+	dg.pipelineOutline.Refresh()
 }
 
 // refreshFrom updates the displayed output of every card from index `from`
@@ -768,6 +1439,10 @@ func (dg *DeenGUI) refreshFrom(from int) {
 			dg.sourceEntry.Enable()
 		}
 	}
+	if dg.sourceRaw != nil {
+		text, _ := guiTextDisplayMode(dg.pipe.Source(), dg.sourceFullRaw)
+		dg.setText(dg.sourceRaw, text)
+	}
 	if dg.sourceHex != nil {
 		hexText, _ := guiHexDisplayMode(dg.pipe.Source(), dg.sourceFullHex)
 		dg.setText(dg.sourceHex, hexText)
@@ -776,12 +1451,21 @@ func (dg *DeenGUI) refreshFrom(from int) {
 		stringsText, _ := guiStringsDisplayMode(dg.pipe.Source(), dg.sourceFullStrings)
 		dg.setText(dg.sourceStrings, stringsText)
 	}
+	dg.syncSourcePreviewTab()
+	if dg.sourcePreview != nil {
+		preview, spans, _ := pipeline.HighlightedPreview(dg.pipe.Source())
+		setPreviewText(dg.sourcePreview, preview, spans)
+	}
 	dg.refreshSourceFullControls(rawNeedsFull, hexNeedsFull, stringsNeedsFull)
 	for i := from; i < len(dg.cards); i++ {
-		if dg.cards[i].collapsed {
+		if dg.cards[i] == nil || dg.cards[i].collapsed {
 			continue
 		}
 		dg.cards[i].refresh()
+	}
+	dg.refreshResultStatus()
+	if dg.compareWorkspace != nil {
+		dg.compareWorkspace.refreshPoints()
 	}
 }
 
@@ -794,26 +1478,70 @@ func (dg *DeenGUI) setText(e *widget.Entry, s string) {
 
 // --- toolbar actions ---
 
+func (dg *DeenGUI) closeIfWorking(closer io.Closer) bool {
+	if !dg.working {
+		return false
+	}
+	_ = closer.Close()
+	return true
+}
+
 func (dg *DeenGUI) openFile() {
+	if dg.working {
+		return
+	}
 	dialog.ShowFileOpen(func(rc fyne.URIReadCloser, err error) {
-		if err != nil || rc == nil {
+		if err != nil {
+			dialog.ShowError(err, dg.window)
 			return
 		}
-		name := rc.URI().Name()
+		if rc == nil {
+			return
+		}
+		dg.loadSourceReader(rc, rc.URI().Name())
+	}, dg.window)
+}
+
+func (dg *DeenGUI) handleDroppedFiles(_ fyne.Position, uris []fyne.URI) {
+	if dg.working || len(uris) == 0 {
+		return
+	}
+	rc, err := storage.Reader(uris[0])
+	if err != nil {
+		dialog.ShowError(err, dg.window)
+		return
+	}
+	dg.loadSourceReader(rc, uris[0].Name())
+}
+
+func (dg *DeenGUI) loadSourceReader(rc fyne.URIReadCloser, name string) <-chan struct{} {
+	if rc == nil || dg.closeIfWorking(rc) {
+		completed := make(chan struct{})
+		close(completed)
+		return completed
+	}
+	var data []byte
+	return dg.runPipelineWork("Processing file", func() error {
+		defer rc.Close()
+		loaded, err := io.ReadAll(rc)
+		if err != nil {
+			return err
+		}
+		data = loaded
+		dg.pipe.SetSourceOwned(data)
+		return nil
+	}, func() {
 		dg.sourceName = name
 		dg.clearSourceFullViews()
-		dg.runPipelineWork("Processing file", func() error {
-			defer rc.Close()
-			data, err := io.ReadAll(rc)
-			if err != nil {
-				return err
-			}
-			dg.pipe.SetSourceOwned(data)
-			return nil
-		}, func() {
-			dg.rebuild()
-		})
-	}, dg.window)
+		dg.selectedStage = pipelineStageInput
+		dg.rebuild()
+		dg.selectTab(0)
+		if strings.TrimSpace(name) == "" {
+			dg.showActionFeedback("Input loaded")
+		} else {
+			dg.showActionFeedback(fmt.Sprintf("Loaded “%s”", feedbackSubject(name)))
+		}
+	})
 }
 
 func (dg *DeenGUI) sourceMetadataSummary() string {
@@ -832,22 +1560,37 @@ func metadataSummary(source string, meta pipeline.Metadata) string {
 }
 
 func (dg *DeenGUI) saveResult() {
+	if dg.working {
+		return
+	}
 	dialog.ShowFileSave(func(wc fyne.URIWriteCloser, err error) {
 		if err != nil || wc == nil {
 			return
 		}
-		defer wc.Close()
-		if _, err := wc.Write(dg.pipe.Result()); err != nil {
-			dialog.ShowError(err, dg.window)
+		if dg.closeIfWorking(wc) {
+			return
 		}
+		uri := wc.URI()
+		if err := writeAndClose(wc, dg.pipe.Result()); err != nil {
+			dialog.ShowError(err, dg.window)
+			return
+		}
+		dg.showActionFeedback(fileActionFeedback("Result saved", "Saved", uri))
 	}, dg.window)
 }
 
 func (dg *DeenGUI) openChain() {
+	if dg.working {
+		return
+	}
 	dialog.ShowFileOpen(func(rc fyne.URIReadCloser, err error) {
 		if err != nil || rc == nil {
 			return
 		}
+		if dg.closeIfWorking(rc) {
+			return
+		}
+		uri := rc.URI()
 		dg.runPipelineWork("Importing chain", func() error {
 			defer rc.Close()
 			data, err := io.ReadAll(rc)
@@ -858,198 +1601,72 @@ func (dg *DeenGUI) openChain() {
 			if err := dg.pipe.ImportJSON(data); err != nil {
 				return err
 			}
-			dg.stepsExpanded = false
 			return nil
-		}, dg.rebuild)
+		}, func() {
+			dg.selectedStage = pipelineStageInput
+			dg.rebuild()
+			dg.selectTab(0)
+			dg.showActionFeedback(fileActionFeedback("Chain loaded", "Loaded", uri))
+		})
 	}, dg.window)
 }
 
 func (dg *DeenGUI) saveChain() {
+	if dg.working {
+		return
+	}
 	dialog.ShowFileSave(func(wc fyne.URIWriteCloser, err error) {
 		if err != nil || wc == nil {
 			return
 		}
-		defer wc.Close()
+		if dg.closeIfWorking(wc) {
+			return
+		}
 		data, err := dg.pipe.ExportJSON()
 		if err != nil {
+			_ = wc.Close()
 			dialog.ShowError(err, dg.window)
 			return
 		}
-		if _, err := wc.Write(data); err != nil {
+		uri := wc.URI()
+		if err := writeAndClose(wc, data); err != nil {
 			dialog.ShowError(err, dg.window)
+			return
 		}
+		dg.showActionFeedback(fileActionFeedback("Chain saved", "Saved", uri))
 	}, dg.window)
 }
 
 func (dg *DeenGUI) copyResult() {
+	if dg.working {
+		return
+	}
 	if pipeline.IsLargeData(dg.pipe.Result()) {
 		dialog.ShowInformation("Copy result", "Result is too large to copy safely from the GUI. Use Save result instead.", dg.window)
 		return
 	}
 	dg.window.Clipboard().SetContent(string(dg.pipe.Result()))
+	dg.showActionFeedback("Result copied")
 }
 
 func (dg *DeenGUI) copyCommand() {
+	if dg.working {
+		return
+	}
 	command := dg.pipe.CommandLine()
 	if command == "" {
 		dialog.ShowInformation("Command line", "No enabled transforms to export.", dg.window)
 		return
 	}
 	dg.window.Clipboard().SetContent(command)
-	entry := widget.NewMultiLineEntry()
-	entry.SetText(command)
-	entry.Wrapping = fyne.TextWrapBreak
-	entry.SetMinRowsVisible(4)
-	entry.Disable()
-	dialog.ShowCustom("Command copied", "Close", entry, dg.window)
-}
-
-type comparePoint struct {
-	Label string
-	Data  []byte
-}
-
-func (dg *DeenGUI) comparePoints() []comparePoint {
-	points := []comparePoint{{Label: "Input", Data: dg.pipe.Source()}}
-	for i := range dg.pipe.Steps() {
-		points = append(points, comparePoint{
-			Label: fmt.Sprintf("Step %d output", i+1),
-			Data:  dg.pipe.Output(i),
-		})
-	}
-	return points
-}
-
-func compareLabels(points []comparePoint) []string {
-	labels := make([]string, len(points))
-	for i, point := range points {
-		labels[i] = point.Label
-	}
-	return labels
-}
-
-func compareData(points []comparePoint, label string) []byte {
-	for _, point := range points {
-		if point.Label == label {
-			return point.Data
-		}
-	}
-	return nil
-}
-
-func formatCompareData(data []byte, mode string) string {
-	switch mode {
-	case "hex":
-		text, _ := guiHexDisplay(data)
-		return text
-	case "base64":
-		if pipeline.IsLargeData(data) {
-			return pipeline.LargeDataPlaceholder(data) + "\n\nBase64 preview disabled for large data."
-		}
-		return base64.StdEncoding.EncodeToString(data)
-	default:
-		text, _ := guiTextDisplay(data)
-		return text
-	}
+	dg.showActionFeedback("Command copied")
 }
 
 func (dg *DeenGUI) showCompare() {
-	points := dg.comparePoints()
-	labels := compareLabels(points)
-	leftSelect := widget.NewSelect(labels, nil)
-	rightSelect := widget.NewSelect(labels, nil)
-	modeSelect := widget.NewSelect([]string{"text", "hex", "base64"}, nil)
-	leftSelect.SetSelected(labels[0])
-	rightSelect.SetSelected(labels[len(labels)-1])
-	modeSelect.SetSelected("text")
-
-	leftMeta := widget.NewLabel("")
-	leftMeta.Importance = widget.LowImportance
-	rightMeta := widget.NewLabel("")
-	rightMeta.Importance = widget.LowImportance
-	leftBody := multilineEntry(12)
-	leftBody.Disable()
-	rightBody := multilineEntry(12)
-	rightBody.Disable()
-
-	refresh := func() {
-		mode := modeSelect.Selected
-		left := compareData(points, leftSelect.Selected)
-		right := compareData(points, rightSelect.Selected)
-		leftMeta.SetText(metadataSummary("", pipeline.DataMetadata(left, 0)))
-		rightMeta.SetText(metadataSummary("", pipeline.DataMetadata(right, 0)))
-		leftBody.SetText(formatCompareData(left, mode))
-		rightBody.SetText(formatCompareData(right, mode))
-	}
-	leftSelect.OnChanged = func(string) { refresh() }
-	rightSelect.OnChanged = func(string) { refresh() }
-	modeSelect.OnChanged = func(string) { refresh() }
-	refresh()
-
-	leftPanel := container.NewBorder(container.NewVBox(leftSelect, leftMeta), nil, nil, nil, leftBody)
-	rightPanel := container.NewBorder(container.NewVBox(rightSelect, rightMeta), nil, nil, nil, rightBody)
-	split := container.NewHSplit(leftPanel, rightPanel)
-	split.SetOffset(0.5)
-	content := container.NewBorder(container.NewHBox(widget.NewLabel("View"), modeSelect), nil, nil, nil, split)
-	content.Resize(fyne.NewSize(820, 520))
-	d := dialog.NewCustom("Compare pipeline data", "Close", content, dg.window)
-	d.Resize(fyne.NewSize(900, 600))
-	d.Show()
-}
-
-func (dg *DeenGUI) showSuggestions() {
-	var suggestions []pipeline.Suggestion
-	dg.runPipelineWork("Detecting transforms", func() error {
-		suggestions = pipeline.Suggestions(dg.pipe.Result())
-		return nil
-	}, func() {
-		dg.showSuggestionsDialog(suggestions)
-	})
-}
-
-func (dg *DeenGUI) showSuggestionsDialog(suggestions []pipeline.Suggestion) {
-	list := container.NewVBox()
-	if len(suggestions) == 0 {
-		list.Add(widget.NewLabel("No likely transforms detected."))
-		dialog.ShowCustom("Suggested transforms", "Close", list, dg.window)
+	if dg.working {
 		return
 	}
-	sort.SliceStable(suggestions, func(i, j int) bool {
-		return suggestions[i].Confidence > suggestions[j].Confidence
-	})
-
-	var d dialog.Dialog
-	for _, s := range suggestions {
-		s := s
-		detail := s.Reason
-		if s.Confidence > 0 {
-			detail += fmt.Sprintf(" Confidence: %d%%.", s.Confidence)
-		}
-		actionLabel := "Add"
-		if len(s.Steps) > 1 {
-			actionLabel = "Apply chain"
-		}
-		action := widget.NewButton(actionLabel, func() {
-			if d != nil {
-				d.Hide()
-			}
-			dg.runPipelineWork("Processing", func() error {
-				dg.pipe.AddSuggestion(s)
-				return nil
-			}, dg.rebuild)
-		})
-		itemContent := container.NewVBox(widget.NewLabelWithStyle(s.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		if s.Reason != "" {
-			itemContent.Add(widget.NewLabel(detail))
-		}
-		if s.Preview != "" {
-			itemContent.Add(widget.NewLabel(guiSafeSuggestionPreview(s.Preview)))
-		}
-		list.Add(container.NewBorder(nil, nil, nil, action, itemContent))
-	}
-	d = dialog.NewCustom("Suggested transforms", "Close", container.NewVScroll(list), dg.window)
-	d.Resize(fyne.NewSize(560, 360))
-	d.Show()
+	dg.selectTab(4)
 }
 
 func guiSafeSuggestionPreview(preview string) string {
@@ -1072,98 +1689,38 @@ func guiSafeSuggestionPreview(preview string) string {
 }
 
 func (dg *DeenGUI) showPluginSearch() {
-	query := widget.NewEntry()
-	query.SetPlaceHolder("Search transformers")
-	results := container.NewVBox()
-	scroll := container.NewVScroll(results)
-	scroll.SetMinSize(fyne.NewSize(640, 420))
-
-	var d dialog.Dialog
-	refresh := func(q string) {
-		results.RemoveAll()
-		matches := plugins.SearchUICatalog(q)
-		if len(matches) == 0 {
-			results.Add(widget.NewLabel("No transformers found."))
-		}
-		for _, info := range matches {
-			info := info
-			direction := "encode"
-			if !info.CanDecode {
-				direction = "run"
-			}
-			title := fmt.Sprintf("%s / %s", plugins.CategoryLabel(info.Category), info.Label)
-			var titleMeta []string
-			if info.Label != info.Name {
-				titleMeta = append(titleMeta, "command: "+info.Name)
-			}
-			if len(info.Aliases) > 0 {
-				titleMeta = append(titleMeta, "aliases: "+strings.Join(info.Aliases, ", "))
-			}
-			if len(titleMeta) > 0 {
-				title += " (" + strings.Join(titleMeta, "; ") + ")"
-			}
-			desc := widget.NewLabel(info.Description)
-			desc.Wrapping = fyne.TextWrapWord
-			addEncode := widget.NewButton("Add "+direction, func() {
-				if d != nil {
-					d.Hide()
-				}
-				dg.runPipelineWork("Processing", func() error {
-					dg.pipe.AddStep(info.Name, false)
-					return nil
-				}, dg.rebuild)
-			})
-			actions := container.NewHBox(addEncode)
-			if info.CanDecode {
-				actions.Add(widget.NewButton("Add decode", func() {
-					if d != nil {
-						d.Hide()
-					}
-					dg.runPipelineWork("Processing", func() error {
-						dg.pipe.AddStep(info.Name, true)
-						return nil
-					}, dg.rebuild)
-				}))
-			}
-			results.Add(widget.NewCard(title, "", container.NewVBox(desc, actions)))
-		}
-		results.Refresh()
+	if dg.working {
+		return
 	}
-	query.OnChanged = refresh
-	refresh("")
-
-	d = dialog.NewCustom("Search transformers", "Close", container.NewBorder(query, nil, nil, nil, scroll), dg.window)
-	d.Resize(fyne.NewSize(700, 520))
-	d.Show()
-	dg.window.Canvas().Focus(query)
+	dg.selectTab(0)
+	if dg.selectedStage != pipelineStageAdd {
+		dg.selectedStage = pipelineStageAdd
+		dg.rebuild()
+	}
+	if dg.addCatalog != nil && dg.window != nil {
+		dg.window.Canvas().Focus(dg.addCatalog.search)
+	}
 }
 
 func (dg *DeenGUI) showPresets() {
-	list := container.NewVBox()
-	var d dialog.Dialog
-	for _, preset := range pipeline.BuiltinPresets() {
-		preset := preset
-		desc := widget.NewLabel(preset.Description)
-		desc.Wrapping = fyne.TextWrapWord
-		apply := widget.NewButton("Apply", func() {
-			if d != nil {
-				d.Hide()
-			}
-			dg.runPipelineWork("Processing", func() error {
-				dg.pipe.ApplyPreset(preset)
-				return nil
-			}, dg.rebuild)
-		})
-		list.Add(widget.NewCard(preset.Name, "", container.NewVBox(desc, apply)))
+	if dg.working {
+		return
 	}
-	scroll := container.NewVScroll(list)
-	scroll.SetMinSize(fyne.NewSize(640, 420))
-	d = dialog.NewCustom("Presets", "Close", scroll, dg.window)
-	d.Resize(fyne.NewSize(700, 520))
-	d.Show()
+	dg.selectTab(1)
+	if dg.workflowLibrary == nil {
+		return
+	}
+	dg.workflowLibrary.search.SetText("")
+	dg.workflowLibrary.filter.SetSelected(presetWorkflowsFilter)
+	if dg.window != nil {
+		dg.window.Canvas().Focus(dg.workflowLibrary.search)
+	}
 }
 
 func (dg *DeenGUI) undo() {
+	if dg.working {
+		return
+	}
 	dg.runPipelineWork("Undoing", func() error {
 		dg.pipe.Undo()
 		return nil
@@ -1171,6 +1728,9 @@ func (dg *DeenGUI) undo() {
 }
 
 func (dg *DeenGUI) redo() {
+	if dg.working {
+		return
+	}
 	dg.runPipelineWork("Redoing", func() error {
 		dg.pipe.Redo()
 		return nil
@@ -1178,9 +1738,16 @@ func (dg *DeenGUI) redo() {
 }
 
 func (dg *DeenGUI) clear() {
+	if dg.working {
+		return
+	}
 	dg.sourceName = ""
+	dg.selectedStage = pipelineStageInput
 	dg.runPipelineWork("Clearing", func() error {
 		dg.pipe.Clear()
 		return nil
-	}, dg.rebuild)
+	}, func() {
+		dg.rebuild()
+		dg.selectTab(0)
+	})
 }
