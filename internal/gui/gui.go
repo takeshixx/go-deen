@@ -1413,10 +1413,11 @@ func (dg *DeenGUI) rebuildPipelineOutline() {
 }
 
 // refreshFrom updates the displayed output of every card from index `from`
-// downward without recreating widgets.
+// downward without recreating widgets. It intentionally does not enter the
+// global working state: callers include Entry.OnChanged handlers, so changing
+// focus or disabling controls here would interrupt typing. Some asynchronous
+// completion callbacks also call this while the outer work cycle is active.
 func (dg *DeenGUI) refreshFrom(from int) {
-	dg.setWorking("Refreshing output", true)
-	defer dg.setWorking("", false)
 	if dg.sourceMeta != nil {
 		dg.sourceMeta.SetText(dg.sourceMetadataSummary())
 	}

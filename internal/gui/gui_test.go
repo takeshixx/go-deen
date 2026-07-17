@@ -904,6 +904,97 @@ func TestInputWorkspaceSplitAndDynamicPreview(t *testing.T) {
 
 }
 
+func TestTypingInputKeepsFocusAndUpdatesPipeline(t *testing.T) {
+	dg := newVisualScenarioGUI(t, appearanceLight)
+	dg.pipe.SetSource([]byte("ac"))
+	dg.rebuild()
+	entry := dg.sourceEntry
+	if entry == nil {
+		t.Fatal("Input Editor did not create its editable source")
+	}
+
+	entry.CursorColumn = 1
+	dg.window.Canvas().Focus(entry)
+	fynetest.Type(entry, "bd")
+	fyne.DoAndWait(func() {})
+	if got := entry.Text; got != "abdc" {
+		t.Fatalf("typed source = %q, want %q", got, "abdc")
+	}
+	if got := string(dg.pipe.Source()); got != "abdc" {
+		t.Fatalf("pipeline source = %q, want %q", got, "abdc")
+	}
+	if focused := dg.window.Canvas().Focused(); focused != entry {
+		t.Fatalf("Input focus moved to %T after typing", focused)
+	}
+}
+
+func TestTypingStepOutputKeepsFocusAndUpdatesPipeline(t *testing.T) {
+	dg := newVisualScenarioGUI(t, appearanceDark)
+	dg.pipe.SetSource([]byte("ac"))
+	dg.pipe.AddStep("base64", false)
+	dg.selectedStage = 0
+	dg.rebuild()
+	entry := dg.cards[0].body
+	if entry == nil {
+		t.Fatal("focused step did not create its editable output")
+	}
+	if entry.Text != "YWM=" {
+		t.Fatalf("initial step output = %q, want %q", entry.Text, "YWM=")
+	}
+
+	entry.CursorColumn = 1
+	dg.window.Canvas().Focus(entry)
+	fynetest.Type(entry, "bd")
+	fyne.DoAndWait(func() {})
+	if got := entry.Text; got != "YbdWM=" {
+		t.Fatalf("edited step output = %q, want %q", got, "YbdWM=")
+	}
+	if got := string(dg.pipe.Output(0)); got != "YbdWM=" {
+		t.Fatalf("pipeline step output = %q, want %q", got, "YbdWM=")
+	}
+	if focused := dg.window.Canvas().Focused(); focused != entry {
+		t.Fatalf("step output focus moved to %T after typing", focused)
+	}
+}
+
+func TestTypingStepOptionKeepsFocusAndUpdatesPipeline(t *testing.T) {
+	dg := newVisualScenarioGUI(t, appearanceLight)
+	dg.pipe.SetSource([]byte("compress me"))
+	dg.pipe.AddStep("gzip", false)
+	dg.selectedStage = 0
+	dg.rebuild()
+	card := dg.cards[0]
+
+	var findEditableEntry func(fyne.CanvasObject) *widget.Entry
+	findEditableEntry = func(object fyne.CanvasObject) *widget.Entry {
+		if entry, ok := object.(*widget.Entry); ok && !entry.Disabled() {
+			return entry
+		}
+		if children, ok := object.(*fyne.Container); ok {
+			for _, child := range children.Objects {
+				if entry := findEditableEntry(child); entry != nil {
+					return entry
+				}
+			}
+		}
+		return nil
+	}
+	entry := findEditableEntry(card.options)
+	if entry == nil {
+		t.Fatal("gzip options did not create an editable level control")
+	}
+
+	dg.window.Canvas().Focus(entry)
+	fynetest.Type(entry, "5")
+	fyne.DoAndWait(func() {})
+	if got := dg.pipe.Steps()[0].Options["level"]; got != "5" {
+		t.Fatalf("pipeline gzip level = %q, want %q", got, "5")
+	}
+	if focused := dg.window.Canvas().Focused(); focused != entry {
+		t.Fatalf("step option focus moved to %T after typing", focused)
+	}
+}
+
 func TestFileReaderLoadsIntoInputWorkspace(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "dropped.txt")
 	if err := os.WriteFile(path, []byte("dropped input"), 0o600); err != nil {
