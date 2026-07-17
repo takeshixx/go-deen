@@ -1,12 +1,17 @@
-# deen ![Build & Test](https://github.com/takeshixx/go-deen/workflows/Build%20&%20Test/badge.svg?branch=master)
+# deen [![Build & Test](https://github.com/takeshixx/go-deen/actions/workflows/deen-ci.yml/badge.svg?branch=master)](https://github.com/takeshixx/go-deen/actions/workflows/deen-ci.yml)
 
 `deen` is a tool for encoding, decoding, hashing, compressing and formatting
 data. It ships as a single static binary with no runtime dependencies and runs
 on Linux, Windows and macOS. The same plugins are exposed through several
 interfaces: a command-line interface, a desktop GUI built with
 [Fyne](https://github.com/fyne-io/fyne), a
-[WebAssembly](https://webassembly.org) web interface, and a
+[WebAssembly](https://webassembly.org) web interface available at
+[deen.adversec.com](https://deen.adversec.com), and a
 [Visual Studio Code extension](extras/vscode-deen).
+
+The WebAssembly interface processes data entirely in the browser. Sensitive
+input stays client-side instead of being sent to a backend service. See
+[WebAssembly](#webassembly) for instructions to run the web interface locally.
 
 It is a Go reimplementation of the original Python/PyQt5
 [deen](https://github.com/takeshixx/deen).
