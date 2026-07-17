@@ -90,6 +90,36 @@ Implemented plugin families and tools:
 
 ## Open priorities
 
+### 0. Real-World Decode Examples and Format Gaps
+
+The built-in Examples now include public-doc-inspired chains for CloudFront
+signed URL policies, Kubernetes docker config Secrets, nested protobuf wire
+messages, PowerShell EncodedCommand process logs, and JWKS x5c signing
+certificates. Keep expanding these with realistic, sanitized inputs.
+
+See `docs/real-world-examples.md` for source notes and candidate formats.
+
+Near-term feature candidates from the research:
+
+- Add CloudFront Base64 alphabet support (`+` -> `-`, `=` -> `_`, `/` -> `~`)
+  as a base64 option or CloudFront policy helper.
+- Detect PowerShell `-EncodedCommand` and propose Base64 -> UTF-16LE chains,
+  then consider bounded static deobfuscation helpers for common second-stage
+  script layers.
+- Add JWKS x5c extraction, key selection, and x5t/x5t#S256 verification.
+- Implement JWE compact/JSON inspection and decryption; current JWT/JWE support
+  cannot decode JWE payloads.
+- Add bounded recursive nested JWT/JWE decoding for `cty: JWT`.
+- Add CWT/COSE/WebAuthn parsers on top of existing CBOR support.
+- Add EVTX/Sysmon/Security-event helpers so encoded payloads inside endpoint
+  telemetry can be discovered without brittle regex-only workflows.
+- Add CMS/PKCS#7/S/MIME container parsing on top of PEM/ASN.1/certificate
+  support.
+- Document AWS STS encoded authorization messages as an external decode flow;
+  local decoding is not sufficient without `sts:DecodeAuthorizationMessage`.
+- Consider archive/container extraction plugins for ZIP/TAR/MIME/PDF object
+  streams so detect-next can start from real carrier files.
+
 ### 1. Agentic Tooling / MCP Integration
 
 Make deen a local data workbench for coding agents such as Claude Code.

