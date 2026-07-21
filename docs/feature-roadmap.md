@@ -232,37 +232,11 @@ Scope:
 
 ### Homebrew
 
-Status: keep local for now. Test the current beta before publishing through
-Homebrew.
+Status: publish the CLI formula and macOS GUI cask through a maintained personal
+tap first. Submit them to Homebrew's official repositories after the project
+meets the official acceptance policy. The exact untapped commands
+`brew install deen` and `brew install --cask deen` are official-repository
+outcomes, not commands a new third-party tap can promise.
 
-Plan:
-
-- Start with a personal tap, likely `takeshixx/homebrew-tap`, so users can run
-  `brew install takeshixx/tap/deen`.
-- After the tap is installed once with `brew tap takeshixx/tap`, users can run
-  `brew install deen`.
-- Target the CLI first. A GUI build should be a separate cask later, likely
-  `brew install --cask deen`, once we have signed/notarized macOS app assets.
-- Use a stable, non-beta release before submitting to `homebrew-core`.
-- Add `Formula/deen.rb` with:
-  - `desc`, `homepage`, `license`, release `url`, and `sha256`.
-  - `depends_on "go" => :build`.
-  - `go build -mod=readonly -trimpath` for `./cmd/deen`.
-  - A small `test do` block that checks `deen -version` and a simple transform.
-- Validate formula updates with:
-  - `brew audit --strict --online deen`
-  - `brew install --build-from-source deen`
-  - `brew test deen`
-- Maintenance per release:
-  - Cut and verify the GitHub release.
-  - Update formula URL/version and tarball SHA256.
-  - Run local Homebrew audit/install/test.
-  - Push the tap update.
-  - Optionally add tap CI and bottles once releases are frequent enough.
-
-Before implementation:
-
-- Fix or account for the release workflow/binary version behavior that produced
-  `v3.4.0-beta-master` during the beta release workflow.
-- Decide whether the first Homebrew publication should use the next stable
-  release, for example `v3.4.0`, instead of the current beta.
+The complete release, publication, validation, official-submission, and
+maintenance checklist is in [Homebrew publishing and maintenance](homebrew.md).

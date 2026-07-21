@@ -149,7 +149,9 @@ Implemented after the URL routing work:
    relevant again.
 7. Batch-mode tests and any remaining CLI/core subcommand dispatch coverage if
    batch mode is resumed.
-8. Homebrew packaging plan and release workflow cleanup.
+8. Execute the [Homebrew publishing and maintenance plan](homebrew.md), starting
+   with stable release/versioning cleanup, signed and notarized macOS GUI
+   artifacts, and the personal formula/cask tap.
 
 ## Verification Checklist
 

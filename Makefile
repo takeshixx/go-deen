@@ -1,12 +1,20 @@
-ldflags = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current)"
-ldflagsstripped = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current) -w -s"
+VERSION ?= $(shell git describe --abbrev=0 --tags --always 2>/dev/null || printf dev)
+BRANCH ?= $(shell git branch --show-current 2>/dev/null)
+
+versionldflags = -X github.com/takeshixx/deen/internal/core.version=$(VERSION)
+ifneq ($(strip $(BRANCH)),)
+versionldflags += -X github.com/takeshixx/deen/internal/core.branch=$(BRANCH)
+endif
+
+ldflags = -ldflags "$(versionldflags)"
+ldflagsstripped = -ldflags "$(versionldflags) -w -s"
 gomodflags = -mod=readonly
 
 # GUI builds use cgo; on macOS the Xcode 15+ linker warns about Fyne passing
 # -lobjc twice. Silence it there only (GNU ld would reject this flag).
 guildflags = $(ldflagsstripped)
 ifeq ($(shell uname -s),Darwin)
-guildflags = -ldflags "-X github.com/takeshixx/deen/internal/core.version=$$(git describe --abbrev=0 --tags --always) -X github.com/takeshixx/deen/internal/core.branch=$$(git branch --show-current) -w -s -extldflags=-Wl,-no_warn_duplicate_libraries"
+guildflags = -ldflags "$(versionldflags) -w -s -extldflags=-Wl,-no_warn_duplicate_libraries"
 endif
 
 .PHONY: build

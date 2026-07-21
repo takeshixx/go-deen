@@ -27,6 +27,16 @@ func Version() string {
 // Branch returns the build branch (set via -ldflags), or "" if unset.
 func Branch() string { return branch }
 
+// BuildVersion returns the user-facing build version. Development builds may
+// include their branch, while stable release builds leave branch unset.
+func BuildVersion() string {
+	v := Version()
+	if branch != "" {
+		return v + "-" + branch
+	}
+	return v
+}
+
 var printPluginsPtr *bool
 var printPluginsJSONPtr *bool
 var versionPtr *bool
@@ -52,11 +62,7 @@ func ParseFlags() {
 		plugins.PrintAvailable(true)
 		os.Exit(0)
 	case *versionPtr:
-		fmt.Print(version)
-		if branch != "" {
-			fmt.Printf("-%s", branch)
-		}
-		fmt.Print("\n")
+		fmt.Println(BuildVersion())
 		os.Exit(0)
 	}
 }
