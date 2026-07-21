@@ -38,13 +38,13 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
       - name: Check out release tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.release.outputs.version }}
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.x"
 
@@ -82,7 +82,7 @@ jobs:
           sha256sum deen-* > SHA256SUMS
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release.outputs.version }}
           name: Release ${{ steps.release.outputs.version }}
