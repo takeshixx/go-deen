@@ -16,27 +16,43 @@ input stays client-side instead of being sent to a backend service. See
 It is a Go reimplementation of the original Python/PyQt5
 [deen](https://github.com/takeshixx/deen).
 
-## Plugins
-
-`deen` provides 60+ plugins across six categories. List them at runtime with
-`deen -l` (or `deen -lj` for JSON).
-
-| Category | Plugins |
-| --- | --- |
-| **codecs** | base32, base64, base85, hex, url, html, unicode, strconv, pem, quoted-printable, rot13 |
-| **compressions** | flate, gzip, zlib, bzip2, lzma, lzma2, lzw, brotli, zstd |
-| **hashs** | sha1, sha2 (224/256/384/512, 512/224, 512/256), sha3 (224/256/384/512), md4, md5, ripemd160, blake2s/2b/2x, blake3, bcrypt, scrypt, hmac, adler32, crc32/crc32c/crc32k, crc64/crc64-ecma, fnv (32/64/128 and a-variants) |
-| **formatters** | json, xml, json2xml, toml, jwt, jwk, jq, protobuf, msgpack, cbor, yaml, csv/tsv, qr, saml, timestamp |
-| **misc** | asn1, dns, uuid, entropy, magic, regex, aes, chacha20poly1305, sign/verify, certPrinter, certCloner |
-| **arithmetic** | xor, add, sub, not |
-
-Recent utility plugins add structured binary and security workflows:
-
-- `msgpack`, `cbor`, `protobuf`, `asn1`, `dns`, `magic` and `qr` inspect or decode common binary payloads.
-- `yaml`, `toml`, `csv`/`tsv`, `regex`, `uuid` and `entropy` cover day-to-day data cleanup and inspection.
-- `aes`, `chacha20poly1305` and `sign` support encryption, decryption, signing and verification. Binary keys, nonces and signatures can be supplied as hex or Base64; AES-GCM supports configurable tag lengths and an explicit unsafe verification bypass for research, and AES-CBC supports PKCS#7 or unpadded block data.
-
 ## Install
+
+### Homebrew
+
+Install the `deen` CLI on macOS or Linux from the official deen tap:
+
+```bash
+brew install takeshixx/tap/deen
+```
+
+Verify the installation with `deen --version`. To use the shorter formula name
+for future installs and upgrades, add the tap first:
+
+```bash
+brew tap takeshixx/tap
+brew install deen
+```
+
+### Arch Linux (AUR)
+
+Install the CLI and desktop GUI from the
+[`deen-git`](https://aur.archlinux.org/packages/deen-git) AUR package with an
+AUR helper such as `yay`:
+
+```bash
+yay -S deen-git
+```
+
+Or build and install the package manually:
+
+```bash
+git clone https://aur.archlinux.org/deen-git.git
+cd deen-git
+makepkg -si
+```
+
+### Build from source
 
 ```bash
 make            # build ./bin/deen (CLI)
@@ -207,6 +223,26 @@ Example Claude Code project configuration:
   }
 }
 ```
+
+## Plugins
+
+`deen` provides 60+ plugins across six categories. List them at runtime with
+`deen -l` (or `deen -lj` for JSON).
+
+| Category | Plugins |
+| --- | --- |
+| **codecs** | base32, base64, base85, hex, url, html, unicode, strconv, pem, quoted-printable, rot13 |
+| **compressions** | flate, gzip, zlib, bzip2, lzma, lzma2, lzw, brotli, zstd |
+| **hashs** | sha1, sha2 (224/256/384/512, 512/224, 512/256), sha3 (224/256/384/512), md4, md5, ripemd160, blake2s/2b/2x, blake3, bcrypt, scrypt, hmac, adler32, crc32/crc32c/crc32k, crc64/crc64-ecma, fnv (32/64/128 and a-variants) |
+| **formatters** | json, xml, json2xml, toml, jwt, jwk, jq, protobuf, msgpack, cbor, yaml, csv/tsv, qr, saml, timestamp |
+| **misc** | asn1, dns, uuid, entropy, magic, regex, aes, chacha20poly1305, sign/verify, certPrinter, certCloner |
+| **arithmetic** | xor, add, sub, not |
+
+Recent utility plugins add structured binary and security workflows:
+
+- `msgpack`, `cbor`, `protobuf`, `asn1`, `dns`, `magic` and `qr` inspect or decode common binary payloads.
+- `yaml`, `toml`, `csv`/`tsv`, `regex`, `uuid` and `entropy` cover day-to-day data cleanup and inspection.
+- `aes`, `chacha20poly1305` and `sign` support encryption, decryption, signing and verification. Binary keys, nonces and signatures can be supplied as hex or Base64; AES-GCM supports configurable tag lengths and an explicit unsafe verification bypass for research, and AES-CBC supports PKCS#7 or unpadded block data.
 
 ## GUI
 
