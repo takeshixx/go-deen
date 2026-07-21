@@ -66,3 +66,30 @@ jobs:
 
     - name: Test
       run: make test
+
+  vscode-extension:
+    name: Test VS Code extension
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: "22.x"
+        cache: npm
+        cache-dependency-path: extras/vscode-deen/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+      working-directory: extras/vscode-deen
+
+    - name: Compile
+      run: npm run compile
+      working-directory: extras/vscode-deen
+
+    - name: Lint
+      run: npm run lint
+      working-directory: extras/vscode-deen
