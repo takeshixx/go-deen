@@ -336,6 +336,54 @@ async function main() {
     await urlStep.getByRole("button", { name: "URL Parts", exact: true }).click();
     assert((await urlStep.getByRole("textbox", { name: "URL fragment" }).inputValue()) === "from-raw-json", "raw JSON edits should refresh structured fields");
 
+    const actionURL =
+      "https://login-update.example.invalid/action?utm_source=mail&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&fbclid=abc#continue";
+    const selectedTrackingRemovedURL =
+      "https://login-update.example.invalid/action?redirect=https%3A%2F%2Fportal.example.org%2Fsignin&fbclid=abc#continue";
+    const allTrackingRemovedURL =
+      "https://login-update.example.invalid/action?redirect=https%3A%2F%2Fportal.example.org%2Fsignin#continue";
+    await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
+    await page.locator(".source textarea").fill(actionURL);
+    const actionStep = page.locator(".card:has(.step-actions)").first();
+    const expandActionStep = actionStep.getByRole("button", { name: "Expand step" });
+    if (await expandActionStep.count()) {
+      await expandActionStep.click();
+    }
+    await actionStep.getByRole("button", { name: "Remove tracking parameter 1" }).click();
+    await page.waitForFunction(
+      (expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected,
+      selectedTrackingRemovedURL,
+    );
+    assert(
+      (await page.locator(".card:has(.step-actions)").nth(1).locator("textarea.io").first().inputValue()) === selectedTrackingRemovedURL,
+      "selected tracking removal should update downstream reconstruction",
+    );
+    await page.getByRole("button", { name: "Workflow" }).click();
+    await page.getByRole("menuitem", { name: "Undo" }).click();
+    await page.waitForFunction((expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected, actionURL);
+
+    await actionStep.getByRole("button", { name: "Remove all detected tracking parameters" }).click();
+    await page.waitForFunction(
+      (expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected,
+      allTrackingRemovedURL,
+    );
+    await actionStep.getByRole("button", { name: "Use nested URL from query parameter 1 as source" }).click();
+    await page.waitForFunction(() => document.querySelector(".source textarea")?.value === "https://portal.example.org/signin");
+    assert(
+      (await page.locator(".card:has(.step-actions)").nth(1).locator("textarea.io").first().inputValue()) === "https://portal.example.org/signin",
+      "nested URL promotion should recompute the current chain",
+    );
+    await page.getByRole("button", { name: "Workflow" }).click();
+    await page.getByRole("menuitem", { name: "Undo" }).click();
+    await page.waitForFunction((expected) => document.querySelector(".source textarea")?.value === expected, actionURL);
+    await page.waitForFunction(
+      (expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected,
+      allTrackingRemovedURL,
+    );
+    await page.getByRole("button", { name: "Workflow" }).click();
+    await page.getByRole("menuitem", { name: "Undo" }).click();
+    await page.waitForFunction((expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected, actionURL);
+
     if (process.env.DEEN_URLPARTS_TEST_FILE) {
       const fixtureURL = (await readFile(process.env.DEEN_URLPARTS_TEST_FILE, "utf8")).replace(/\r?\n$/, "");
       assert(fixtureURL.length > 0 && !fixtureURL.includes("\n"), "URL Parts fixture should contain one non-empty URL");
@@ -359,6 +407,26 @@ async function main() {
         (await page.locator(".card:has(.step-actions)").nth(1).locator("textarea.io").first().inputValue()) === fixtureURL,
         "URL Parts fixture should survive a forward and reverse browser round trip",
       );
+      if (fixtureDocument.analysis.tracking_parameters.length > 0) {
+        await fixtureStep.getByRole("button", { name: "Remove all detected tracking parameters" }).click();
+        await page.waitForFunction(() => !document.querySelector('[aria-label="Remove all detected tracking parameters"]'));
+        await page.getByRole("button", { name: "Workflow" }).click();
+        await page.getByRole("menuitem", { name: "Undo" }).click();
+        await page.waitForFunction(
+          (expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected,
+          fixtureURL,
+        );
+      }
+      if (fixtureDocument.analysis.nested_urls.length > 0) {
+        const nested = fixtureDocument.analysis.nested_urls[0];
+        await fixtureStep
+          .getByRole("button", { name: `Use nested URL from query parameter ${nested.parameter_index} as source` })
+          .click();
+        await page.waitForFunction((expected) => document.querySelector(".source textarea")?.value === expected, nested.url);
+        await page.getByRole("button", { name: "Workflow" }).click();
+        await page.getByRole("menuitem", { name: "Undo" }).click();
+        await page.waitForFunction((expected) => document.querySelector(".source textarea")?.value === expected, fixtureURL);
+      }
     }
 
     await page.setViewportSize({ width: 390, height: 844 });

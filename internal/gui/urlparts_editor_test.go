@@ -13,17 +13,84 @@ import (
 )
 
 const guiURLPartsTestURL = "https://login-update.example.invalid/account/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue"
+const guiURLPartsActionURL = "https://login-update.example.invalid/account/verify.php?utm_source=mail&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&fbclid=abc#continue"
 
 func newURLPartsScenario(t *testing.T) *DeenGUI {
+	return newURLPartsScenarioWithSource(t, guiURLPartsTestURL)
+}
+
+func newURLPartsScenarioWithSource(t *testing.T, source string) *DeenGUI {
 	t.Helper()
 	dg := newVisualScenarioGUI(t, appearanceLight)
-	dg.pipe.SetSource([]byte(guiURLPartsTestURL))
+	dg.pipe.SetSource([]byte(source))
 	dg.pipe.AddStep("urlparts", false)
 	dg.pipe.AddStep("urlparts", true)
 	dg.selectedStage = 0
 	dg.stepOutputView = ""
 	dg.rebuild()
 	return dg
+}
+
+func TestURLPartsEditorRemovesSelectedTrackingParameter(t *testing.T) {
+	dg := newURLPartsScenarioWithSource(t, guiURLPartsActionURL)
+	editor := dg.cards[0].urlParts
+	if len(editor.trackingRemoveButtons) != 2 {
+		t.Fatalf("tracking remove buttons = %d, want 2", len(editor.trackingRemoveButtons))
+	}
+	editor.trackingRemoveButtons[0].OnTapped()
+	want := "https://login-update.example.invalid/account/verify.php?redirect=https%3A%2F%2Fportal.example.org%2Fsignin&fbclid=abc#continue"
+	if got := string(dg.pipe.Result()); got != want {
+		t.Fatalf("result after selected removal = %q, want %q", got, want)
+	}
+	if editor.doc.Analysis == nil || len(editor.doc.Analysis.TrackingParameters) != 1 || editor.doc.Analysis.TrackingParameters[0].Key != "fbclid" {
+		t.Fatalf("analysis after selected removal = %#v", editor.doc.Analysis)
+	}
+	if !dg.pipe.Undo() {
+		t.Fatal("selected tracking removal should be undoable")
+	}
+	dg.refreshFrom(0)
+	if got := string(dg.pipe.Result()); got != guiURLPartsActionURL {
+		t.Fatalf("undo result = %q, want original", got)
+	}
+}
+
+func TestURLPartsEditorRemovesAllTrackingParameters(t *testing.T) {
+	dg := newURLPartsScenarioWithSource(t, guiURLPartsActionURL)
+	editor := dg.cards[0].urlParts
+	if editor.removeAllTracking == nil {
+		t.Fatal("remove-all tracking action was not created")
+	}
+	editor.removeAllTracking.OnTapped()
+	want := "https://login-update.example.invalid/account/verify.php?redirect=https%3A%2F%2Fportal.example.org%2Fsignin#continue"
+	if got := string(dg.pipe.Result()); got != want {
+		t.Fatalf("result after removing all tracking = %q, want %q", got, want)
+	}
+	if dg.workStatus.Text != "Removed 2 tracking parameter(s)" {
+		t.Fatalf("action feedback = %q", dg.workStatus.Text)
+	}
+}
+
+func TestURLPartsEditorPromotesNestedURLToSource(t *testing.T) {
+	dg := newURLPartsScenarioWithSource(t, guiURLPartsActionURL)
+	editor := dg.cards[0].urlParts
+	if len(editor.nestedSourceButtons) != 1 {
+		t.Fatalf("nested source buttons = %d, want 1", len(editor.nestedSourceButtons))
+	}
+	editor.nestedSourceButtons[0].OnTapped()
+	want := "https://portal.example.org/signin"
+	if got := string(dg.pipe.Source()); got != want {
+		t.Fatalf("promoted source = %q, want %q", got, want)
+	}
+	if got := string(dg.pipe.Result()); got != want {
+		t.Fatalf("pipeline result after promotion = %q, want %q", got, want)
+	}
+	if !dg.pipe.Undo() {
+		t.Fatal("nested source promotion should be undoable")
+	}
+	dg.rebuild()
+	if got := string(dg.pipe.Source()); got != guiURLPartsActionURL {
+		t.Fatalf("undo source = %q, want original", got)
+	}
 }
 
 func TestURLPartsStepUsesStructuredEditor(t *testing.T) {

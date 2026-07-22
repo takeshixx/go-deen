@@ -130,3 +130,47 @@ func TestURLPartsAnalysisRefreshesAfterEdit(t *testing.T) {
 		t.Fatalf("stale analysis remained in JSON: %s", second.String())
 	}
 }
+
+func TestURLPartsTrackingRemovalPreservesOtherQueryEntries(t *testing.T) {
+	doc := &URLPartsDocument{
+		Version:  URLPartsSchemaVersion,
+		Scheme:   "https",
+		Hostname: "example.invalid",
+		Query: []URLQueryParameter{
+			{Key: "utm_source", Value: "mail", HasValue: true, RawKey: "utm_source", RawValue: "mail"},
+			{Key: "keep", Value: "one two", HasValue: true, RawKey: "keep", RawValue: "one%20two"},
+			{Key: "fbclid", Value: "abc", HasValue: true, RawKey: "fbclid", RawValue: "abc"},
+			{Key: "utm_source", Value: "retry", HasValue: true, RawKey: "utm_source", RawValue: "retry"},
+		},
+	}
+	refreshURLPartsAnalysis(doc)
+	if !RemoveURLTrackingParameter(doc, 3) {
+		t.Fatal("failed to remove the selected tracking parameter")
+	}
+	if len(doc.Query) != 3 || doc.Query[0].Value != "mail" || doc.Query[1].Key != "keep" || doc.Query[2].Value != "retry" {
+		t.Fatalf("query after selected removal = %#v", doc.Query)
+	}
+	if got := RemoveAllURLTrackingParameters(doc); got != 2 {
+		t.Fatalf("removed all count = %d, want 2", got)
+	}
+	if len(doc.Query) != 1 || doc.Query[0].Key != "keep" || doc.Query[0].RawValue != "one%20two" {
+		t.Fatalf("query after remove all = %#v", doc.Query)
+	}
+	if doc.Analysis == nil || len(doc.Analysis.TrackingParameters) != 0 {
+		t.Fatalf("analysis after removal = %#v", doc.Analysis)
+	}
+	rebuilt, err := RebuildURLParts(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt != "https://example.invalid?keep=one%20two" {
+		t.Fatalf("rebuilt URL = %q", rebuilt)
+	}
+}
+
+func TestURLPartsTrackingRemovalRejectsStaleIndex(t *testing.T) {
+	doc := &URLPartsDocument{Query: []URLQueryParameter{{Key: "keep", HasValue: true}}}
+	if RemoveURLTrackingParameter(doc, 0) || RemoveURLTrackingParameter(doc, 1) || RemoveURLTrackingParameter(doc, 2) {
+		t.Fatal("invalid or non-tracking indexes should not be removed")
+	}
+}

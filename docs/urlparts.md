@@ -145,3 +145,9 @@ structured controls in the other direction. The **Show original encoded
 values** control exposes the preserved raw path and query spellings. The
 **Local analysis** section lists derived indicators, nested URLs, tracking
 parameters, and a copyable defanged URL; it never performs network access.
+Detected tracking parameters can be removed individually or all at once.
+Removal edits the URL Parts JSON and rebuilt URL while leaving the original
+pipeline source available for comparison.
+Nested HTTP(S) values provide a **Use as source** action that replaces the
+current pipeline input and recomputes the existing chain without navigating to
+the URL. Both kinds of action participate in normal pipeline undo.

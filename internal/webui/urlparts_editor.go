@@ -13,19 +13,20 @@ import (
 )
 
 type webURLPartsEditor struct {
-	card         *cardRef
-	root         js.Value
-	message      js.Value
-	rebuilt      js.Value
-	copy         js.Value
-	analysisBody js.Value
-	defanged     js.Value
-	copyDefanged js.Value
-	doc          *formatters.URLPartsDocument
-	lastJSON     string
-	showRaw      bool
-	initialized  bool
-	callbacks    []js.Func
+	card              *cardRef
+	root              js.Value
+	message           js.Value
+	rebuilt           js.Value
+	copy              js.Value
+	analysisBody      js.Value
+	defanged          js.Value
+	copyDefanged      js.Value
+	doc               *formatters.URLPartsDocument
+	lastJSON          string
+	showRaw           bool
+	initialized       bool
+	callbacks         []js.Func
+	analysisCallbacks []js.Func
 }
 
 func newWebURLPartsEditor(card *cardRef, data []byte) *webURLPartsEditor {
@@ -146,6 +147,7 @@ func (e *webURLPartsEditor) refreshAnalysis() {
 	if !e.analysisBody.Truthy() || !e.defanged.Truthy() {
 		return
 	}
+	e.releaseAnalysisCallbacks()
 	for {
 		findings := e.analysisBody.Call("querySelector", ".urlparts-analysis-findings")
 		if !findings.Truthy() {
@@ -179,14 +181,31 @@ func (e *webURLPartsEditor) refreshAnalysis() {
 	if len(e.doc.Analysis.NestedURLs) > 0 {
 		e.analysisHeading(findings, "Nested URLs")
 		for _, nested := range e.doc.Analysis.NestedURLs {
-			e.analysisText(findings, fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), "urlparts-analysis-value")
+			nested := nested
+			row := div("urlparts-analysis-action-row")
+			e.analysisText(row, fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), "urlparts-analysis-value")
+			useSource := e.analysisActionButton("link", fmt.Sprintf("Use nested URL from query parameter %d as source", nested.ParameterIndex), "Use as source", func() {
+				e.promoteNestedURL(nested)
+			})
+			appendChildren(row, useSource)
+			findings.Call("appendChild", row)
 		}
 	}
 	if len(e.doc.Analysis.TrackingParameters) > 0 {
 		e.analysisHeading(findings, "Common tracking parameters")
 		for _, tracking := range e.doc.Analysis.TrackingParameters {
-			e.analysisText(findings, fmt.Sprintf("Query #%d: %s", tracking.ParameterIndex, tracking.Key), "urlparts-analysis-value")
+			tracking := tracking
+			row := div("urlparts-analysis-action-row")
+			e.analysisText(row, fmt.Sprintf("Query #%d: %s", tracking.ParameterIndex, tracking.Key), "urlparts-analysis-value")
+			remove := e.analysisActionButton("trash", fmt.Sprintf("Remove tracking parameter %d", tracking.ParameterIndex), "Remove", func() {
+				e.removeTrackingParameter(tracking.ParameterIndex)
+			})
+			appendChildren(row, remove)
+			findings.Call("appendChild", row)
 		}
+		removeAll := e.analysisActionButton("trash", "Remove all detected tracking parameters", "Remove all", e.removeAllTrackingParameters)
+		removeAll.Set("className", "urlparts-analysis-remove-all icon-label")
+		findings.Call("appendChild", removeAll)
 	}
 	e.analysisBody.Call("appendChild", findings)
 }
@@ -202,6 +221,42 @@ func (e *webURLPartsEditor) analysisText(parent js.Value, text, className string
 	item := div(className)
 	item.Set("textContent", text)
 	parent.Call("appendChild", item)
+}
+
+func (e *webURLPartsEditor) analysisActionButton(icon, label, visibleLabel string, fn func()) js.Value {
+	b := el("button")
+	b.Set("type", "button")
+	b.Set("className", "urlparts-analysis-action icon-label")
+	b.Call("setAttribute", "aria-label", label)
+	text := el("span")
+	text.Set("textContent", visibleLabel)
+	appendChildren(b, iconGraphic(icon), text)
+	e.onAnalysis(b, "click", fn)
+	return b
+}
+
+func (e *webURLPartsEditor) removeTrackingParameter(parameterIndex int) {
+	if e.doc == nil || !formatters.RemoveURLTrackingParameter(e.doc, parameterIndex) {
+		return
+	}
+	e.commit(true)
+}
+
+func (e *webURLPartsEditor) removeAllTrackingParameters() {
+	if e.doc == nil || formatters.RemoveAllURLTrackingParameters(e.doc) == 0 {
+		return
+	}
+	e.commit(true)
+}
+
+func (e *webURLPartsEditor) promoteNestedURL(nested formatters.URLPartsNestedURL) {
+	if nested.URL == "" {
+		return
+	}
+	sourceName = ""
+	clearSourceFullViews()
+	pipe.SetSource([]byte(nested.URL))
+	runBusy("Loading nested URL", rebuild)
 }
 
 func (e *webURLPartsEditor) buildAuthority() {
@@ -550,15 +605,47 @@ func (e *webURLPartsEditor) on(node js.Value, event string, fn func()) {
 	node.Call("addEventListener", event, cb)
 }
 
+func (e *webURLPartsEditor) onAnalysis(node js.Value, event string, fn func()) {
+	cb := js.FuncOf(func(js.Value, []js.Value) any {
+		fn()
+		return nil
+	})
+	e.callbacks = append(e.callbacks, cb)
+	e.analysisCallbacks = append(e.analysisCallbacks, cb)
+	callbacks = append(callbacks, cb)
+	node.Call("addEventListener", event, cb)
+}
+
+func (e *webURLPartsEditor) releaseAnalysisCallbacks() {
+	if len(e.analysisCallbacks) == 0 {
+		return
+	}
+	e.callbacks = withoutURLPartsCallbacks(e.callbacks, e.analysisCallbacks)
+	callbacks = withoutURLPartsCallbacks(callbacks, e.analysisCallbacks)
+	for _, callback := range e.analysisCallbacks {
+		callback.Release()
+	}
+	e.analysisCallbacks = nil
+}
+
 func (e *webURLPartsEditor) releaseCallbacks() {
 	if len(e.callbacks) == 0 {
 		return
 	}
-	kept := callbacks[:0]
-	for _, callback := range callbacks {
+	callbacks = withoutURLPartsCallbacks(callbacks, e.callbacks)
+	for _, callback := range e.callbacks {
+		callback.Release()
+	}
+	e.callbacks = nil
+	e.analysisCallbacks = nil
+}
+
+func withoutURLPartsCallbacks(all, removed []js.Func) []js.Func {
+	kept := all[:0]
+	for _, callback := range all {
 		found := false
-		for _, owned := range e.callbacks {
-			if callback.Value.Equal(owned.Value) {
+		for _, candidate := range removed {
+			if callback.Value.Equal(candidate.Value) {
 				found = true
 				break
 			}
@@ -567,11 +654,7 @@ func (e *webURLPartsEditor) releaseCallbacks() {
 			kept = append(kept, callback)
 		}
 	}
-	callbacks = kept
-	for _, callback := range e.callbacks {
-		callback.Release()
-	}
-	e.callbacks = nil
+	return kept
 }
 
 func urlPartsSection(title string) (section, body js.Value) {

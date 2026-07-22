@@ -28,23 +28,26 @@ type urlPartsEditor struct {
 	showRaw    bool
 	refreshing bool
 
-	schemeEntry    *widget.Entry
-	hostnameEntry  *widget.Entry
-	portEntry      *widget.Entry
-	opaqueEntry    *widget.Entry
-	fragmentEntry  *widget.Entry
-	usernameEntry  *widget.Entry
-	passwordEntry  *widget.Entry
-	userinfoCheck  *widget.Check
-	forceQuery     *widget.Check
-	omitHost       *widget.Check
-	rawCheck       *widget.Check
-	rebuiltEntry   *widget.Entry
-	copyURLButton  *widget.Button
-	analysisBox    *fyne.Container
-	defangedEntry  *widget.Entry
-	copyDefanged   *widget.Button
-	analysisLabels []*widget.Label
+	schemeEntry           *widget.Entry
+	hostnameEntry         *widget.Entry
+	portEntry             *widget.Entry
+	opaqueEntry           *widget.Entry
+	fragmentEntry         *widget.Entry
+	usernameEntry         *widget.Entry
+	passwordEntry         *widget.Entry
+	userinfoCheck         *widget.Check
+	forceQuery            *widget.Check
+	omitHost              *widget.Check
+	rawCheck              *widget.Check
+	rebuiltEntry          *widget.Entry
+	copyURLButton         *widget.Button
+	analysisBox           *fyne.Container
+	defangedEntry         *widget.Entry
+	copyDefanged          *widget.Button
+	analysisLabels        []*widget.Label
+	nestedSourceButtons   []*widget.Button
+	trackingRemoveButtons []*widget.Button
+	removeAllTracking     *widget.Button
 
 	pathRows          *fyne.Container
 	queryRows         *fyne.Container
@@ -448,6 +451,9 @@ func (e *urlPartsEditor) rebuildAnalysis() {
 	e.unregisterControls(e.analysisControls)
 	e.analysisControls = nil
 	e.analysisLabels = nil
+	e.nestedSourceButtons = nil
+	e.trackingRemoveButtons = nil
+	e.removeAllTracking = nil
 	e.analysisBox.RemoveAll()
 
 	e.defangedEntry = multilineEntry(2)
@@ -486,25 +492,83 @@ func (e *urlPartsEditor) rebuildAnalysis() {
 	if len(e.doc.Analysis.NestedURLs) > 0 {
 		e.analysisBox.Add(urlPartsSectionTitle("Nested URLs"))
 		for _, nested := range e.doc.Analysis.NestedURLs {
-			e.addAnalysisLabel(fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), widget.LowImportance)
+			nested := nested
+			label := e.newAnalysisLabel(fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), widget.LowImportance)
+			useSource := widget.NewButtonWithIcon("Use as source", theme.NavigateNextIcon(), func() {
+				e.promoteNestedURL(nested)
+			})
+			useSource.Importance = widget.LowImportance
+			e.registerAnalysis(useSource)
+			e.nestedSourceButtons = append(e.nestedSourceButtons, useSource)
+			e.analysisBox.Add(container.NewBorder(nil, nil, nil, useSource, label))
 		}
 	}
 	if len(e.doc.Analysis.TrackingParameters) > 0 {
 		e.analysisBox.Add(urlPartsSectionTitle("Common tracking parameters"))
 		for _, tracking := range e.doc.Analysis.TrackingParameters {
-			e.addAnalysisLabel(fmt.Sprintf("Query #%d: %s", tracking.ParameterIndex, tracking.Key), widget.LowImportance)
+			tracking := tracking
+			label := e.newAnalysisLabel(fmt.Sprintf("Query #%d: %s", tracking.ParameterIndex, tracking.Key), widget.LowImportance)
+			remove := widget.NewButtonWithIcon("Remove", theme.DeleteIcon(), func() {
+				e.removeTrackingParameter(tracking.ParameterIndex)
+			})
+			remove.Importance = widget.LowImportance
+			e.registerAnalysis(remove)
+			e.trackingRemoveButtons = append(e.trackingRemoveButtons, remove)
+			e.analysisBox.Add(container.NewBorder(nil, nil, nil, remove, label))
 		}
+		e.removeAllTracking = widget.NewButtonWithIcon("Remove all detected tracking parameters", theme.DeleteIcon(), e.removeAllTrackingParameters)
+		e.removeAllTracking.Importance = widget.LowImportance
+		e.registerAnalysis(e.removeAllTracking)
+		e.analysisBox.Add(e.removeAllTracking)
 	}
 	e.analysisBox.Refresh()
 	e.scroll.Refresh()
 }
 
 func (e *urlPartsEditor) addAnalysisLabel(text string, importance widget.Importance) {
+	e.analysisBox.Add(e.newAnalysisLabel(text, importance))
+}
+
+func (e *urlPartsEditor) newAnalysisLabel(text string, importance widget.Importance) *widget.Label {
 	label := widget.NewLabel(text)
 	label.Wrapping = fyne.TextWrapBreak
 	label.Importance = importance
 	e.analysisLabels = append(e.analysisLabels, label)
-	e.analysisBox.Add(label)
+	return label
+}
+
+func (e *urlPartsEditor) removeTrackingParameter(parameterIndex int) {
+	if e.ignoreChange() || !formatters.RemoveURLTrackingParameter(e.doc, parameterIndex) {
+		return
+	}
+	e.commit()
+	e.rebuildQueryRows()
+	e.card.gui.showActionFeedback("Tracking parameter removed")
+}
+
+func (e *urlPartsEditor) removeAllTrackingParameters() {
+	if e.ignoreChange() {
+		return
+	}
+	removed := formatters.RemoveAllURLTrackingParameters(e.doc)
+	if removed == 0 {
+		return
+	}
+	e.commit()
+	e.rebuildQueryRows()
+	e.card.gui.showActionFeedback(fmt.Sprintf("Removed %d tracking parameter(s)", removed))
+}
+
+func (e *urlPartsEditor) promoteNestedURL(nested formatters.URLPartsNestedURL) {
+	if e.card == nil || e.card.gui == nil || e.card.gui.working || nested.URL == "" {
+		return
+	}
+	dg := e.card.gui
+	dg.sourceName = ""
+	dg.clearSourceFullViews()
+	dg.pipe.SetSource([]byte(nested.URL))
+	dg.rebuild()
+	dg.showActionFeedback(fmt.Sprintf("Using nested URL from query #%d as source", nested.ParameterIndex))
 }
 
 func (e *urlPartsEditor) register(control fyne.Disableable) {

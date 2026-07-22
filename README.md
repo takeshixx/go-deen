@@ -256,7 +256,9 @@ available Linux window protocol at runtime.
 
 Forward `urlparts` steps include a structured URL editor for modifying the
 authority, path segments, ordered query parameters, and fragment while keeping
-the JSON output and downstream steps synchronized.
+the JSON output and downstream steps synchronized. Its local analysis can
+remove detected tracking parameters or feed an extracted nested URL back into
+the current chain without opening it.
 
 On Debian, Ubuntu, and Raspberry Pi OS, install the graphics development
 headers before building:

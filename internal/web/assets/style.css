@@ -946,6 +946,26 @@ a {
 	font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
+.urlparts-analysis-action-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.45rem;
+}
+
+.urlparts-analysis-action-row .urlparts-analysis-value {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.urlparts-analysis-action,
+.urlparts-analysis-remove-all {
+	flex: 0 0 auto;
+}
+
+.urlparts-analysis-remove-all {
+	justify-self: start;
+}
+
 .full-view-controls {
 	align-items: center;
 	display: flex;
@@ -1531,5 +1551,14 @@ a {
 
 	.urlparts-row .urlparts-row-actions {
 		grid-column: 2;
+	}
+
+	.urlparts-analysis-action-row {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.urlparts-analysis-action {
+		align-self: flex-start;
 	}
 }

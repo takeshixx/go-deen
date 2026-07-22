@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -185,6 +186,37 @@ func DefangURL(rawURL string) (string, error) {
 		}
 	}
 	return defanged, nil
+}
+
+// RemoveURLTrackingParameter removes one detected tracking parameter by its
+// one-based query position. It returns false when the position is invalid or
+// no longer refers to a recognized tracking key.
+func RemoveURLTrackingParameter(doc *URLPartsDocument, parameterIndex int) bool {
+	if doc == nil || parameterIndex < 1 || parameterIndex > len(doc.Query) {
+		return false
+	}
+	index := parameterIndex - 1
+	if !isTrackingParameter(doc.Query[index].Key) {
+		return false
+	}
+	doc.Query = slices.Delete(doc.Query, index, index+1)
+	refreshURLPartsAnalysis(doc)
+	return true
+}
+
+// RemoveAllURLTrackingParameters removes every currently recognized tracking
+// parameter while retaining the order and raw spellings of all other entries.
+func RemoveAllURLTrackingParameters(doc *URLPartsDocument) int {
+	if doc == nil || len(doc.Query) == 0 {
+		return 0
+	}
+	before := len(doc.Query)
+	doc.Query = slices.DeleteFunc(doc.Query, func(parameter URLQueryParameter) bool {
+		return isTrackingParameter(parameter.Key)
+	})
+	removed := before - len(doc.Query)
+	refreshURLPartsAnalysis(doc)
+	return removed
 }
 
 func refreshURLPartsAnalysis(doc *URLPartsDocument) {
