@@ -278,7 +278,8 @@ Open `http://127.0.0.1:9090`, paste or load input data, then add transforms or
 start from one of the built-in examples. The web UI can download results, export
 and import chain JSON, and copy a share link for the current chain. Share links
 include the transform recipe in the URL hash, but intentionally do not include
-the source input.
+the source input. Forward `urlparts` steps provide the same structured URL editor
+as the desktop GUI.
 
 To do it by hand, build with the `webembed` tag and run `serve`:
 

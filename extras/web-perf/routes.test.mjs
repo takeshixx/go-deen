@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
@@ -15,6 +16,19 @@ const basicChainHash =
 const twoStepChainHash =
   "#chain=" +
   Buffer.from(JSON.stringify({ version: 1, steps: [{ plugin: "base64" }, { plugin: "hex" }] }))
+    .toString("base64url")
+    .replace(/=+$/, "");
+const urlPartsChainHash =
+  "#chain=" +
+  Buffer.from(
+    JSON.stringify({
+      version: 1,
+      steps: [
+        { plugin: "urlparts" },
+        { plugin: "urlparts", unprocess: true },
+      ],
+    }),
+  )
     .toString("base64url")
     .replace(/=+$/, "");
 
@@ -156,6 +170,15 @@ async function assertStepActionsFit(page) {
   assert(result.ok, `mobile step actions should fit inside the card: ${JSON.stringify(result)}`);
 }
 
+async function assertURLPartsEditorFits(page) {
+  const result = await page.getByTestId("urlparts-editor").evaluate((editor) => ({
+    ok: editor.scrollWidth <= editor.clientWidth + 1,
+    clientWidth: editor.clientWidth,
+    scrollWidth: editor.scrollWidth,
+  }));
+  assert(result.ok, `mobile URL Parts editor should not overflow horizontally: ${JSON.stringify(result)}`);
+}
+
 async function main() {
   const server = startServer();
   let browser;
@@ -242,7 +265,95 @@ async function main() {
     await page.getByRole("menuitem", { name: "Download result" }).click();
     await page.waitForFunction(() => window.__deenDownloads.includes("sample.deen-result.txt"));
 
+    await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
+    const urlSource =
+      "https://login-update.example.invalid/a/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue";
+    await page.locator(".source textarea").fill(urlSource);
+    const urlStep = page.locator(".card:has(.step-actions)").first();
+    const rebuiltStep = page.locator(".card:has(.step-actions)").nth(1);
+    const expandURLStep = urlStep.getByRole("button", { name: "Expand step" });
+    if (await expandURLStep.count()) {
+      await expandURLStep.click();
+    }
+    const urlEditor = urlStep.getByTestId("urlparts-editor");
+    await urlEditor.waitFor({ timeout: 15000 });
+    assert(
+      await urlStep.getByRole("button", { name: "URL Parts", exact: true }).evaluate((button) => button.classList.contains("active")),
+      "forward URL Parts step should select the structured editor",
+    );
+    assert((await urlEditor.getByRole("textbox", { name: "Rebuilt URL" }).inputValue()) === urlSource, "rebuilt URL should initially match source");
+
+    await urlEditor.getByRole("textbox", { name: "URL hostname" }).fill("review.invalid");
+    await urlEditor.getByRole("textbox", { name: "Path segment 2" }).fill("checked");
+    await urlEditor.getByRole("textbox", { name: "Query value 2" }).fill("https://safe.example.org/result");
+    await urlEditor.getByRole("textbox", { name: "URL fragment" }).fill("reviewed");
+    const editedURL =
+      "https://review.invalid/a/checked?campaign=Q3&redirect=https%3A%2F%2Fsafe.example.org%2Fresult&campaign=retry#reviewed";
+    assert((await urlEditor.getByRole("textbox", { name: "Rebuilt URL" }).inputValue()) === editedURL, "structured edits should rebuild the URL");
+    assert((await rebuiltStep.locator("textarea.io").first().inputValue()) === editedURL, "structured edits should recompute a downstream reverse step");
+
+    await urlEditor.getByRole("checkbox", { name: "Show original encoded values" }).check();
+    assert((await urlEditor.locator(".urlparts-raw:visible").count()) >= 4, "raw encoding toggle should reveal encoded values");
+    await urlEditor.getByRole("button", { name: "Copy URL" }).click();
+    assert((await page.evaluate(() => navigator.clipboard.readText())) === editedURL, "copy URL should copy the rebuilt URL");
+
+    await urlEditor.getByRole("textbox", { name: "URL port" }).fill("invalid");
+    assert(await urlEditor.getByRole("button", { name: "Copy URL" }).isDisabled(), "invalid URL fields should disable copy");
+    assert((await urlEditor.locator(".urlparts-message.invalid").textContent()).includes("invalid URL port"), "invalid port should show validation feedback");
+    await urlEditor.getByRole("textbox", { name: "URL port" }).fill("");
+
+    await urlEditor.getByRole("button", { name: "Add query parameter" }).click();
+    await urlStep.getByRole("textbox", { name: "Query key 4" }).waitFor();
+    await urlStep.getByRole("textbox", { name: "Query key 4" }).fill("review");
+    await urlStep.getByRole("textbox", { name: "Query value 4" }).fill("passed");
+    assert((await urlStep.getByRole("textbox", { name: "Rebuilt URL" }).inputValue()).includes("&review=passed#"), "added query row should affect rebuilt URL");
+    await urlStep.getByRole("button", { name: "Move query parameter 4 up" }).click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Query key 3"]')?.value === "review");
+    assert((await urlStep.getByRole("textbox", { name: "Query key 3" }).inputValue()) === "review", "query move control should preserve ordered parameters");
+    await urlStep.getByRole("button", { name: "Duplicate query parameter 1" }).click();
+    await urlStep.getByRole("textbox", { name: "Query key 5" }).waitFor();
+    await urlStep.getByRole("button", { name: "Remove query parameter 2" }).click();
+    await page.waitForFunction(() => document.querySelectorAll('[aria-label^="Query key "]').length === 4);
+
+    await urlStep.getByRole("button", { name: "Raw", exact: true }).click();
+    const rawURLParts = urlStep.locator("textarea.io").first();
+    const rawDocument = JSON.parse(await rawURLParts.inputValue());
+    rawDocument.fragment = "from-raw-json";
+    await rawURLParts.fill(JSON.stringify(rawDocument, null, 2));
+    await urlStep.getByRole("button", { name: "URL Parts", exact: true }).click();
+    assert((await urlStep.getByRole("textbox", { name: "URL fragment" }).inputValue()) === "from-raw-json", "raw JSON edits should refresh structured fields");
+
+    if (process.env.DEEN_URLPARTS_TEST_FILE) {
+      const fixtureURL = (await readFile(process.env.DEEN_URLPARTS_TEST_FILE, "utf8")).replace(/\r?\n$/, "");
+      assert(fixtureURL.length > 0 && !fixtureURL.includes("\n"), "URL Parts fixture should contain one non-empty URL");
+      await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
+      await page.locator(".source textarea").fill(fixtureURL);
+      const fixtureStep = page.locator(".card:has(.step-actions)").first();
+      const expandFixtureStep = fixtureStep.getByRole("button", { name: "Expand step" });
+      if (await expandFixtureStep.count()) {
+        await expandFixtureStep.click();
+      }
+      await page.waitForFunction(
+        (expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected,
+        fixtureURL,
+      );
+      assert(
+        (await page.locator(".card:has(.step-actions)").nth(1).locator("textarea.io").first().inputValue()) === fixtureURL,
+        "URL Parts fixture should survive a forward and reverse browser round trip",
+      );
+    }
+
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
+    await page.locator(".source textarea").fill(urlSource);
+    const mobileURLStep = page.locator(".card:has(.step-actions)").first();
+    const expandMobileURLStep = mobileURLStep.getByRole("button", { name: "Expand step" });
+    if (await expandMobileURLStep.count()) {
+      await expandMobileURLStep.click();
+    }
+    await mobileURLStep.getByTestId("urlparts-editor").waitFor({ timeout: 15000 });
+    await assertURLPartsEditorFits(page);
+
     await page.goto(`${targetURL}#examples?search=jwt`, { waitUntil: "domcontentloaded" });
     await page.getByRole("textbox", { name: /search examples/i }).waitFor({ timeout: 15000 });
     assert((await activeTab(page)) === "Examples", "mobile examples route should activate Examples tab");

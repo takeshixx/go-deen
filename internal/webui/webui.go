@@ -70,6 +70,9 @@ type cardRef struct {
 	hexPanel          js.Value
 	stringsPanel      js.Value
 	previewPanel      js.Value
+	urlPartsButton    js.Value
+	urlPartsPanel     js.Value
+	urlParts          *webURLPartsEditor
 	activeOutputView  string
 	activateOutput    func(string)
 	imageEnabled      bool
@@ -2256,7 +2259,11 @@ func stepCard(i int) js.Value {
 		if updating {
 			return
 		}
-		pipe.EditOutput(i, []byte(ref.output.Get("value").String()))
+		data := []byte(ref.output.Get("value").String())
+		pipe.EditOutput(i, data)
+		if ref.urlParts != nil {
+			ref.urlParts.refresh(data)
+		}
 		refreshOutputs(i + 1)
 	})
 	ref.hexOutput = textareaWithMax("", 960)
@@ -2264,6 +2271,9 @@ func stepCard(i int) js.Value {
 	ref.stringsOutput = textareaWithMax("", 960)
 	ref.stringsOutput.Set("readOnly", true)
 	ref.preview = previewBox()
+	if step.Plugin == "urlparts" && !step.Unprocess {
+		ref.urlParts = newWebURLPartsEditor(ref, pipe.Output(i))
+	}
 	ref.imageEnabled = stepGeneratesImage(step)
 	if ref.imageEnabled {
 		ref.imagePanel, ref.image, ref.imageMsg = imagePreviewBox()
@@ -2317,6 +2327,9 @@ func outputViewer(ref *cardRef) js.Value {
 		{"Strings", "strings", ref.stringsOutput},
 		{"Preview", "preview", ref.preview},
 	}
+	if ref.urlParts != nil {
+		panelItems = append(panelItems, panelItem{"URL Parts", "urlparts", ref.urlParts.root})
+	}
 	if ref.imageEnabled {
 		panelItems = append(panelItems, panelItem{"Image", "image", ref.imagePanel})
 	}
@@ -2332,6 +2345,9 @@ func outputViewer(ref *cardRef) js.Value {
 	hasStrings := pipeline.IsBinaryData(pipe.Output(ref.index))
 	if hasPreview {
 		activeView = "preview"
+	}
+	if ref.urlParts != nil {
+		activeView = "urlparts"
 	}
 	ref.activeOutputView = activeView
 	var activate func(string)
@@ -2364,6 +2380,8 @@ func outputViewer(ref *cardRef) js.Value {
 		case "preview":
 			ref.previewButton, ref.previewPanel = btn, panel
 			setOutputTabVisible(btn, panel, hasPreview)
+		case "urlparts":
+			ref.urlPartsButton, ref.urlPartsPanel = btn, panel
 		case "image":
 			ref.imageButton = btn
 		}
@@ -2375,6 +2393,9 @@ func outputViewer(ref *cardRef) js.Value {
 			return
 		}
 		if active == "preview" && !pipeline.HasStructuredPreview(pipe.Output(ref.index)) {
+			return
+		}
+		if active == "urlparts" && ref.urlParts == nil {
 			return
 		}
 		for name, btn := range buttons {
@@ -2684,6 +2705,9 @@ func renderOutput(c *cardRef) {
 	} else {
 		c.output.Set("title", "")
 	}
+	if c.urlParts != nil {
+		c.urlParts.refresh(out)
+	}
 	hexText, _ := webHexDisplay(out, c.fullHex)
 	c.hexOutput.Set("value", hexText)
 	stringsText, _ := webStringsDisplay(out, c.fullStrings)
@@ -2704,7 +2728,7 @@ func renderOutput(c *cardRef) {
 	if hasPreview {
 		preview, spans, _ := pipeline.HighlightedPreview(out)
 		renderHighlightedText(c.preview, preview, spans)
-		if !previewWasVisible && c.activateOutput != nil {
+		if !previewWasVisible && c.urlParts == nil && c.activateOutput != nil {
 			c.activateOutput("preview")
 		}
 	} else if c.activeOutputView == "preview" && c.activateOutput != nil {
