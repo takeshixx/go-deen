@@ -87,3 +87,17 @@ deen urlparts "$URL" \
 URLs can contain credentials, session tokens, email addresses, and other
 sensitive values. Treat the JSON output and any saved pipeline source with the
 same care as the original URL.
+
+## Desktop GUI editor
+
+In the desktop GUI, a forward `urlparts` step adds a **URL Parts** output tab.
+It provides editable scheme, hostname, port, user-information, path-segment,
+query-parameter, fragment, and advanced fields. Path and query rows can be
+added, duplicated, reordered, or removed. Query values without an equals sign
+remain distinguishable from explicitly empty values.
+
+The tab continuously shows the locally rebuilt URL and can copy it without
+opening it. Structured edits update the JSON in the **Raw** tab and recompute
+downstream pipeline steps. Editing valid JSON in the **Raw** tab refreshes the
+structured controls in the other direction. The **Show original encoded
+values** control exposes the preserved raw path and query spellings.

@@ -192,6 +192,26 @@ func TestVisualRegressionScenariosRender(t *testing.T) {
 			},
 		},
 		{
+			name:       "url-parts-editor-light",
+			size:       fyne.NewSize(1180, 800),
+			appearance: appearanceLight,
+			setup: func(dg *DeenGUI) {
+				dg.pipe.SetSource([]byte(guiURLPartsTestURL))
+				dg.pipe.AddStep("urlparts", false)
+				dg.selectedStage = 0
+				dg.stepOutputView = "URL Parts"
+			},
+			assert: func(t *testing.T, dg *DeenGUI) {
+				card := dg.cards[0]
+				if card == nil || card.urlParts == nil || card.urlPartsTab == nil || card.viewer.Selected() != card.urlPartsTab {
+					t.Fatal("URL Parts scene is missing or did not select the structured editor")
+				}
+				if card.urlParts.rebuiltEntry.Text != guiURLPartsTestURL || len(card.urlParts.queryKeyEntries) != 3 {
+					t.Fatal("URL Parts scene did not render its rebuilt URL or query rows")
+				}
+			},
+		},
+		{
 			name:       "compact-stages-drawer-dark",
 			size:       fyne.NewSize(720, 620),
 			appearance: appearanceDark,

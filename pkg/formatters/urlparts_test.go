@@ -11,11 +11,11 @@ func TestURLPartsProcessExposesStructuredComponents(t *testing.T) {
 	input := "https://login-update.example.invalid:8443/account/verify.php?recipient=alice%40corp.example&campaign=Q3&campaign=retry#continue"
 	out := runFormat(t, p.Process, p.RegisterFlags, []byte(input))
 
-	var doc urlPartsDocument
+	var doc URLPartsDocument
 	if err := json.Unmarshal(out, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.Version != urlPartsSchemaVersion || doc.Scheme != "https" {
+	if doc.Version != URLPartsSchemaVersion || doc.Scheme != "https" {
 		t.Fatalf("unexpected schema or scheme: %#v", doc)
 	}
 	if doc.Hostname != "login-update.example.invalid" || doc.Port != "8443" {
@@ -55,7 +55,7 @@ func TestURLPartsEditQueryValueReencodesOnlyChangedValue(t *testing.T) {
 	p := NewPluginURLParts()
 	input := "https://example.invalid/verify?recipient=alice%40corp.example&space=one%20two&flag"
 	jsonData := runFormat(t, p.Process, p.RegisterFlags, []byte(input))
-	var doc urlPartsDocument
+	var doc URLPartsDocument
 	if err := json.Unmarshal(jsonData, &doc); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestURLPartsEditQueryValueReencodesOnlyChangedValue(t *testing.T) {
 func TestURLPartsEditPathSegmentsPreservesSegmentBoundaries(t *testing.T) {
 	p := NewPluginURLParts()
 	jsonData := runFormat(t, p.Process, p.RegisterFlags, []byte("https://example.invalid/a%2Fb/c/"))
-	var doc urlPartsDocument
+	var doc URLPartsDocument
 	if err := json.Unmarshal(jsonData, &doc); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestURLPartsEditPathSegmentsPreservesSegmentBoundaries(t *testing.T) {
 func TestURLPartsEditedPathTakesPrecedenceOverDerivedSegments(t *testing.T) {
 	p := NewPluginURLParts()
 	jsonData := runFormat(t, p.Process, p.RegisterFlags, []byte("https://example.invalid/original/path"))
-	var doc urlPartsDocument
+	var doc URLPartsDocument
 	if err := json.Unmarshal(jsonData, &doc); err != nil {
 		t.Fatal(err)
 	}

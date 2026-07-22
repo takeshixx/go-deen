@@ -488,6 +488,8 @@ type stepCard struct {
 	hexTab                *container.TabItem
 	stringsTab            *container.TabItem
 	previewTab            *container.TabItem
+	urlPartsTab           *container.TabItem
+	urlParts              *urlPartsEditor
 	preview               *widget.TextGrid
 	image                 *canvas.Image
 	imageMsg              *widget.Label
@@ -580,6 +582,9 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 			return
 		}
 		dg.pipe.EditOutput(c.index, []byte(s))
+		if c.urlParts != nil {
+			c.urlParts.refresh([]byte(s))
+		}
 		dg.refreshFrom(c.index + 1)
 	}
 	c.hexBody = multilineEntry(6)
@@ -591,6 +596,11 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	viewerTabs := []*container.TabItem{
 		c.rawTab,
 		c.hexTab,
+	}
+	if step.Plugin == "urlparts" && !step.Unprocess {
+		c.urlParts = newURLPartsEditor(c, dg.pipe.Output(i))
+		c.urlPartsTab = container.NewTabItem("URL Parts", c.urlParts.view)
+		viewerTabs = append(viewerTabs, c.urlPartsTab)
 	}
 	if pipeline.IsBinaryData(dg.pipe.Output(i)) {
 		c.stringsTab = container.NewTabItem("Strings", c.stringsBody)
@@ -614,7 +624,9 @@ func (dg *DeenGUI) newStepCard(i int) *stepCard {
 	viewer.SetTabLocation(container.TabLocationTop)
 	c.viewer = viewer
 	fallbackView := "Raw"
-	if c.previewTab != nil {
+	if c.urlPartsTab != nil {
+		fallbackView = "URL Parts"
+	} else if c.previewTab != nil {
 		fallbackView = "Preview"
 	} else if pipeline.IsBinaryData(dg.pipe.Output(i)) {
 		fallbackView = "Hex"
@@ -1031,6 +1043,9 @@ func (c *stepCard) refresh() {
 		c.body.Enable()
 	}
 	c.gui.setText(c.body, text)
+	if c.urlParts != nil {
+		c.urlParts.refresh(out)
+	}
 	hexText, _ := guiHexDisplayMode(out, c.fullHex)
 	c.gui.setText(c.hexBody, hexText)
 	stringsText, _ := guiStringsDisplayMode(out, c.fullStrings)

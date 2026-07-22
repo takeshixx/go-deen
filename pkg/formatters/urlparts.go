@@ -15,35 +15,38 @@ import (
 	"github.com/takeshixx/deen/pkg/types"
 )
 
-const urlPartsSchemaVersion = 1
+// URLPartsSchemaVersion is the JSON schema version emitted by urlparts.
+const URLPartsSchemaVersion = 1
 
-// urlPartsDocument is the stable JSON representation emitted by urlparts.
+// URLPartsDocument is the stable JSON representation emitted by urlparts.
 // The decoded fields are convenient to inspect and edit. Raw contains encoded
 // spellings that let the reverse transform preserve distinctions such as %2F
 // versus / when the corresponding decoded value has not been changed.
-type urlPartsDocument struct {
+type URLPartsDocument struct {
 	Version      int                 `json:"version"`
 	Scheme       string              `json:"scheme"`
-	Userinfo     *urlPartsUserinfo   `json:"userinfo"`
+	Userinfo     *URLPartsUserinfo   `json:"userinfo"`
 	Hostname     string              `json:"hostname"`
 	Port         string              `json:"port"`
 	Opaque       string              `json:"opaque"`
 	OmitHost     bool                `json:"omit_host"`
 	Path         string              `json:"path"`
 	PathSegments []string            `json:"path_segments"`
-	Query        []urlQueryParameter `json:"query"`
+	Query        []URLQueryParameter `json:"query"`
 	ForceQuery   bool                `json:"force_query"`
 	Fragment     string              `json:"fragment"`
-	Raw          *urlPartsRaw        `json:"raw,omitempty"`
+	Raw          *URLPartsRaw        `json:"raw,omitempty"`
 }
 
-type urlPartsUserinfo struct {
+// URLPartsUserinfo represents optional decoded URL credentials.
+type URLPartsUserinfo struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	PasswordSet bool   `json:"password_set"`
 }
 
-type urlQueryParameter struct {
+// URLQueryParameter preserves one ordered query key/value occurrence.
+type URLQueryParameter struct {
 	Key      string `json:"key"`
 	Value    string `json:"value"`
 	HasValue bool   `json:"has_value"`
@@ -51,7 +54,8 @@ type urlQueryParameter struct {
 	RawValue string `json:"raw_value"`
 }
 
-type urlPartsRaw struct {
+// URLPartsRaw preserves original encoded spellings used for loss-aware rebuilds.
+type URLPartsRaw struct {
 	Host     string `json:"host"`
 	Path     string `json:"path"`
 	Fragment string `json:"fragment"`
@@ -70,17 +74,14 @@ func NewPluginURLParts() *types.DeenPlugin {
 		if err != nil {
 			return err
 		}
-		enc := json.NewEncoder(w)
-		enc.SetEscapeHTML(false)
-		enc.SetIndent("", "    ")
-		return enc.Encode(doc)
+		return EncodeURLPartsJSON(w, doc)
 	}
 	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
-		doc, err := decodeURLParts(r)
+		doc, err := DecodeURLPartsJSON(r)
 		if err != nil {
 			return err
 		}
-		rebuilt, err := rebuildURL(doc)
+		rebuilt, err := RebuildURLParts(doc)
 		if err != nil {
 			return err
 		}
@@ -90,7 +91,7 @@ func NewPluginURLParts() *types.DeenPlugin {
 	return p
 }
 
-func parseURLParts(r io.Reader) (*urlPartsDocument, error) {
+func parseURLParts(r io.Reader) (*URLPartsDocument, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -114,8 +115,8 @@ func parseURLParts(r io.Reader) (*urlPartsDocument, error) {
 		return nil, err
 	}
 
-	doc := &urlPartsDocument{
-		Version:      urlPartsSchemaVersion,
+	doc := &URLPartsDocument{
+		Version:      URLPartsSchemaVersion,
 		Scheme:       u.Scheme,
 		Hostname:     u.Hostname(),
 		Port:         u.Port(),
@@ -126,7 +127,7 @@ func parseURLParts(r io.Reader) (*urlPartsDocument, error) {
 		Query:        query,
 		ForceQuery:   u.ForceQuery,
 		Fragment:     u.Fragment,
-		Raw: &urlPartsRaw{
+		Raw: &URLPartsRaw{
 			Host:     u.Host,
 			Path:     rawPath,
 			Fragment: u.EscapedFragment(),
@@ -134,7 +135,7 @@ func parseURLParts(r io.Reader) (*urlPartsDocument, error) {
 	}
 	if u.User != nil {
 		password, passwordSet := u.User.Password()
-		doc.Userinfo = &urlPartsUserinfo{
+		doc.Userinfo = &URLPartsUserinfo{
 			Username:    u.User.Username(),
 			Password:    password,
 			PasswordSet: passwordSet,
@@ -166,12 +167,12 @@ func splitURLPath(rawPath string) ([]string, error) {
 	return segments, nil
 }
 
-func splitURLQuery(rawQuery string) ([]urlQueryParameter, error) {
+func splitURLQuery(rawQuery string) ([]URLQueryParameter, error) {
 	if rawQuery == "" {
-		return []urlQueryParameter{}, nil
+		return []URLQueryParameter{}, nil
 	}
 	rawParameters := strings.Split(rawQuery, "&")
-	parameters := make([]urlQueryParameter, 0, len(rawParameters))
+	parameters := make([]URLQueryParameter, 0, len(rawParameters))
 	for i, parameter := range rawParameters {
 		rawKey, rawValue, hasValue := strings.Cut(parameter, "=")
 		key, err := url.QueryUnescape(rawKey)
@@ -185,7 +186,7 @@ func splitURLQuery(rawQuery string) ([]urlQueryParameter, error) {
 				return nil, fmt.Errorf("decode query parameter %d value: %w", i+1, err)
 			}
 		}
-		parameters = append(parameters, urlQueryParameter{
+		parameters = append(parameters, URLQueryParameter{
 			Key:      key,
 			Value:    value,
 			HasValue: hasValue,
@@ -196,10 +197,11 @@ func splitURLQuery(rawQuery string) ([]urlQueryParameter, error) {
 	return parameters, nil
 }
 
-func decodeURLParts(r io.Reader) (*urlPartsDocument, error) {
+// DecodeURLPartsJSON validates and decodes a versioned URL Parts document.
+func DecodeURLPartsJSON(r io.Reader) (*URLPartsDocument, error) {
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
-	var doc urlPartsDocument
+	var doc URLPartsDocument
 	if err := dec.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("decode URL parts JSON: %w", err)
 	}
@@ -210,13 +212,25 @@ func decodeURLParts(r io.Reader) (*urlPartsDocument, error) {
 		}
 		return nil, fmt.Errorf("decode URL parts JSON: %w", err)
 	}
-	if doc.Version != urlPartsSchemaVersion {
-		return nil, fmt.Errorf("unsupported URL parts schema version %d (want %d)", doc.Version, urlPartsSchemaVersion)
+	if doc.Version != URLPartsSchemaVersion {
+		return nil, fmt.Errorf("unsupported URL parts schema version %d (want %d)", doc.Version, URLPartsSchemaVersion)
 	}
 	return &doc, nil
 }
 
-func rebuildURL(doc *urlPartsDocument) (string, error) {
+// EncodeURLPartsJSON writes a URL Parts document in the same readable form as
+// the urlparts plugin. GUI editors use it to keep raw and structured views in
+// sync without duplicating serialization behavior.
+func EncodeURLPartsJSON(w io.Writer, doc *URLPartsDocument) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "    ")
+	return enc.Encode(doc)
+}
+
+// RebuildURLParts validates a URL Parts document and returns its URL form.
+// It performs no network access.
+func RebuildURLParts(doc *URLPartsDocument) (string, error) {
 	if err := validateURLParts(doc); err != nil {
 		return "", err
 	}
@@ -250,7 +264,7 @@ func rebuildURL(doc *urlPartsDocument) (string, error) {
 	return u.String(), nil
 }
 
-func validateURLParts(doc *urlPartsDocument) error {
+func validateURLParts(doc *URLPartsDocument) error {
 	if doc.Scheme != "" {
 		for i, r := range doc.Scheme {
 			valid := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
@@ -277,7 +291,7 @@ func validateURLParts(doc *urlPartsDocument) error {
 	return nil
 }
 
-func rebuiltHost(doc *urlPartsDocument) string {
+func rebuiltHost(doc *URLPartsDocument) string {
 	if doc.Raw != nil {
 		raw := &url.URL{Host: doc.Raw.Host}
 		if raw.Hostname() == doc.Hostname && raw.Port() == doc.Port {
@@ -293,7 +307,7 @@ func rebuiltHost(doc *urlPartsDocument) string {
 	return doc.Hostname
 }
 
-func setRebuiltPath(u *url.URL, doc *urlPartsDocument) {
+func setRebuiltPath(u *url.URL, doc *URLPartsDocument) {
 	if doc.Opaque != "" {
 		return
 	}
@@ -337,7 +351,7 @@ func setPathFromSegments(u *url.URL, originalPath string, segments []string) {
 	u.RawPath = rawPath
 }
 
-func joinURLQuery(parameters []urlQueryParameter) (string, error) {
+func joinURLQuery(parameters []URLQueryParameter) (string, error) {
 	rawParameters := make([]string, len(parameters))
 	for i, parameter := range parameters {
 		if !parameter.HasValue && parameter.Value != "" {

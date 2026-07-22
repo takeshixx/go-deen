@@ -253,6 +253,10 @@ arguments. The Fyne 2.8 desktop build supports Windows 10 and later, macOS
 10.15 and later, and Linux desktops using X11 or Wayland. Fyne selects the
 available Linux window protocol at runtime.
 
+Forward `urlparts` steps include a structured URL editor for modifying the
+authority, path segments, ordered query parameters, and fragment while keeping
+the JSON output and downstream steps synchronized.
+
 On Debian, Ubuntu, and Raspberry Pi OS, install the graphics development
 headers before building:
 
