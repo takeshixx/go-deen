@@ -78,6 +78,7 @@ var pluginConstructors = []func() *types.DeenPlugin{
 	formatters.NewPluginXMLFormatter,
 	formatters.NewPluginJSON2XML,
 	formatters.NewPluginTOML,
+	formatters.NewPluginURLParts,
 	formatters.NewPluginJwt,
 	formatters.NewPluginJWK,
 	formatters.NewPluginJQFormatter,

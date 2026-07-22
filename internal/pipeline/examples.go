@@ -32,6 +32,19 @@ type Example struct {
 func BuiltinExamples() []Example {
 	return []Example{
 		{
+			Name:        "Suspicious URL redirect inspection",
+			Description: "Split a phishing-style URL into components and extract its nested redirect target without contacting either host.",
+			Source:      []byte("https://login-update.example.invalid/account/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue"),
+			Steps: []PresetStep{
+				{Plugin: "urlparts"},
+				{Plugin: "jq", Options: map[string]string{
+					"q":        `.query[] | select(.key == "redirect") | {parameter: .key, destination: .value}`,
+					"no-color": "true",
+				}},
+			},
+			WantContains: `"destination": "https://portal.example.org/signin"`,
+		},
+		{
 			Name:        "JWT claim tampering check",
 			Description: "Decode a signed JWT, change the user claim with jq, recreate the token with the original signature, then decode it again.",
 			Source:      []byte("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30"),

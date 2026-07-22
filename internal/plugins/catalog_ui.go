@@ -100,6 +100,7 @@ var pluginLabels = map[string]string{
 	"xml":               "XML",
 	"json2xml":          "JSON to XML",
 	"toml":              "TOML",
+	"urlparts":          "URL Parts",
 	"jwt":               "JWT",
 	"jwk":               "JWK",
 	"jq":                "jq",
@@ -488,6 +489,12 @@ var catalogCopyByName = map[string]catalogCopy{
 		"Use it to inspect config files such as pyproject.toml, Cargo manifests, and application settings.",
 		referenceSets["toml"],
 		[]Example{{"Format config", "name = \"deen\"", "name = \"deen\""}},
+	},
+	"urlparts": {
+		"Splits a URL into structured JSON and rebuilds a URL after its components are edited.",
+		"Use it to inspect suspicious links, nested redirects, tracking parameters, callbacks, webhooks, and signed URLs without contacting the destination.",
+		referenceSets["url"],
+		[]Example{{"Inspect a suspicious URL", "https://example.invalid/a/b?next=https%3A%2F%2Fportal.example.org", "{ scheme, hostname, path_segments, query, fragment }"}},
 	},
 	"jwt": {
 		"Decodes JWTs into readable header and claim data.",

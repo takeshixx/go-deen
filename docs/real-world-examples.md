@@ -6,6 +6,36 @@ built-in examples.
 
 ## Added as built-in examples
 
+### Suspicious URL inspection and redirect extraction
+
+Source pattern:
+Spam and phishing links often combine a misleading hostname, several path
+segments, duplicate tracking parameters, and a percent-encoded redirect URL.
+The `urlparts` formatter separates these components locally without resolving
+or contacting the destination. Query parameters remain ordered and duplicate
+keys are retained.
+
+Runnable chain:
+
+```sh
+printf '%s' 'https://login-update.example.invalid/account/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue' \
+| deen urlparts \
+| deen jq -q '.query[] | select(.key == "redirect") | .value' -no-color
+```
+
+Edit a decoded value and rebuild the URL:
+
+```sh
+printf '%s' 'https://example.invalid/verify?recipient=alice%40corp.example' \
+| deen urlparts \
+| deen jq -q '(.query[] | select(.key == "recipient").value) = "bob@corp.example"' -no-color \
+| deen .urlparts
+```
+
+Reference:
+
+- https://www.rfc-editor.org/rfc/rfc3986
+
 ### CloudFront signed URL custom policy
 
 Source pattern:
