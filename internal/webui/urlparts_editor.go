@@ -139,8 +139,40 @@ func (e *webURLPartsEditor) buildAnalysis() {
 	appendChildren(previewBody, e.defanged, e.copyDefanged)
 	appendChildren(preview, title, description, previewBody)
 	body.Call("appendChild", preview)
+	reportActions := div("urlparts-report-actions")
+	copyJSON := e.actionButton("copy", "Copy JSON report", func() {
+		if e.doc == nil {
+			return
+		}
+		var report bytes.Buffer
+		if formatters.EncodeURLPartsReportJSON(&report, e.doc) != nil {
+			return
+		}
+		e.copyAnalysisReport("Copy JSON report:", report.String())
+	})
+	copyMarkdown := e.actionButton("copy", "Copy Markdown report", func() {
+		if e.doc == nil {
+			return
+		}
+		report, err := formatters.URLPartsReportMarkdown(e.doc)
+		if err != nil {
+			return
+		}
+		e.copyAnalysisReport("Copy Markdown report:", report)
+	})
+	appendChildren(reportActions, copyJSON, copyMarkdown)
+	body.Call("appendChild", reportActions)
 	e.root.Call("appendChild", section)
 	e.refreshAnalysis()
+}
+
+func (e *webURLPartsEditor) copyAnalysisReport(prompt, value string) {
+	clipboard := js.Global().Get("navigator").Get("clipboard")
+	if clipboard.Truthy() {
+		clipboard.Call("writeText", value)
+	} else {
+		js.Global().Call("prompt", prompt, value)
+	}
 }
 
 func (e *webURLPartsEditor) refreshAnalysis() {
@@ -178,18 +210,9 @@ func (e *webURLPartsEditor) refreshAnalysis() {
 			e.analysisText(findings, prefix+indicator.Message, className)
 		}
 	}
-	if len(e.doc.Analysis.NestedURLs) > 0 {
-		e.analysisHeading(findings, "Nested URLs")
-		for _, nested := range e.doc.Analysis.NestedURLs {
-			nested := nested
-			row := div("urlparts-analysis-action-row")
-			e.analysisText(row, fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), "urlparts-analysis-value")
-			useSource := e.analysisActionButton("link", fmt.Sprintf("Use nested URL from query parameter %d as source", nested.ParameterIndex), "Use as source", func() {
-				e.promoteNestedURL(nested)
-			})
-			appendChildren(row, useSource)
-			findings.Call("appendChild", row)
-		}
+	if len(e.doc.Analysis.RedirectChains) > 0 {
+		e.analysisHeading(findings, "Local redirect chains")
+		e.appendRedirectNodes(findings, e.doc.Analysis.RedirectChains)
 	}
 	if len(e.doc.Analysis.TrackingParameters) > 0 {
 		e.analysisHeading(findings, "Common tracking parameters")
@@ -208,6 +231,32 @@ func (e *webURLPartsEditor) refreshAnalysis() {
 		findings.Call("appendChild", removeAll)
 	}
 	e.analysisBody.Call("appendChild", findings)
+}
+
+func (e *webURLPartsEditor) appendRedirectNodes(parent js.Value, nodes []formatters.URLPartsRedirectNode) {
+	for _, node := range nodes {
+		node := node
+		row := div("urlparts-analysis-action-row urlparts-redirect-node")
+		row.Call("setAttribute", "data-depth", strconv.Itoa(node.Depth))
+		row.Get("style").Set("marginLeft", fmt.Sprintf("%.2frem", float64(node.Depth-1)*1.1))
+		status := ""
+		if node.Cycle {
+			status = " (cycle detected)"
+		} else if node.Truncated {
+			status = " (deeper values omitted)"
+		}
+		e.analysisText(row, fmt.Sprintf("Query #%d (%s): %s%s", node.ParameterIndex, node.Key, node.DefangedURL, status), "urlparts-analysis-value")
+		label := fmt.Sprintf("Use redirect depth %d query parameter %d as source", node.Depth, node.ParameterIndex)
+		if node.Depth == 1 {
+			label = fmt.Sprintf("Use nested URL from query parameter %d as source", node.ParameterIndex)
+		}
+		useSource := e.analysisActionButton("link", label, "Use as source", func() {
+			e.promoteRedirectNode(node)
+		})
+		appendChildren(row, useSource)
+		parent.Call("appendChild", row)
+		e.appendRedirectNodes(parent, node.Children)
+	}
 }
 
 func (e *webURLPartsEditor) analysisHeading(parent js.Value, text string) {
@@ -249,13 +298,13 @@ func (e *webURLPartsEditor) removeAllTrackingParameters() {
 	e.commit(true)
 }
 
-func (e *webURLPartsEditor) promoteNestedURL(nested formatters.URLPartsNestedURL) {
-	if nested.URL == "" {
+func (e *webURLPartsEditor) promoteRedirectNode(node formatters.URLPartsRedirectNode) {
+	if node.URL == "" {
 		return
 	}
 	sourceName = ""
 	clearSourceFullViews()
-	pipe.SetSource([]byte(nested.URL))
+	pipe.SetSource([]byte(node.URL))
 	runBusy("Loading nested URL", rebuild)
 }
 

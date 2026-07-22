@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"slices"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -44,6 +45,8 @@ type urlPartsEditor struct {
 	analysisBox           *fyne.Container
 	defangedEntry         *widget.Entry
 	copyDefanged          *widget.Button
+	copyJSONReport        *widget.Button
+	copyMarkdownReport    *widget.Button
 	analysisLabels        []*widget.Label
 	nestedSourceButtons   []*widget.Button
 	trackingRemoveButtons []*widget.Button
@@ -454,6 +457,8 @@ func (e *urlPartsEditor) rebuildAnalysis() {
 	e.nestedSourceButtons = nil
 	e.trackingRemoveButtons = nil
 	e.removeAllTracking = nil
+	e.copyJSONReport = nil
+	e.copyMarkdownReport = nil
 	e.analysisBox.RemoveAll()
 
 	e.defangedEntry = multilineEntry(2)
@@ -475,6 +480,27 @@ func (e *urlPartsEditor) rebuildAnalysis() {
 	}
 	e.defangedEntry.SetText(e.doc.Analysis.DefangedURL)
 	e.analysisBox.Add(widget.NewCard("Defanged URL", "Safer to paste into tickets or chat; this does not change the pipeline URL.", container.NewBorder(nil, nil, nil, e.copyDefanged, e.defangedEntry)))
+	e.copyJSONReport = widget.NewButtonWithIcon("Copy JSON report", theme.ContentCopyIcon(), func() {
+		var report bytes.Buffer
+		if err := formatters.EncodeURLPartsReportJSON(&report, e.doc); err != nil || e.card.gui.window == nil {
+			return
+		}
+		e.card.gui.window.Clipboard().SetContent(report.String())
+		e.card.gui.showActionFeedback("JSON URL report copied")
+	})
+	e.copyMarkdownReport = widget.NewButtonWithIcon("Copy Markdown report", theme.ContentCopyIcon(), func() {
+		report, err := formatters.URLPartsReportMarkdown(e.doc)
+		if err != nil || e.card.gui.window == nil {
+			return
+		}
+		e.card.gui.window.Clipboard().SetContent(report)
+		e.card.gui.showActionFeedback("Markdown URL report copied")
+	})
+	for _, button := range []*widget.Button{e.copyJSONReport, e.copyMarkdownReport} {
+		button.Importance = widget.LowImportance
+		e.registerAnalysis(button)
+	}
+	e.analysisBox.Add(container.NewHBox(e.copyJSONReport, e.copyMarkdownReport))
 
 	if len(e.doc.Analysis.Indicators) == 0 {
 		e.addAnalysisLabel("No common indicators detected. This is not a safety verdict.", widget.LowImportance)
@@ -489,19 +515,9 @@ func (e *urlPartsEditor) rebuildAnalysis() {
 			e.addAnalysisLabel(prefix+": "+indicator.Message, importance)
 		}
 	}
-	if len(e.doc.Analysis.NestedURLs) > 0 {
-		e.analysisBox.Add(urlPartsSectionTitle("Nested URLs"))
-		for _, nested := range e.doc.Analysis.NestedURLs {
-			nested := nested
-			label := e.newAnalysisLabel(fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), widget.LowImportance)
-			useSource := widget.NewButtonWithIcon("Use as source", theme.NavigateNextIcon(), func() {
-				e.promoteNestedURL(nested)
-			})
-			useSource.Importance = widget.LowImportance
-			e.registerAnalysis(useSource)
-			e.nestedSourceButtons = append(e.nestedSourceButtons, useSource)
-			e.analysisBox.Add(container.NewBorder(nil, nil, nil, useSource, label))
-		}
+	if len(e.doc.Analysis.RedirectChains) > 0 {
+		e.analysisBox.Add(urlPartsSectionTitle("Local redirect chains"))
+		e.addRedirectNodes(e.doc.Analysis.RedirectChains)
 	}
 	if len(e.doc.Analysis.TrackingParameters) > 0 {
 		e.analysisBox.Add(urlPartsSectionTitle("Common tracking parameters"))
@@ -523,6 +539,28 @@ func (e *urlPartsEditor) rebuildAnalysis() {
 	}
 	e.analysisBox.Refresh()
 	e.scroll.Refresh()
+}
+
+func (e *urlPartsEditor) addRedirectNodes(nodes []formatters.URLPartsRedirectNode) {
+	for _, node := range nodes {
+		node := node
+		status := ""
+		if node.Cycle {
+			status = " (cycle detected)"
+		} else if node.Truncated {
+			status = " (deeper values omitted)"
+		}
+		prefix := strings.Repeat("  ", node.Depth-1)
+		label := e.newAnalysisLabel(fmt.Sprintf("%s↳ Query #%d (%s): %s%s", prefix, node.ParameterIndex, node.Key, node.DefangedURL, status), widget.LowImportance)
+		useSource := widget.NewButtonWithIcon("Use as source", theme.NavigateNextIcon(), func() {
+			e.promoteRedirectNode(node)
+		})
+		useSource.Importance = widget.LowImportance
+		e.registerAnalysis(useSource)
+		e.nestedSourceButtons = append(e.nestedSourceButtons, useSource)
+		e.analysisBox.Add(container.NewBorder(nil, nil, nil, useSource, label))
+		e.addRedirectNodes(node.Children)
+	}
 }
 
 func (e *urlPartsEditor) addAnalysisLabel(text string, importance widget.Importance) {
@@ -559,16 +597,16 @@ func (e *urlPartsEditor) removeAllTrackingParameters() {
 	e.card.gui.showActionFeedback(fmt.Sprintf("Removed %d tracking parameter(s)", removed))
 }
 
-func (e *urlPartsEditor) promoteNestedURL(nested formatters.URLPartsNestedURL) {
-	if e.card == nil || e.card.gui == nil || e.card.gui.working || nested.URL == "" {
+func (e *urlPartsEditor) promoteRedirectNode(node formatters.URLPartsRedirectNode) {
+	if e.card == nil || e.card.gui == nil || e.card.gui.working || node.URL == "" {
 		return
 	}
 	dg := e.card.gui
 	dg.sourceName = ""
 	dg.clearSourceFullViews()
-	dg.pipe.SetSource([]byte(nested.URL))
+	dg.pipe.SetSource([]byte(node.URL))
 	dg.rebuild()
-	dg.showActionFeedback(fmt.Sprintf("Using nested URL from query #%d as source", nested.ParameterIndex))
+	dg.showActionFeedback(fmt.Sprintf("Using redirect depth %d query #%d as source", node.Depth, node.ParameterIndex))
 }
 
 func (e *urlPartsEditor) register(control fyne.Disableable) {

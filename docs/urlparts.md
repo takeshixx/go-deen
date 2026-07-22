@@ -9,12 +9,12 @@ printf '%s' 'https://example.invalid/a/b?next=https%3A%2F%2Fportal.example.org#c
 | deen urlparts
 ```
 
-New output uses schema version 2. The decoder continues to accept version 1
-documents and upgrades them the next time they are encoded:
+New output uses schema version 3. The decoder continues to accept version 1 and
+2 documents and upgrades them the next time they are encoded:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "scheme": "https",
   "userinfo": null,
   "hostname": "example.invalid",
@@ -56,16 +56,30 @@ documents and upgrades them the next time they are encoded:
         "hostname": "portal.example.org"
       }
     ],
+    "redirect_chains": [
+      {
+        "depth": 1,
+        "parameter_index": 1,
+        "key": "next",
+        "url": "https://portal.example.org",
+        "defanged_url": "hxxps://portal[.]example[.]org",
+        "scheme": "https",
+        "hostname": "portal.example.org",
+        "cycle": false,
+        "truncated": false,
+        "children": []
+      }
+    ],
     "tracking_parameters": [],
-    "defanged_url": "hxxps://example[.]invalid/a/b?next=https%3A%2F%2Fportal.example.org#continue"
+    "defanged_url": "hxxps://example[.]invalid/a/b?next=hxxps%3A%2F%2Fportal%5B.%5Dexample%5B.%5Dorg#continue"
   }
 }
 ```
 
 ## Field behavior
 
-- `version` identifies the schema. `.urlparts` emits version 2 and accepts
-  versions 1 and 2.
+- `version` identifies the schema. `.urlparts` emits version 3 and accepts
+  versions 1 through 3.
 - `scheme`, `userinfo`, `hostname`, and `port` describe the authority. A null
   `userinfo` means the URL contains no username. `password_set` inside a
   non-null `userinfo` distinguishes no password from an explicitly empty one.
@@ -85,8 +99,10 @@ documents and upgrades them the next time they are encoded:
   and hexadecimal escape casing.
 - `analysis` is derived locally from the editable fields. It contains
   evidence-oriented indicators, nested HTTP(S) URLs extracted from decoded
-  query values, common analytics/campaign parameter occurrences, and a
-  defanged form for pasting into tickets or chat. It is informational, is not a
+  query values, recursive redirect chains, common analytics/campaign parameter
+  occurrences, and a defanged form for pasting into tickets or chat. Recursive
+  inspection is local, cycle-safe, and bounded to four levels; `truncated`
+  marks nodes with deeper values omitted. Analysis is informational, is not a
   malicious/benign verdict, and is ignored during URL reconstruction.
 
 Decoded fields are authoritative when edited. During reconstruction, a raw
@@ -103,6 +119,13 @@ deen urlparts "$URL" \
 | deen jq -q '.analysis.nested_urls[].url' -no-color
 ```
 
+Inspect every recursively decoded redirect node:
+
+```sh
+deen urlparts "$URL" \
+| deen jq -q '.. | objects | select(has("depth") and has("defanged_url"))' -no-color
+```
+
 List common tracking parameter occurrences:
 
 ```sh
@@ -115,6 +138,14 @@ Produce a defanged copy without opening or resolving the URL:
 ```sh
 deen urlparts "$URL" \
 | deen jq -q '.analysis.defanged_url' -no-color
+```
+
+Export a deterministic standalone report. Reports omit live redirect URL
+fields and use defanged URL text:
+
+```sh
+deen urlparts -report json "$URL"
+deen urlparts -report markdown "$URL"
 ```
 
 Change a query value and rebuild the URL:
@@ -150,4 +181,6 @@ Removal edits the URL Parts JSON and rebuilt URL while leaving the original
 pipeline source available for comparison.
 Nested HTTP(S) values provide a **Use as source** action that replaces the
 current pipeline input and recomputes the existing chain without navigating to
-the URL. Both kinds of action participate in normal pipeline undo.
+the URL. Both kinds of action participate in normal pipeline undo. Redirects
+are displayed as an indented local tree, and **Copy JSON report** / **Copy
+Markdown report** export deterministic, defanged summaries.

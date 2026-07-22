@@ -4,6 +4,7 @@ package gui
 
 import (
 	"bytes"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -93,6 +94,46 @@ func TestURLPartsEditorPromotesNestedURLToSource(t *testing.T) {
 	}
 }
 
+func TestURLPartsEditorShowsRecursiveRedirectChain(t *testing.T) {
+	third := "https://third.invalid/final"
+	second := "https://second.invalid/?target=" + url.QueryEscape(third)
+	first := "https://first.invalid/?redirect=" + url.QueryEscape(second)
+	dg := newURLPartsScenarioWithSource(t, "https://root.invalid/?next="+url.QueryEscape(first))
+	editor := dg.cards[0].urlParts
+	if len(editor.nestedSourceButtons) != 3 {
+		t.Fatalf("recursive redirect actions = %d, want 3", len(editor.nestedSourceButtons))
+	}
+	foundThird := false
+	for _, label := range editor.analysisLabels {
+		if strings.Contains(label.Text, "hxxps://third[.]invalid/final") {
+			foundThird = true
+		}
+	}
+	if !foundThird {
+		t.Fatal("recursive redirect tree did not render the third hop")
+	}
+	editor.nestedSourceButtons[2].OnTapped()
+	if got := string(dg.pipe.Source()); got != third {
+		t.Fatalf("promoted third-hop source = %q, want %q", got, third)
+	}
+}
+
+func TestURLPartsEditorCopiesAnalysisReports(t *testing.T) {
+	dg := newURLPartsScenarioWithSource(t, guiURLPartsActionURL)
+	editor := dg.cards[0].urlParts
+	if editor.copyJSONReport == nil || editor.copyMarkdownReport == nil {
+		t.Fatal("analysis report actions were not created")
+	}
+	editor.copyJSONReport.OnTapped()
+	if dg.workStatus.Text != "JSON URL report copied" {
+		t.Fatalf("JSON report feedback = %q", dg.workStatus.Text)
+	}
+	editor.copyMarkdownReport.OnTapped()
+	if dg.workStatus.Text != "Markdown URL report copied" {
+		t.Fatalf("Markdown report feedback = %q", dg.workStatus.Text)
+	}
+}
+
 func TestURLPartsStepUsesStructuredEditor(t *testing.T) {
 	dg := newURLPartsScenario(t)
 	card := dg.cards[0]
@@ -118,7 +159,7 @@ func TestURLPartsStepUsesStructuredEditor(t *testing.T) {
 	if editor.doc.Analysis == nil || len(editor.doc.Analysis.NestedURLs) != 1 {
 		t.Fatalf("analysis = %#v", editor.doc.Analysis)
 	}
-	if editor.defangedEntry.Text != "hxxps://login-update[.]example[.]invalid/account/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue" {
+	if editor.defangedEntry.Text != "hxxps://login-update[.]example[.]invalid/account/verify.php?campaign=Q3&redirect=hxxps%3A%2F%2Fportal%5B.%5Dexample%5B.%5Dorg%2Fsignin&campaign=retry#continue" {
 		t.Fatalf("defanged preview = %q", editor.defangedEntry.Text)
 	}
 	if editor.copyDefanged.Disabled() {

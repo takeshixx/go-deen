@@ -12,11 +12,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/takeshixx/deen/pkg/helpers"
 	"github.com/takeshixx/deen/pkg/types"
 )
 
 // URLPartsSchemaVersion is the JSON schema version emitted by urlparts.
-const URLPartsSchemaVersion = 2
+const URLPartsSchemaVersion = 3
 
 const urlPartsMinimumSchemaVersion = 1
 
@@ -72,12 +73,29 @@ func NewPluginURLParts() *types.DeenPlugin {
 	p.Aliases = []string{".urlparts", "urlparse", ".urlparse"}
 	p.Category = "formatters"
 	p.Description = "Splits a URL into editable JSON with local analysis and rebuilds it from edited parts."
-	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
+	p.RegisterFlags = func(flags *flag.FlagSet) {
+		flags.String("report", "", "emit a standalone analysis report: json or markdown")
+	}
+	p.Process = func(r io.Reader, w io.Writer, flags *flag.FlagSet) error {
 		doc, err := parseURLParts(r)
 		if err != nil {
 			return err
 		}
-		return EncodeURLPartsJSON(w, doc)
+		switch reportFormat := strings.ToLower(helpers.StringFlag(flags, "report")); reportFormat {
+		case "":
+			return EncodeURLPartsJSON(w, doc)
+		case "json":
+			return EncodeURLPartsReportJSON(w, doc)
+		case "markdown", "md":
+			report, err := URLPartsReportMarkdown(doc)
+			if err != nil {
+				return err
+			}
+			_, err = io.WriteString(w, report)
+			return err
+		default:
+			return fmt.Errorf("unsupported URL report format %q (want json or markdown)", reportFormat)
+		}
 	}
 	p.Unprocess = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
 		doc, err := DecodeURLPartsJSON(r)

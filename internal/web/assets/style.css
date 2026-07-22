@@ -966,6 +966,17 @@ a {
 	justify-self: start;
 }
 
+.urlparts-report-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+}
+
+.urlparts-redirect-node {
+	border-left: 1px dashed var(--border);
+	padding-left: 0.45rem;
+}
+
 .full-view-controls {
 	align-items: center;
 	display: flex;
@@ -1560,5 +1571,9 @@ a {
 
 	.urlparts-analysis-action {
 		align-self: flex-start;
+	}
+
+	.urlparts-redirect-node {
+		margin-left: 0 !important;
 	}
 }

@@ -17,7 +17,7 @@ func TestURLPartsAnalysisFindsIndicatorsNestedURLsAndTracking(t *testing.T) {
 	if err := json.Unmarshal(out, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.Version != 2 || doc.Analysis == nil {
+	if doc.Version != URLPartsSchemaVersion || doc.Analysis == nil {
 		t.Fatalf("version=%d analysis=%#v", doc.Version, doc.Analysis)
 	}
 	gotCodes := make([]string, len(doc.Analysis.Indicators))
@@ -38,9 +38,20 @@ func TestURLPartsAnalysisFindsIndicatorsNestedURLsAndTracking(t *testing.T) {
 	if len(doc.Analysis.TrackingParameters) != 1 || doc.Analysis.TrackingParameters[0].ParameterIndex != 1 || doc.Analysis.TrackingParameters[0].Key != "utm_source" {
 		t.Fatalf("tracking parameters = %#v", doc.Analysis.TrackingParameters)
 	}
-	wantDefanged := "hxxp://user:secret@192[.]0[.]2[.]10:8080/login?utm_source=mail&redirect=https%253A%252F%252Fportal.example.org%252Fsignin&flag"
+	wantDefanged := "hxxp://user:secret@192[.]0[.]2[.]10:8080/login?utm_source=mail&redirect=hxxps%3A%2F%2Fportal%5B.%5Dexample%5B.%5Dorg%2Fsignin&flag"
 	if doc.Analysis.DefangedURL != wantDefanged {
 		t.Fatalf("defanged URL = %q, want %q", doc.Analysis.DefangedURL, wantDefanged)
+	}
+}
+
+func TestURLPartsDefangingNeutralizesUnescapedNestedURL(t *testing.T) {
+	doc := mustParseURLPartsForTest(t, "https://root.invalid/?next=https://child.invalid/path")
+	defanged, err := DefangURLParts(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(defanged, "https://child.invalid") || !strings.Contains(defanged, "next=hxxps%3A%2F%2Fchild%5B.%5Dinvalid%2Fpath") {
+		t.Fatalf("defanged URL = %q", defanged)
 	}
 }
 
@@ -83,13 +94,16 @@ func TestURLPartsAnalysisFlagsHTTPWithoutHostname(t *testing.T) {
 	}
 }
 
-func TestURLPartsDecodeAcceptsVersionOneAndEncodeUpgradesIt(t *testing.T) {
+func TestURLPartsDecodeAcceptsOlderVersionsAndEncodeUpgradesThem(t *testing.T) {
 	doc, err := DecodeURLPartsJSON(strings.NewReader(`{"version":1,"scheme":"https","hostname":"example.invalid"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if doc.Analysis == nil {
 		t.Fatal("version 1 document was not analyzed")
+	}
+	if _, err := DecodeURLPartsJSON(strings.NewReader(`{"version":2,"scheme":"https","hostname":"example.invalid"}`)); err != nil {
+		t.Fatalf("version 2 document was rejected: %v", err)
 	}
 	var out bytes.Buffer
 	if err := EncodeURLPartsJSON(&out, doc); err != nil {
@@ -98,7 +112,7 @@ func TestURLPartsDecodeAcceptsVersionOneAndEncodeUpgradesIt(t *testing.T) {
 	if doc.Version != URLPartsSchemaVersion {
 		t.Fatalf("encoded document version = %d", doc.Version)
 	}
-	if !strings.Contains(out.String(), `"version": 2`) || !strings.Contains(out.String(), `"analysis"`) {
+	if !strings.Contains(out.String(), `"version": 3`) || !strings.Contains(out.String(), `"analysis"`) {
 		t.Fatalf("upgraded JSON = %s", out.String())
 	}
 }

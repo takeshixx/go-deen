@@ -9,11 +9,15 @@ import (
 	"unicode"
 )
 
+// URLPartsRedirectMaxDepth bounds local recursive redirect inspection.
+const URLPartsRedirectMaxDepth = 4
+
 // URLPartsAnalysis contains derived, local-only observations about a URL.
 // It is informational and is never used to rebuild the URL.
 type URLPartsAnalysis struct {
 	Indicators         []URLPartsIndicator         `json:"indicators"`
 	NestedURLs         []URLPartsNestedURL         `json:"nested_urls"`
+	RedirectChains     []URLPartsRedirectNode      `json:"redirect_chains"`
 	TrackingParameters []URLPartsTrackingParameter `json:"tracking_parameters"`
 	DefangedURL        string                      `json:"defanged_url"`
 }
@@ -37,6 +41,21 @@ type URLPartsNestedURL struct {
 	Hostname       string `json:"hostname"`
 }
 
+// URLPartsRedirectNode represents one locally decoded HTTP(S) URL in a
+// recursive redirect tree. Children are URLs found in this node's query values.
+type URLPartsRedirectNode struct {
+	Depth          int                    `json:"depth"`
+	ParameterIndex int                    `json:"parameter_index"`
+	Key            string                 `json:"key"`
+	URL            string                 `json:"url"`
+	DefangedURL    string                 `json:"defanged_url"`
+	Scheme         string                 `json:"scheme"`
+	Hostname       string                 `json:"hostname"`
+	Cycle          bool                   `json:"cycle"`
+	Truncated      bool                   `json:"truncated"`
+	Children       []URLPartsRedirectNode `json:"children"`
+}
+
 // URLPartsTrackingParameter identifies a commonly used analytics or campaign
 // parameter. ParameterIndex is one-based.
 type URLPartsTrackingParameter struct {
@@ -44,20 +63,22 @@ type URLPartsTrackingParameter struct {
 	Key            string `json:"key"`
 }
 
-// AnalyzeURLParts derives indicators, nested URLs, tracking parameters, and a
-// defanged representation without resolving or fetching the URL.
+// AnalyzeURLParts derives indicators, first-hop nested URLs, bounded redirect
+// chains, tracking parameters, and a defanged representation without resolving
+// or fetching the URL.
 func AnalyzeURLParts(doc *URLPartsDocument) (*URLPartsAnalysis, error) {
 	rebuilt, err := RebuildURLParts(doc)
 	if err != nil {
 		return nil, err
 	}
-	defanged, err := DefangURL(rebuilt)
+	defanged, err := DefangURLParts(doc)
 	if err != nil {
 		return nil, err
 	}
 	analysis := &URLPartsAnalysis{
 		Indicators:         []URLPartsIndicator{},
 		NestedURLs:         []URLPartsNestedURL{},
+		RedirectChains:     []URLPartsRedirectNode{},
 		TrackingParameters: []URLPartsTrackingParameter{},
 		DefangedURL:        defanged,
 	}
@@ -120,24 +141,24 @@ func AnalyzeURLParts(doc *URLPartsDocument) (*URLPartsAnalysis, error) {
 				Key:            parameter.Key,
 			})
 		}
-		if !parameter.HasValue {
-			continue
-		}
-		if nested, ok := findNestedURL(parameter.Value); ok {
-			analysis.NestedURLs = append(analysis.NestedURLs, URLPartsNestedURL{
-				ParameterIndex: i + 1,
-				Key:            parameter.Key,
-				URL:            nested.String(),
-				Scheme:         nested.Scheme,
-				Hostname:       nested.Hostname(),
-			})
-		}
 	}
-	if len(analysis.NestedURLs) > 0 {
+	visited := map[string]bool{rebuilt: true}
+	analysis.RedirectChains = buildURLRedirectNodes(doc.Query, 1, visited)
+	for _, node := range analysis.RedirectChains {
+		analysis.NestedURLs = append(analysis.NestedURLs, URLPartsNestedURL{
+			ParameterIndex: node.ParameterIndex,
+			Key:            node.Key,
+			URL:            node.URL,
+			Scheme:         node.Scheme,
+			Hostname:       node.Hostname,
+		})
+	}
+	redirectCount := countURLRedirectNodes(analysis.RedirectChains)
+	if redirectCount > 0 {
 		analysis.Indicators = append(analysis.Indicators, URLPartsIndicator{
 			Code:     "nested_url",
 			Severity: "info",
-			Message:  fmt.Sprintf("Found %d nested HTTP(S) URL(s) in query values.", len(analysis.NestedURLs)),
+			Message:  fmt.Sprintf("Found %d nested HTTP(S) URL(s) in query values.", redirectCount),
 		})
 	}
 	if len(analysis.TrackingParameters) > 0 {
@@ -148,6 +169,120 @@ func AnalyzeURLParts(doc *URLPartsDocument) (*URLPartsAnalysis, error) {
 		})
 	}
 	return analysis, nil
+}
+
+// DefangURLParts defangs both the outer URL and recognized nested HTTP(S)
+// query values so copied text cannot retain a live nested URL substring.
+func DefangURLParts(doc *URLPartsDocument) (string, error) {
+	rebuilt, err := RebuildURLParts(doc)
+	if err != nil {
+		return "", err
+	}
+	copyDoc := *doc
+	copyDoc.Query = append([]URLQueryParameter(nil), doc.Query...)
+	changed := false
+	for i := range copyDoc.Query {
+		parameter := &copyDoc.Query[i]
+		if !parameter.HasValue {
+			continue
+		}
+		nested, ok := findNestedURL(parameter.Value)
+		if !ok {
+			continue
+		}
+		defanged, err := DefangURL(nested.String())
+		if err != nil {
+			continue
+		}
+		parameter.Value = defanged
+		parameter.RawValue = ""
+		changed = true
+	}
+	if changed {
+		rebuilt, err = RebuildURLParts(&copyDoc)
+		if err != nil {
+			return "", err
+		}
+	}
+	return DefangURL(rebuilt)
+}
+
+func buildURLRedirectNodes(parameters []URLQueryParameter, depth int, visited map[string]bool) []URLPartsRedirectNode {
+	nodes := []URLPartsRedirectNode{}
+	for i, parameter := range parameters {
+		if !parameter.HasValue {
+			continue
+		}
+		nested, ok := findNestedURL(parameter.Value)
+		if !ok {
+			continue
+		}
+		nestedURL := nested.String()
+		defanged := defangNestedURL(nestedURL)
+		node := URLPartsRedirectNode{
+			Depth:          depth,
+			ParameterIndex: i + 1,
+			Key:            parameter.Key,
+			URL:            nestedURL,
+			DefangedURL:    defanged,
+			Scheme:         nested.Scheme,
+			Hostname:       nested.Hostname(),
+			Children:       []URLPartsRedirectNode{},
+		}
+		if visited[nestedURL] {
+			node.Cycle = true
+			nodes = append(nodes, node)
+			continue
+		}
+		query, err := splitURLQuery(nested.RawQuery)
+		if err != nil {
+			nodes = append(nodes, node)
+			continue
+		}
+		if depth >= URLPartsRedirectMaxDepth {
+			node.Truncated = hasNestedURL(query)
+			nodes = append(nodes, node)
+			continue
+		}
+		nextVisited := make(map[string]bool, len(visited)+1)
+		for value := range visited {
+			nextVisited[value] = true
+		}
+		nextVisited[nestedURL] = true
+		node.Children = buildURLRedirectNodes(query, depth+1, nextVisited)
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+func defangNestedURL(rawURL string) string {
+	doc, err := parseURLParts(strings.NewReader(rawURL))
+	if err == nil {
+		if defanged, err := DefangURLParts(doc); err == nil {
+			return defanged
+		}
+	}
+	defanged, _ := DefangURL(rawURL)
+	return defanged
+}
+
+func hasNestedURL(parameters []URLQueryParameter) bool {
+	for _, parameter := range parameters {
+		if parameter.HasValue {
+			if _, ok := findNestedURL(parameter.Value); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func countURLRedirectNodes(nodes []URLPartsRedirectNode) int {
+	count := 0
+	for _, node := range nodes {
+		count += 1 + countURLRedirectNodes(node.Children)
+	}
+	return count
 }
 
 // DefangURL makes URLs safer to paste into tickets and chat. HTTP(S) becomes

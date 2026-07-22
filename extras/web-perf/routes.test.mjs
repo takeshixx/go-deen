@@ -287,10 +287,18 @@ async function main() {
       "analysis should provide a defanged URL",
     );
     const initialAnalysis = await urlEditor.locator(".urlparts-analysis-findings").textContent();
-    assert(initialAnalysis.includes("Nested URLs") && initialAnalysis.includes("portal.example.org"), "analysis should expose nested redirect URLs");
+    assert(initialAnalysis.includes("Local redirect chains") && initialAnalysis.includes("portal[.]example[.]org"), "analysis should expose defanged redirect chains");
     assert(initialAnalysis.includes("Common tracking parameters") && initialAnalysis.includes("utm_source"), "analysis should identify common tracking parameters");
     await urlEditor.getByRole("button", { name: "Copy defanged URL" }).click();
     assert((await page.evaluate(() => navigator.clipboard.readText())).startsWith("hxxps://login-update[.]example[.]invalid/"), "copy defanged URL should use the local analysis value");
+    await urlEditor.getByRole("button", { name: "Copy JSON report" }).click();
+    const jsonReportText = await page.evaluate(() => navigator.clipboard.readText());
+    const jsonReport = JSON.parse(jsonReportText);
+    assert(jsonReport.report_version === 1 && jsonReport.url_parts_schema_version === 3, "JSON report should expose explicit report and URL schema versions");
+    assert(jsonReport.redirect_chains.length === 1 && !jsonReportText.includes('"url": "https://'), "JSON report should contain only defanged redirect URLs");
+    await urlEditor.getByRole("button", { name: "Copy Markdown report" }).click();
+    const markdownReport = await page.evaluate(() => navigator.clipboard.readText());
+    assert(markdownReport.includes("# URL analysis report") && markdownReport.includes("not a safety verdict"), "Markdown report should include its safety context");
 
     await urlEditor.getByRole("textbox", { name: "URL hostname" }).fill("review.invalid");
     await urlEditor.getByRole("textbox", { name: "Path segment 2" }).fill("checked");
@@ -301,7 +309,7 @@ async function main() {
     assert((await urlEditor.getByRole("textbox", { name: "Rebuilt URL" }).inputValue()) === editedURL, "structured edits should rebuild the URL");
     assert((await rebuiltStep.locator("textarea.io").first().inputValue()) === editedURL, "structured edits should recompute a downstream reverse step");
     assert((await urlEditor.getByRole("textbox", { name: "Defanged URL" }).inputValue()).startsWith("hxxps://review[.]invalid/"), "defanged URL should update with structured edits");
-    assert((await urlEditor.locator(".urlparts-analysis-findings").textContent()).includes("safe.example.org"), "nested URL analysis should update with query edits");
+    assert((await urlEditor.locator(".urlparts-analysis-findings").textContent()).includes("safe[.]example[.]org"), "nested URL analysis should update with query edits");
 
     await urlEditor.getByRole("checkbox", { name: "Show original encoded values" }).check();
     assert((await urlEditor.locator(".urlparts-raw:visible").count()) >= 4, "raw encoding toggle should reveal encoded values");
@@ -330,7 +338,7 @@ async function main() {
     await urlStep.getByRole("button", { name: "Raw", exact: true }).click();
     const rawURLParts = urlStep.locator("textarea.io").first();
     const rawDocument = JSON.parse(await rawURLParts.inputValue());
-    assert(rawDocument.version === 2 && rawDocument.analysis?.nested_urls?.length === 1, "raw JSON should include versioned machine-readable analysis");
+    assert(rawDocument.version === 3 && rawDocument.analysis?.redirect_chains?.length === 1, "raw JSON should include versioned recursive analysis");
     rawDocument.fragment = "from-raw-json";
     await rawURLParts.fill(JSON.stringify(rawDocument, null, 2));
     await urlStep.getByRole("button", { name: "URL Parts", exact: true }).click();
@@ -384,6 +392,27 @@ async function main() {
     await page.getByRole("menuitem", { name: "Undo" }).click();
     await page.waitForFunction((expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected, actionURL);
 
+    const thirdRedirect = "https://third.invalid/final";
+    const secondRedirect = `https://second.invalid/next?target=${encodeURIComponent(thirdRedirect)}`;
+    const firstRedirect = `https://first.invalid/start?redirect=${encodeURIComponent(secondRedirect)}`;
+    const recursiveURL = `https://root.invalid/?next=${encodeURIComponent(firstRedirect)}`;
+    await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
+    await page.locator(".source textarea").fill(recursiveURL);
+    const recursiveStep = page.locator(".card:has(.step-actions)").first();
+    const expandRecursiveStep = recursiveStep.getByRole("button", { name: "Expand step" });
+    if (await expandRecursiveStep.count()) {
+      await expandRecursiveStep.click();
+    }
+    await page.waitForFunction(() => document.querySelectorAll(".urlparts-redirect-node").length === 3);
+    const redirectDepths = await recursiveStep.locator(".urlparts-redirect-node").evaluateAll((nodes) => nodes.map((node) => node.dataset.depth));
+    assert(JSON.stringify(redirectDepths) === JSON.stringify(["1", "2", "3"]), "recursive redirect nodes should retain their depth");
+    assert((await recursiveStep.locator(".urlparts-analysis-findings").textContent()).includes("hxxps://third[.]invalid/final"), "recursive tree should render the third defanged hop");
+    await recursiveStep.getByRole("button", { name: "Use redirect depth 3 query parameter 1 as source" }).click();
+    await page.waitForFunction((expected) => document.querySelector(".source textarea")?.value === expected, thirdRedirect);
+    await page.getByRole("button", { name: "Workflow" }).click();
+    await page.getByRole("menuitem", { name: "Undo" }).click();
+    await page.waitForFunction((expected) => document.querySelector(".source textarea")?.value === expected, recursiveURL);
+
     if (process.env.DEEN_URLPARTS_TEST_FILE) {
       const fixtureURL = (await readFile(process.env.DEEN_URLPARTS_TEST_FILE, "utf8")).replace(/\r?\n$/, "");
       assert(fixtureURL.length > 0 && !fixtureURL.includes("\n"), "URL Parts fixture should contain one non-empty URL");
@@ -400,7 +429,7 @@ async function main() {
       );
       const fixtureDocument = JSON.parse(await fixtureStep.locator("textarea.io").first().inputValue());
       assert(
-        fixtureDocument.version === 2 && fixtureDocument.analysis?.defanged_url?.length > 0,
+        fixtureDocument.version === 3 && fixtureDocument.analysis?.defanged_url?.length > 0,
         "URL Parts fixture should produce versioned local analysis",
       );
       assert(
@@ -431,13 +460,14 @@ async function main() {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
-    await page.locator(".source textarea").fill(urlSource);
+    await page.locator(".source textarea").fill(recursiveURL);
     const mobileURLStep = page.locator(".card:has(.step-actions)").first();
     const expandMobileURLStep = mobileURLStep.getByRole("button", { name: "Expand step" });
     if (await expandMobileURLStep.count()) {
       await expandMobileURLStep.click();
     }
     await mobileURLStep.getByTestId("urlparts-editor").waitFor({ timeout: 15000 });
+    await page.waitForFunction(() => document.querySelectorAll(".urlparts-redirect-node").length === 3);
     await assertURLPartsEditorFits(page);
 
     await page.goto(`${targetURL}#examples?search=jwt`, { waitUntil: "domcontentloaded" });

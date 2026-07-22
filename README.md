@@ -177,8 +177,8 @@ sensitive
 See [real-world examples](docs/real-world-examples.md) for longer CloudFront,
 Kubernetes, PowerShell, Protobuf, and JWKS/X.509 analysis chains.
 The [URL Parts schema](docs/urlparts.md) documents loss-aware URL inspection,
-editing, reconstruction, local indicators, nested redirect extraction,
-defanging, and jq usage.
+editing, reconstruction, local indicators, recursive redirect extraction,
+defanging, analysis reports, and jq usage.
 
 ### Listing and help
 
