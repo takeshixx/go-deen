@@ -48,6 +48,15 @@ func TestURLPartsStepUsesStructuredEditor(t *testing.T) {
 	if editor.rebuiltEntry.Text != guiURLPartsTestURL || editor.copyURLButton.Disabled() {
 		t.Fatalf("rebuilt preview=%q copyDisabled=%v", editor.rebuiltEntry.Text, editor.copyURLButton.Disabled())
 	}
+	if editor.doc.Analysis == nil || len(editor.doc.Analysis.NestedURLs) != 1 {
+		t.Fatalf("analysis = %#v", editor.doc.Analysis)
+	}
+	if editor.defangedEntry.Text != "hxxps://login-update[.]example[.]invalid/account/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue" {
+		t.Fatalf("defanged preview = %q", editor.defangedEntry.Text)
+	}
+	if editor.copyDefanged.Disabled() {
+		t.Fatal("copy defanged URL should be enabled")
+	}
 }
 
 func TestURLPartsEditorShowsValidationErrorsInPreview(t *testing.T) {
@@ -68,8 +77,9 @@ func TestURLPartsEditorRebuildDoesNotLeakWorkControls(t *testing.T) {
 	want := len(dg.workControls)
 	editor.rawCheck.SetChecked(true)
 	editor.rawCheck.SetChecked(false)
+	editor.hostnameEntry.SetText("analysis-refresh.invalid")
 	if got := len(dg.workControls); got != want {
-		t.Fatalf("work controls after row rebuilds = %d, want %d", got, want)
+		t.Fatalf("work controls after row and analysis rebuilds = %d, want %d", got, want)
 	}
 }
 
@@ -93,6 +103,21 @@ func TestURLPartsStructuredEditsUpdateJSONAndDownstreamURL(t *testing.T) {
 	}
 	if doc.Hostname != "review.invalid" || doc.PathSegments[1] != "checked" || doc.Query[1].Value != "https://safe.example.org/result" {
 		t.Fatalf("structured JSON was not updated: %#v", doc)
+	}
+	if doc.Analysis == nil || len(doc.Analysis.NestedURLs) != 1 || doc.Analysis.NestedURLs[0].Hostname != "safe.example.org" {
+		t.Fatalf("analysis was not updated: %#v", doc.Analysis)
+	}
+	if !strings.HasPrefix(editor.defangedEntry.Text, "hxxps://review[.]invalid/") {
+		t.Fatalf("defanged URL did not update: %q", editor.defangedEntry.Text)
+	}
+}
+
+func TestURLPartsEditorCopiesDefangedURL(t *testing.T) {
+	dg := newURLPartsScenario(t)
+	editor := dg.cards[0].urlParts
+	editor.copyDefanged.OnTapped()
+	if dg.workStatus.Text != "Defanged URL copied" {
+		t.Fatalf("action feedback = %q", dg.workStatus.Text)
 	}
 }
 

@@ -128,7 +128,7 @@ func TestURLPartsRejectsInvalidInput(t *testing.T) {
 		{name: "empty URL", input: " \n", process: true, want: "URL is empty"},
 		{name: "bad query escape", input: "https://example.invalid/?value=%zz", process: true, want: "decode query parameter"},
 		{name: "bad JSON", input: `{`, want: "decode URL parts JSON"},
-		{name: "wrong schema", input: `{"version":2}`, want: "unsupported URL parts schema version"},
+		{name: "wrong schema", input: `{"version":99}`, want: "unsupported URL parts schema version"},
 		{name: "unknown field", input: `{"version":1,"extra":true}`, want: "unknown field"},
 		{name: "value without equals", input: `{"version":1,"query":[{"key":"flag","value":"unexpected","has_value":false}]}`, want: "has a value"},
 		{name: "bad port", input: `{"version":1,"hostname":"example.invalid","port":"99999"}`, want: "invalid URL port"},

@@ -491,10 +491,10 @@ var catalogCopyByName = map[string]catalogCopy{
 		[]Example{{"Format config", "name = \"deen\"", "name = \"deen\""}},
 	},
 	"urlparts": {
-		"Splits a URL into structured JSON and rebuilds a URL after its components are edited.",
+		"Splits a URL into structured JSON, derives local indicators, and rebuilds it after its components are edited.",
 		"Use it to inspect suspicious links, nested redirects, tracking parameters, callbacks, webhooks, and signed URLs without contacting the destination.",
 		referenceSets["url"],
-		[]Example{{"Inspect a suspicious URL", "https://example.invalid/a/b?next=https%3A%2F%2Fportal.example.org", "{ scheme, hostname, path_segments, query, fragment }"}},
+		[]Example{{"Inspect a suspicious URL", "https://example.invalid/a/b?next=https%3A%2F%2Fportal.example.org", "{ scheme, hostname, path_segments, query, fragment, analysis }"}},
 	},
 	"jwt": {
 		"Decodes JWTs into readable header and claim data.",

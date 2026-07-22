@@ -28,19 +28,23 @@ type urlPartsEditor struct {
 	showRaw    bool
 	refreshing bool
 
-	schemeEntry   *widget.Entry
-	hostnameEntry *widget.Entry
-	portEntry     *widget.Entry
-	opaqueEntry   *widget.Entry
-	fragmentEntry *widget.Entry
-	usernameEntry *widget.Entry
-	passwordEntry *widget.Entry
-	userinfoCheck *widget.Check
-	forceQuery    *widget.Check
-	omitHost      *widget.Check
-	rawCheck      *widget.Check
-	rebuiltEntry  *widget.Entry
-	copyURLButton *widget.Button
+	schemeEntry    *widget.Entry
+	hostnameEntry  *widget.Entry
+	portEntry      *widget.Entry
+	opaqueEntry    *widget.Entry
+	fragmentEntry  *widget.Entry
+	usernameEntry  *widget.Entry
+	passwordEntry  *widget.Entry
+	userinfoCheck  *widget.Check
+	forceQuery     *widget.Check
+	omitHost       *widget.Check
+	rawCheck       *widget.Check
+	rebuiltEntry   *widget.Entry
+	copyURLButton  *widget.Button
+	analysisBox    *fyne.Container
+	defangedEntry  *widget.Entry
+	copyDefanged   *widget.Button
+	analysisLabels []*widget.Label
 
 	pathRows          *fyne.Container
 	queryRows         *fyne.Container
@@ -52,6 +56,7 @@ type urlPartsEditor struct {
 	staticControls    []fyne.Disableable
 	pathControls      []fyne.Disableable
 	queryControls     []fyne.Disableable
+	analysisControls  []fyne.Disableable
 }
 
 func newURLPartsEditor(card *stepCard, data []byte) *urlPartsEditor {
@@ -109,6 +114,10 @@ func (e *urlPartsEditor) build() {
 	e.register(e.copyURLButton)
 	e.content.Add(widget.NewCard("Rebuilt URL", "Preview generated locally from the fields below.", container.NewBorder(nil, nil, nil, e.copyURLButton, e.rebuiltEntry)))
 	e.refreshRebuiltURL()
+	e.content.Add(urlPartsSectionTitle("Local analysis"))
+	e.analysisBox = container.NewVBox()
+	e.content.Add(e.analysisBox)
+	e.rebuildAnalysis()
 
 	e.rawCheck = widget.NewCheck("Show original encoded values", nil)
 	e.rawCheck.SetChecked(e.showRaw)
@@ -255,6 +264,7 @@ func (e *urlPartsEditor) commit() {
 	e.card.gui.pipe.EditOutput(e.card.index, data)
 	e.card.gui.setText(e.card.body, e.lastJSON)
 	e.refreshRebuiltURL()
+	e.rebuildAnalysis()
 	e.card.meta.SetText(metadataSummary("", pipeline.DataMetadata(data, len(e.card.gui.pipe.Input(e.card.index)))))
 	e.card.syncPreviewTab(data)
 	if e.card.preview != nil {
@@ -431,6 +441,72 @@ func (e *urlPartsEditor) refreshRebuiltURL() {
 	}
 }
 
+func (e *urlPartsEditor) rebuildAnalysis() {
+	if e.analysisBox == nil || e.doc == nil {
+		return
+	}
+	e.unregisterControls(e.analysisControls)
+	e.analysisControls = nil
+	e.analysisLabels = nil
+	e.analysisBox.RemoveAll()
+
+	e.defangedEntry = multilineEntry(2)
+	e.defangedEntry.Disable()
+	e.copyDefanged = widget.NewButtonWithIcon("Copy defanged URL", theme.ContentCopyIcon(), func() {
+		if e.doc == nil || e.doc.Analysis == nil || e.doc.Analysis.DefangedURL == "" || e.card.gui.window == nil {
+			return
+		}
+		e.card.gui.window.Clipboard().SetContent(e.doc.Analysis.DefangedURL)
+		e.card.gui.showActionFeedback("Defanged URL copied")
+	})
+	e.copyDefanged.Importance = widget.LowImportance
+	e.registerAnalysis(e.copyDefanged)
+	if e.doc.Analysis == nil {
+		e.copyDefanged.Disable()
+		e.analysisBox.Add(widget.NewCard("Defanged URL", "Unavailable while URL fields are invalid.", container.NewBorder(nil, nil, nil, e.copyDefanged, e.defangedEntry)))
+		e.analysisBox.Refresh()
+		return
+	}
+	e.defangedEntry.SetText(e.doc.Analysis.DefangedURL)
+	e.analysisBox.Add(widget.NewCard("Defanged URL", "Safer to paste into tickets or chat; this does not change the pipeline URL.", container.NewBorder(nil, nil, nil, e.copyDefanged, e.defangedEntry)))
+
+	if len(e.doc.Analysis.Indicators) == 0 {
+		e.addAnalysisLabel("No common indicators detected. This is not a safety verdict.", widget.LowImportance)
+	} else {
+		for _, indicator := range e.doc.Analysis.Indicators {
+			importance := widget.LowImportance
+			prefix := "Info"
+			if indicator.Severity == "warning" {
+				importance = widget.WarningImportance
+				prefix = "Warning"
+			}
+			e.addAnalysisLabel(prefix+": "+indicator.Message, importance)
+		}
+	}
+	if len(e.doc.Analysis.NestedURLs) > 0 {
+		e.analysisBox.Add(urlPartsSectionTitle("Nested URLs"))
+		for _, nested := range e.doc.Analysis.NestedURLs {
+			e.addAnalysisLabel(fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), widget.LowImportance)
+		}
+	}
+	if len(e.doc.Analysis.TrackingParameters) > 0 {
+		e.analysisBox.Add(urlPartsSectionTitle("Common tracking parameters"))
+		for _, tracking := range e.doc.Analysis.TrackingParameters {
+			e.addAnalysisLabel(fmt.Sprintf("Query #%d: %s", tracking.ParameterIndex, tracking.Key), widget.LowImportance)
+		}
+	}
+	e.analysisBox.Refresh()
+	e.scroll.Refresh()
+}
+
+func (e *urlPartsEditor) addAnalysisLabel(text string, importance widget.Importance) {
+	label := widget.NewLabel(text)
+	label.Wrapping = fyne.TextWrapBreak
+	label.Importance = importance
+	e.analysisLabels = append(e.analysisLabels, label)
+	e.analysisBox.Add(label)
+}
+
 func (e *urlPartsEditor) register(control fyne.Disableable) {
 	e.card.gui.registerWorkControl(control)
 	e.staticControls = append(e.staticControls, control)
@@ -446,13 +522,20 @@ func (e *urlPartsEditor) registerQuery(control fyne.Disableable) {
 	e.queryControls = append(e.queryControls, control)
 }
 
+func (e *urlPartsEditor) registerAnalysis(control fyne.Disableable) {
+	e.card.gui.registerWorkControl(control)
+	e.analysisControls = append(e.analysisControls, control)
+}
+
 func (e *urlPartsEditor) clearControls() {
 	e.unregisterControls(e.staticControls)
 	e.unregisterControls(e.pathControls)
 	e.unregisterControls(e.queryControls)
+	e.unregisterControls(e.analysisControls)
 	e.staticControls = nil
 	e.pathControls = nil
 	e.queryControls = nil
+	e.analysisControls = nil
 }
 
 func (e *urlPartsEditor) unregisterControls(controls []fyne.Disableable) {

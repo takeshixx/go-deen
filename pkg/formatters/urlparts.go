@@ -16,7 +16,9 @@ import (
 )
 
 // URLPartsSchemaVersion is the JSON schema version emitted by urlparts.
-const URLPartsSchemaVersion = 1
+const URLPartsSchemaVersion = 2
+
+const urlPartsMinimumSchemaVersion = 1
 
 // URLPartsDocument is the stable JSON representation emitted by urlparts.
 // The decoded fields are convenient to inspect and edit. Raw contains encoded
@@ -36,6 +38,7 @@ type URLPartsDocument struct {
 	ForceQuery   bool                `json:"force_query"`
 	Fragment     string              `json:"fragment"`
 	Raw          *URLPartsRaw        `json:"raw,omitempty"`
+	Analysis     *URLPartsAnalysis   `json:"analysis,omitempty"`
 }
 
 // URLPartsUserinfo represents optional decoded URL credentials.
@@ -68,7 +71,7 @@ func NewPluginURLParts() *types.DeenPlugin {
 	p.Name = "urlparts"
 	p.Aliases = []string{".urlparts", "urlparse", ".urlparse"}
 	p.Category = "formatters"
-	p.Description = "Splits a URL into structured JSON and rebuilds a URL from edited parts."
+	p.Description = "Splits a URL into editable JSON with local analysis and rebuilds it from edited parts."
 	p.Process = func(r io.Reader, w io.Writer, _ *flag.FlagSet) error {
 		doc, err := parseURLParts(r)
 		if err != nil {
@@ -212,9 +215,10 @@ func DecodeURLPartsJSON(r io.Reader) (*URLPartsDocument, error) {
 		}
 		return nil, fmt.Errorf("decode URL parts JSON: %w", err)
 	}
-	if doc.Version != URLPartsSchemaVersion {
-		return nil, fmt.Errorf("unsupported URL parts schema version %d (want %d)", doc.Version, URLPartsSchemaVersion)
+	if doc.Version < urlPartsMinimumSchemaVersion || doc.Version > URLPartsSchemaVersion {
+		return nil, fmt.Errorf("unsupported URL parts schema version %d (supported %d through %d)", doc.Version, urlPartsMinimumSchemaVersion, URLPartsSchemaVersion)
 	}
+	refreshURLPartsAnalysis(&doc)
 	return &doc, nil
 }
 
@@ -222,6 +226,11 @@ func DecodeURLPartsJSON(r io.Reader) (*URLPartsDocument, error) {
 // the urlparts plugin. GUI editors use it to keep raw and structured views in
 // sync without duplicating serialization behavior.
 func EncodeURLPartsJSON(w io.Writer, doc *URLPartsDocument) error {
+	if doc == nil {
+		return fmt.Errorf("URL parts document is nil")
+	}
+	doc.Version = URLPartsSchemaVersion
+	refreshURLPartsAnalysis(doc)
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "    ")

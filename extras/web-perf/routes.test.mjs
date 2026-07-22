@@ -267,7 +267,7 @@ async function main() {
 
     await page.goto(`${targetURL}${urlPartsChainHash}`, { waitUntil: "domcontentloaded" });
     const urlSource =
-      "https://login-update.example.invalid/a/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue";
+      "https://login-update.example.invalid/a/verify.php?utm_source=mail&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue";
     await page.locator(".source textarea").fill(urlSource);
     const urlStep = page.locator(".card:has(.step-actions)").first();
     const rebuiltStep = page.locator(".card:has(.step-actions)").nth(1);
@@ -282,15 +282,26 @@ async function main() {
       "forward URL Parts step should select the structured editor",
     );
     assert((await urlEditor.getByRole("textbox", { name: "Rebuilt URL" }).inputValue()) === urlSource, "rebuilt URL should initially match source");
+    assert(
+      (await urlEditor.getByRole("textbox", { name: "Defanged URL" }).inputValue()).startsWith("hxxps://login-update[.]example[.]invalid/"),
+      "analysis should provide a defanged URL",
+    );
+    const initialAnalysis = await urlEditor.locator(".urlparts-analysis-findings").textContent();
+    assert(initialAnalysis.includes("Nested URLs") && initialAnalysis.includes("portal.example.org"), "analysis should expose nested redirect URLs");
+    assert(initialAnalysis.includes("Common tracking parameters") && initialAnalysis.includes("utm_source"), "analysis should identify common tracking parameters");
+    await urlEditor.getByRole("button", { name: "Copy defanged URL" }).click();
+    assert((await page.evaluate(() => navigator.clipboard.readText())).startsWith("hxxps://login-update[.]example[.]invalid/"), "copy defanged URL should use the local analysis value");
 
     await urlEditor.getByRole("textbox", { name: "URL hostname" }).fill("review.invalid");
     await urlEditor.getByRole("textbox", { name: "Path segment 2" }).fill("checked");
     await urlEditor.getByRole("textbox", { name: "Query value 2" }).fill("https://safe.example.org/result");
     await urlEditor.getByRole("textbox", { name: "URL fragment" }).fill("reviewed");
     const editedURL =
-      "https://review.invalid/a/checked?campaign=Q3&redirect=https%3A%2F%2Fsafe.example.org%2Fresult&campaign=retry#reviewed";
+      "https://review.invalid/a/checked?utm_source=mail&redirect=https%3A%2F%2Fsafe.example.org%2Fresult&campaign=retry#reviewed";
     assert((await urlEditor.getByRole("textbox", { name: "Rebuilt URL" }).inputValue()) === editedURL, "structured edits should rebuild the URL");
     assert((await rebuiltStep.locator("textarea.io").first().inputValue()) === editedURL, "structured edits should recompute a downstream reverse step");
+    assert((await urlEditor.getByRole("textbox", { name: "Defanged URL" }).inputValue()).startsWith("hxxps://review[.]invalid/"), "defanged URL should update with structured edits");
+    assert((await urlEditor.locator(".urlparts-analysis-findings").textContent()).includes("safe.example.org"), "nested URL analysis should update with query edits");
 
     await urlEditor.getByRole("checkbox", { name: "Show original encoded values" }).check();
     assert((await urlEditor.locator(".urlparts-raw:visible").count()) >= 4, "raw encoding toggle should reveal encoded values");
@@ -299,6 +310,7 @@ async function main() {
 
     await urlEditor.getByRole("textbox", { name: "URL port" }).fill("invalid");
     assert(await urlEditor.getByRole("button", { name: "Copy URL" }).isDisabled(), "invalid URL fields should disable copy");
+    assert(await urlEditor.getByRole("button", { name: "Copy defanged URL" }).isDisabled(), "invalid URL fields should disable defanged copy");
     assert((await urlEditor.locator(".urlparts-message.invalid").textContent()).includes("invalid URL port"), "invalid port should show validation feedback");
     await urlEditor.getByRole("textbox", { name: "URL port" }).fill("");
 
@@ -318,6 +330,7 @@ async function main() {
     await urlStep.getByRole("button", { name: "Raw", exact: true }).click();
     const rawURLParts = urlStep.locator("textarea.io").first();
     const rawDocument = JSON.parse(await rawURLParts.inputValue());
+    assert(rawDocument.version === 2 && rawDocument.analysis?.nested_urls?.length === 1, "raw JSON should include versioned machine-readable analysis");
     rawDocument.fragment = "from-raw-json";
     await rawURLParts.fill(JSON.stringify(rawDocument, null, 2));
     await urlStep.getByRole("button", { name: "URL Parts", exact: true }).click();
@@ -336,6 +349,11 @@ async function main() {
       await page.waitForFunction(
         (expected) => document.querySelector('[aria-label="Rebuilt URL"]')?.value === expected,
         fixtureURL,
+      );
+      const fixtureDocument = JSON.parse(await fixtureStep.locator("textarea.io").first().inputValue());
+      assert(
+        fixtureDocument.version === 2 && fixtureDocument.analysis?.defanged_url?.length > 0,
+        "URL Parts fixture should produce versioned local analysis",
       );
       assert(
         (await page.locator(".card:has(.step-actions)").nth(1).locator("textarea.io").first().inputValue()) === fixtureURL,

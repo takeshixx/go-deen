@@ -9,11 +9,12 @@ printf '%s' 'https://example.invalid/a/b?next=https%3A%2F%2Fportal.example.org#c
 | deen urlparts
 ```
 
-The output uses schema version 1:
+New output uses schema version 2. The decoder continues to accept version 1
+documents and upgrades them the next time they are encoded:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "scheme": "https",
   "userinfo": null,
   "hostname": "example.invalid",
@@ -37,13 +38,34 @@ The output uses schema version 1:
     "host": "example.invalid",
     "path": "/a/b",
     "fragment": "continue"
+  },
+  "analysis": {
+    "indicators": [
+      {
+        "code": "nested_url",
+        "severity": "info",
+        "message": "Found 1 nested HTTP(S) URL(s) in query values."
+      }
+    ],
+    "nested_urls": [
+      {
+        "parameter_index": 1,
+        "key": "next",
+        "url": "https://portal.example.org",
+        "scheme": "https",
+        "hostname": "portal.example.org"
+      }
+    ],
+    "tracking_parameters": [],
+    "defanged_url": "hxxps://example[.]invalid/a/b?next=https%3A%2F%2Fportal.example.org#continue"
   }
 }
 ```
 
 ## Field behavior
 
-- `version` identifies the schema. `.urlparts` currently accepts version 1.
+- `version` identifies the schema. `.urlparts` emits version 2 and accepts
+  versions 1 and 2.
 - `scheme`, `userinfo`, `hostname`, and `port` describe the authority. A null
   `userinfo` means the URL contains no username. `password_set` inside a
   non-null `userinfo` distinguishes no password from an explicitly empty one.
@@ -61,6 +83,11 @@ The output uses schema version 1:
 - `raw` and the `raw_key`/`raw_value` fields retain the original encoded
   spelling. They preserve evidence such as `%2F` versus `/`, `%20` versus `+`,
   and hexadecimal escape casing.
+- `analysis` is derived locally from the editable fields. It contains
+  evidence-oriented indicators, nested HTTP(S) URLs extracted from decoded
+  query values, common analytics/campaign parameter occurrences, and a
+  defanged form for pasting into tickets or chat. It is informational, is not a
+  malicious/benign verdict, and is ignored during URL reconstruction.
 
 Decoded fields are authoritative when edited. During reconstruction, a raw
 spelling is reused only while it still decodes to the corresponding value. A
@@ -73,7 +100,21 @@ Extract a nested redirect URL:
 
 ```sh
 deen urlparts "$URL" \
-| deen jq -q '.query[] | select(.key == "redirect") | .value' -no-color
+| deen jq -q '.analysis.nested_urls[].url' -no-color
+```
+
+List common tracking parameter occurrences:
+
+```sh
+deen urlparts "$URL" \
+| deen jq -q '.analysis.tracking_parameters[] | {parameter_index, key}' -no-color
+```
+
+Produce a defanged copy without opening or resolving the URL:
+
+```sh
+deen urlparts "$URL" \
+| deen jq -q '.analysis.defanged_url' -no-color
 ```
 
 Change a query value and rebuild the URL:
@@ -101,4 +142,6 @@ The tab continuously shows the locally rebuilt URL and can copy it without
 opening it. Structured edits update the JSON in the **Raw** tab and recompute
 downstream pipeline steps. Editing valid JSON in the **Raw** tab refreshes the
 structured controls in the other direction. The **Show original encoded
-values** control exposes the preserved raw path and query spellings.
+values** control exposes the preserved raw path and query spellings. The
+**Local analysis** section lists derived indicators, nested URLs, tracking
+parameters, and a copyable defanged URL; it never performs network access.

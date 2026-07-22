@@ -13,14 +13,15 @@ Spam and phishing links often combine a misleading hostname, several path
 segments, duplicate tracking parameters, and a percent-encoded redirect URL.
 The `urlparts` formatter separates these components locally without resolving
 or contacting the destination. Query parameters remain ordered and duplicate
-keys are retained.
+keys are retained. Its derived analysis also lists nested HTTP(S) URLs, common
+tracking parameters, evidence-oriented indicators, and a defanged copy.
 
 Runnable chain:
 
 ```sh
 printf '%s' 'https://login-update.example.invalid/account/verify.php?campaign=Q3&redirect=https%3A%2F%2Fportal.example.org%2Fsignin&campaign=retry#continue' \
 | deen urlparts \
-| deen jq -q '.query[] | select(.key == "redirect") | .value' -no-color
+| deen jq -q '.analysis.nested_urls[].url' -no-color
 ```
 
 Edit a decoded value and rebuild the URL:

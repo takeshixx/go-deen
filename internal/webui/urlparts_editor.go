@@ -13,16 +13,19 @@ import (
 )
 
 type webURLPartsEditor struct {
-	card        *cardRef
-	root        js.Value
-	message     js.Value
-	rebuilt     js.Value
-	copy        js.Value
-	doc         *formatters.URLPartsDocument
-	lastJSON    string
-	showRaw     bool
-	initialized bool
-	callbacks   []js.Func
+	card         *cardRef
+	root         js.Value
+	message      js.Value
+	rebuilt      js.Value
+	copy         js.Value
+	analysisBody js.Value
+	defanged     js.Value
+	copyDefanged js.Value
+	doc          *formatters.URLPartsDocument
+	lastJSON     string
+	showRaw      bool
+	initialized  bool
+	callbacks    []js.Func
 }
 
 func newWebURLPartsEditor(card *cardRef, data []byte) *webURLPartsEditor {
@@ -96,12 +99,109 @@ func (e *webURLPartsEditor) build() {
 	})
 
 	appendChildren(e.root, e.message, preview, rawWrap)
+	e.buildAnalysis()
 	e.buildAuthority()
 	e.buildPath()
 	e.buildQuery()
 	e.buildFragment()
 	e.setRawVisible()
 	e.refreshRebuiltURL()
+}
+
+func (e *webURLPartsEditor) buildAnalysis() {
+	section, body := urlPartsSection("Local analysis")
+	section.Set("className", "urlparts-section urlparts-analysis")
+	e.analysisBody = body
+	preview := div("urlparts-preview urlparts-defanged")
+	title := el("strong")
+	title.Set("textContent", "Defanged URL")
+	e.defanged = el("textarea")
+	e.defanged.Set("className", "urlparts-rebuilt")
+	e.defanged.Set("readOnly", true)
+	e.defanged.Set("rows", 2)
+	e.defanged.Call("setAttribute", "aria-label", "Defanged URL")
+	e.copyDefanged = e.actionButton("copy", "Copy defanged URL", func() {
+		if e.doc == nil || e.doc.Analysis == nil || e.doc.Analysis.DefangedURL == "" {
+			return
+		}
+		value := e.doc.Analysis.DefangedURL
+		clipboard := js.Global().Get("navigator").Get("clipboard")
+		if clipboard.Truthy() {
+			clipboard.Call("writeText", value)
+		} else {
+			js.Global().Call("prompt", "Copy defanged URL:", value)
+		}
+	})
+	description := div("urlparts-analysis-note")
+	description.Set("textContent", "Safer to paste into tickets or chat. Findings are local observations, not a safety verdict.")
+	previewBody := div("urlparts-preview-body")
+	appendChildren(previewBody, e.defanged, e.copyDefanged)
+	appendChildren(preview, title, description, previewBody)
+	body.Call("appendChild", preview)
+	e.root.Call("appendChild", section)
+	e.refreshAnalysis()
+}
+
+func (e *webURLPartsEditor) refreshAnalysis() {
+	if !e.analysisBody.Truthy() || !e.defanged.Truthy() {
+		return
+	}
+	for {
+		findings := e.analysisBody.Call("querySelector", ".urlparts-analysis-findings")
+		if !findings.Truthy() {
+			break
+		}
+		findings.Call("remove")
+	}
+	findings := div("urlparts-analysis-findings")
+	if e.doc == nil || e.doc.Analysis == nil {
+		e.defanged.Set("value", "")
+		e.copyDefanged.Set("disabled", true)
+		e.analysisText(findings, "Analysis unavailable while URL fields are invalid.", "urlparts-indicator warning")
+		e.analysisBody.Call("appendChild", findings)
+		return
+	}
+	e.defanged.Set("value", e.doc.Analysis.DefangedURL)
+	e.copyDefanged.Set("disabled", e.doc.Analysis.DefangedURL == "")
+	if len(e.doc.Analysis.Indicators) == 0 {
+		e.analysisText(findings, "No common indicators detected. This is not a safety verdict.", "urlparts-indicator")
+	} else {
+		for _, indicator := range e.doc.Analysis.Indicators {
+			className := "urlparts-indicator"
+			prefix := "Info: "
+			if indicator.Severity == "warning" {
+				className += " warning"
+				prefix = "Warning: "
+			}
+			e.analysisText(findings, prefix+indicator.Message, className)
+		}
+	}
+	if len(e.doc.Analysis.NestedURLs) > 0 {
+		e.analysisHeading(findings, "Nested URLs")
+		for _, nested := range e.doc.Analysis.NestedURLs {
+			e.analysisText(findings, fmt.Sprintf("Query #%d (%s): %s", nested.ParameterIndex, nested.Key, nested.URL), "urlparts-analysis-value")
+		}
+	}
+	if len(e.doc.Analysis.TrackingParameters) > 0 {
+		e.analysisHeading(findings, "Common tracking parameters")
+		for _, tracking := range e.doc.Analysis.TrackingParameters {
+			e.analysisText(findings, fmt.Sprintf("Query #%d: %s", tracking.ParameterIndex, tracking.Key), "urlparts-analysis-value")
+		}
+	}
+	e.analysisBody.Call("appendChild", findings)
+}
+
+func (e *webURLPartsEditor) analysisHeading(parent js.Value, text string) {
+	heading := el("strong")
+	heading.Set("className", "urlparts-analysis-heading")
+	heading.Set("textContent", text)
+	parent.Call("appendChild", heading)
+}
+
+func (e *webURLPartsEditor) analysisText(parent js.Value, text, className string) {
+	item := div(className)
+	item.Set("textContent", text)
+	parent.Call("appendChild", item)
 }
 
 func (e *webURLPartsEditor) buildAuthority() {
@@ -405,6 +505,7 @@ func (e *webURLPartsEditor) commit(structural bool) {
 		return
 	}
 	e.refreshRebuiltURL()
+	e.refreshAnalysis()
 	renderOutput(e.card)
 	refreshOutputs(e.card.index + 1)
 }

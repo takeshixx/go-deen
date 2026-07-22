@@ -913,6 +913,39 @@ a {
 	overflow-wrap: anywhere;
 }
 
+.urlparts-analysis-note {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.urlparts-analysis-findings {
+	display: grid;
+	gap: 0.35rem;
+}
+
+.urlparts-indicator,
+.urlparts-analysis-value {
+	border-left: 3px solid var(--border);
+	border-radius: 3px;
+	background: color-mix(in srgb, var(--panel) 88%, var(--bg) 12%);
+	padding: 0.4rem 0.55rem;
+	font-size: 0.84rem;
+	overflow-wrap: anywhere;
+}
+
+.urlparts-indicator.warning {
+	border-left-color: var(--warning);
+}
+
+.urlparts-analysis-heading {
+	margin-top: 0.25rem;
+	font-size: 0.84rem;
+}
+
+.urlparts-analysis-value {
+	font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
 .full-view-controls {
 	align-items: center;
 	display: flex;
