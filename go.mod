@@ -13,7 +13,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/iancoleman/orderedmap v0.3.0
 	github.com/itchyny/gojq v0.12.19
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.18.7
 	github.com/liyue201/goqr v0.0.0-20200803022322-df443203d4ea
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tdewolff/minify/v2 v2.24.13
