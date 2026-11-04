@@ -10,7 +10,7 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/dsnet/compress v0.0.1
 	github.com/fxamacker/cbor/v2 v2.9.2
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/iancoleman/orderedmap v0.3.0
 	github.com/itchyny/gojq v0.12.19
 	github.com/klauspost/compress v1.18.6
